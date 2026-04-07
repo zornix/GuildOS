@@ -1,0 +1,10 @@
+fastapi[standard]
+uvicorn
+pydantic-settings
+pydantic[email]
+supabase
+psycopg2-binary
+PyJWT
+httpx
+pytest
+pytest-asyncio

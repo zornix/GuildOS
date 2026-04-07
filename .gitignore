@@ -1,0 +1,65 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# Python
+__pycache__/
+*.py[codz]
+*$py.class
+.Python
+*.egg-info/
+.eggs/
+.venv/
+venv/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pdm-python
+.pixi/
+
+# Next.js / frontend build
+.next/
+out/
+build/
+*.tsbuildinfo
+next-env.d.ts
+
+# Env & secrets
+.env
+.env.*
+.envrc
+!.env.example
+
+# OS & tooling
+.DS_Store
+*.pem
+.vercel
+.idea/
+
+# Logs & debug
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Test / coverage
+coverage/
+htmlcov/
+.tox/
+**/test-results/
+**/playwright-report/
+**/blob-report/
+**/.playwright/
+playwright/.cache/
+
+# Cursor (local AI ignore lists; keep out of repo)
+.cursorignore
+.cursorindexingignore
