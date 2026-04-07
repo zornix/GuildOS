@@ -2,10 +2,10 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "postgresql://postgres:[YOUR-PASSWORD]@db.rcdertwcsodstmwfygpz.supabase.co:5432/postgres"
+    DATABASE_URL: str = ""
     JWT_SECRET: str = "QPLOnmefgLAvU8yo3LMXUQuqYrX1A2pJGPo4xzeGx5F"
     FRONTEND_URL: str = "https://fraternity-os.vercel.app"
-    BASE_URL: str = "https://guild-os-blush.vercel.app"
+    BASE_URL: str = "https://guild-os-two.vercel.app"
     CHECKIN_LINK_TTL_MINUTES: int = 10
 
     class Config:
