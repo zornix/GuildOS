@@ -49,7 +49,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoginError("");
     setLoginLoading(true);
     try {
-      const res = await api.login(email);
+      const normalizedEmail = email.trim().toLowerCase();
+      const res = await api.login(normalizedEmail);
       if (res.access_token) {
         api.setToken(res.access_token);
         const me = await api.getMe();

@@ -24,11 +24,12 @@ async def login(body: LoginRequest):
     """
     import jwt as pyjwt
 
+    normalized_email = body.email.strip().lower()
     sb = get_supabase()
     result = (
         sb.table("members")
         .select("id, name, email, role, chapter_id")
-        .eq("email", body.email)
+        .eq("email", normalized_email)
         .eq("status", "active")
         .single()
         .execute()
