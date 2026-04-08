@@ -7,7 +7,7 @@ def get_supabase():
     global _pg_client
     if _pg_client is None:
         from api.postgres_client import PostgresClient
-        _pg_client = PostgresClient(settings.DATABASE_URL, settings.JWT_SECRET)
+        _pg_client = PostgresClient(settings.POSTGRES_URL_NON_POOLING, settings.SUPABASE_JWT_SECRET)
     return _pg_client
 
 

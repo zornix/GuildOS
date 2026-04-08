@@ -40,7 +40,7 @@ async def login(body: LoginRequest):
 
     token = pyjwt.encode(
         {"sub": member["id"], "exp": datetime.now(timezone.utc) + timedelta(days=30)},
-        settings.JWT_SECRET,
+        settings.SUPABASE_JWT_SECRET,
         algorithm="HS256",
     )
     return {"access_token": token, "token_type": "bearer"}

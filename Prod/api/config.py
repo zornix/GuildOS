@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    POSTGRES_URL: str = ""
+    POSTGRES_URL_NON_POOLING: str = ""
     SUPABASE_JWT_SECRET: str = ""
     FRONTEND_URL: str = "https://fraternity-os.vercel.app"
     BASE_URL: str = "https://guild-os-two.vercel.app"
