@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from api.dependencies import get_current_user, require_officer
 from api.models.schemas import EventCreate, EventUpdate, CheckInLinkResponse
-from api.services.checkin_links import create_checkin_link, deactivate_checkin_link
+from api.services.checkin_links import create_checkin_link, deactivate_checkin_link, get_active_link_for_event
 from api.db import get_supabase
 
 router = APIRouter()
@@ -96,6 +96,24 @@ async def delete_event(event_id: str, officer=Depends(require_officer)):
         .eq("chapter_id", officer["chapter_id"]) \
         .execute()
     return {"deleted": True}
+
+
+@router.get("/{event_id}/checkin-link")
+async def get_checkin_link(event_id: str, user=Depends(get_current_user)):
+    """Get the currently active check-in link for an event, if any."""
+    sb = get_supabase()
+    event = (
+        sb.table("events")
+        .select("id")
+        .eq("id", event_id)
+        .eq("chapter_id", user["chapter_id"])
+        .single()
+        .execute()
+    )
+    if not event.data:
+        raise HTTPException(404, "Event not found")
+    link = await get_active_link_for_event(event_id)
+    return link or {}
 
 
 @router.post("/{event_id}/checkin-link", response_model=CheckInLinkResponse)

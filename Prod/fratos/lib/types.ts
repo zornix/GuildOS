@@ -74,6 +74,15 @@ export interface CheckinLink {
   created_by: string;
 }
 
+export interface ActiveCheckinLinkRow {
+  event_id: string;
+  event_title: string;
+  date: string;
+  short_code: string;
+  url: string;
+  expires_at: string;
+}
+
 export interface FineSummary {
   total_unpaid: number;
   total_paid: number;

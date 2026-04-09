@@ -45,6 +45,25 @@ export function EventsPage() {
     return () => window.removeEventListener("focus", onFocus);
   }, [selected, attendance.reload]);
 
+  // Restore active check-in link from server when entering event detail
+  useEffect(() => {
+    if (!selected) return;
+    let cancelled = false;
+    api.getActiveCheckinLink(selected).then((res) => {
+      if (cancelled) return;
+      setActiveLink("short_code" in res && res.short_code ? (res as CheckinLink) : null);
+    });
+    return () => { cancelled = true; };
+  }, [selected]);
+
+  // Refresh event list when window regains focus (picks up new DB rows)
+  useEffect(() => {
+    if (selected) return;
+    const onFocus = () => events.reload();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [selected, events.reload]);
+
   const show = (m: string) => {
     setToast(m);
     setTimeout(() => setToast(null), 2500);
@@ -72,7 +91,7 @@ export function EventsPage() {
     const isPast = new Date(detail.date) < now;
     return (
       <div>
-        <button onClick={() => { setSelected(null); setActiveLink(null); }} style={{ background: "none", border: "none", color: T.acl, cursor: "pointer", fontSize: 13, marginBottom: 16, padding: 0 }}>
+        <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: T.acl, cursor: "pointer", fontSize: 13, marginBottom: 16, padding: 0 }}>
           ← Back to Events
         </button>
         <Card style={{ marginBottom: 16 }}>

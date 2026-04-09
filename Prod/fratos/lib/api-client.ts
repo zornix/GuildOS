@@ -4,6 +4,7 @@ import type {
   Excuse,
   Fine,
   CheckinLink,
+  ActiveCheckinLinkRow,
   FineSummary,
   InviteResult,
   RosterEntry,
@@ -111,11 +112,17 @@ class ApiClient {
   }
 
   // Check-in links
+  getActiveCheckinLink(eventId: string) {
+    return this.request<CheckinLink | Record<string, never>>(`/api/events/${eventId}/checkin-link`);
+  }
   createCheckinLink(eventId: string) {
     return this.request<CheckinLink>(`/api/events/${eventId}/checkin-link`, { method: "POST" });
   }
   killCheckinLink(eventId: string) {
     return this.request<{ deactivated: boolean }>(`/api/events/${eventId}/checkin-link`, { method: "DELETE" });
+  }
+  listActiveCheckinLinks() {
+    return this.request<ActiveCheckinLinkRow[]>("/api/checkin-links/active");
   }
 
   // Attendance

@@ -87,6 +87,58 @@ async def validate_checkin_link(short_code: str) -> dict | None:
     return result.data if result.data else None
 
 
+async def get_active_link_for_event(event_id: str) -> dict | None:
+    """Return the currently active, non-expired link for an event (or None)."""
+    sb = get_supabase_admin()
+    now = datetime.now(timezone.utc)
+    result = (
+        sb.table("checkin_links")
+        .select("event_id, short_code, expires_at, active")
+        .eq("event_id", event_id)
+        .eq("active", True)
+        .gte("expires_at", now.isoformat())
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        return None
+    row = result.data[0]
+    return {
+        "short_code": row["short_code"],
+        "url": f"{settings.BASE_URL}/c/{row['short_code']}",
+        "expires_at": row["expires_at"],
+        "event_id": row["event_id"],
+    }
+
+
+async def list_active_links_for_chapter(chapter_id: str) -> list[dict]:
+    """Return all active, non-expired check-in links for events in a chapter."""
+    sb = get_supabase_admin()
+    now = datetime.now(timezone.utc)
+    result = (
+        sb.table("checkin_links")
+        .select("event_id, short_code, expires_at, events!inner(title, date, chapter_id)")
+        .eq("active", True)
+        .eq("events.chapter_id", chapter_id)
+        .gte("expires_at", now.isoformat())
+        .execute()
+    )
+    rows = []
+    for row in result.data or []:
+        ev = row.get("events") or {}
+        if not ev:
+            continue
+        rows.append({
+            "event_id": row["event_id"],
+            "event_title": ev.get("title", ""),
+            "date": ev.get("date", ""),
+            "short_code": row["short_code"],
+            "url": f"{settings.BASE_URL}/c/{row['short_code']}",
+            "expires_at": row["expires_at"],
+        })
+    return rows
+
+
 async def deactivate_checkin_link(event_id: str):
     """Officer manually kills the link before TTL expires."""
     sb = get_supabase_admin()

@@ -10,8 +10,9 @@ import { EventsPage } from "./views/events";
 import { FinesPage } from "./views/fines";
 import { MembersPage } from "./views/members";
 import { StandingPage } from "./views/standing";
+import { ActiveCheckInsPage } from "./views/active-checkins";
 
-type PageId = "dashboard" | "events" | "fines" | "members" | "standing";
+type PageId = "dashboard" | "events" | "fines" | "members" | "standing" | "active-checkins";
 
 const NAV: { id: PageId; label: string; icon: string }[] = [
   { id: "dashboard", label: "Dashboard", icon: "home" },
@@ -19,16 +20,18 @@ const NAV: { id: PageId; label: string; icon: string }[] = [
   { id: "fines", label: "Fines", icon: "dollar" },
   { id: "members", label: "Members", icon: "users" },
   { id: "standing", label: "Standing", icon: "shield" },
+  { id: "active-checkins", label: "Active Check-Ins", icon: "link" },
 ];
 
 function AppShell() {
   const { user, logout } = useAuth();
   const [page, setPage] = useState<PageId>("dashboard");
 
-  const navItems = NAV.filter((n) => n.id !== "standing" || user.role === "officer");
+  const officerOnly: PageId[] = ["standing", "active-checkins"];
+  const navItems = NAV.filter((n) => !officerOnly.includes(n.id) || user.role === "officer");
 
   useEffect(() => {
-    if (page === "standing" && user.role !== "officer") setPage("dashboard");
+    if (officerOnly.includes(page) && user.role !== "officer") setPage("dashboard");
   }, [page, user.role]);
 
   return (
@@ -79,6 +82,7 @@ function AppShell() {
           {page === "fines" && <FinesPage />}
           {page === "members" && <MembersPage />}
           {page === "standing" && <StandingPage />}
+          {page === "active-checkins" && <ActiveCheckInsPage />}
         </div>
       </div>
     </div>
