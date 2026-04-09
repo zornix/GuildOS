@@ -16,6 +16,7 @@ import { CreateEventForm } from "../components/forms/create-event-form";
 import { CheckInForm } from "../components/forms/check-in-form";
 import { ExcuseForm } from "../components/forms/excuse-form";
 import type { Event, RosterEntry, CheckinLink } from "../lib/types";
+import { isPastEvent } from "../lib/event-time";
 
 export function EventsPage() {
   const { user } = useAuth();
@@ -71,7 +72,7 @@ export function EventsPage() {
 
   const now = new Date();
   const list = (events.data || []).filter((e) =>
-    tab === "upcoming" ? new Date(e.date) >= now : new Date(e.date) < now,
+    tab === "upcoming" ? !isPastEvent(e, now) : isPastEvent(e, now),
   );
   const detail = selected ? (events.data || []).find((e) => e.id === selected) : null;
 
@@ -87,8 +88,18 @@ export function EventsPage() {
     setActiveLink(null);
   };
 
+  const deleteSelectedEvent = async () => {
+    if (!selected || user.role !== "officer") return;
+    if (!window.confirm("Delete this event? This cannot be undone.")) return;
+    await api.deleteEvent(selected);
+    show("Event deleted");
+    setSelected(null);
+    setActiveLink(null);
+    events.reload();
+  };
+
   if (detail) {
-    const isPast = new Date(detail.date) < now;
+    const isPast = isPastEvent(detail, now);
     return (
       <div>
         <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: T.acl, cursor: "pointer", fontSize: 13, marginBottom: 16, padding: 0 }}>
@@ -114,6 +125,9 @@ export function EventsPage() {
                   <Btn variant="danger" onClick={killLink}><Icon type="x" size={14} /> Close Check-In</Btn>
                 )
               )}
+              <Btn variant="danger" onClick={deleteSelectedEvent}>
+                <Icon type="x" size={14} /> Delete Event
+              </Btn>
             </div>
           )}
           {!isPast && user.role !== "officer" && (

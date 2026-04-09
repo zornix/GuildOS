@@ -8,6 +8,7 @@ import { Badge } from "../components/ui/badge";
 import { Btn } from "../components/ui/btn";
 import { Icon } from "../components/ui/icon";
 import type { Event, Fine, Excuse } from "../lib/types";
+import { isUpcomingEvent } from "../lib/event-time";
 
 export function DashboardPage() {
   const { user } = useAuth();
@@ -16,7 +17,7 @@ export function DashboardPage() {
   const excuses = useApi<Excuse[]>(() => api.getExcuses(user.role === "officer" ? "pending" : null));
 
   const now = new Date();
-  const upcoming = (events.data || []).filter((e) => new Date(e.date) >= now);
+  const upcoming = (events.data || []).filter((e) => isUpcomingEvent(e, now));
   const pendingExcuses = (excuses.data || []).filter((e) => e.status === "pending");
   const unpaidFines = (fines.data || []).filter((f) => f.status === "unpaid");
 
