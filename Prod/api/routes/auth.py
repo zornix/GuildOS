@@ -1,34 +1,30 @@
 from datetime import datetime, timezone, timedelta
 
+import bcrypt
+import jwt as pyjwt
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 
 from api.dependencies import get_current_user, require_officer
-from api.models.schemas import UserProfile, InviteRequest
+from api.models.schemas import UserProfile, InviteRequest, LoginRequest, SetPasswordRequest
 from api.db import get_supabase
 from api.config import settings
 
 router = APIRouter()
 
 
-class LoginRequest(BaseModel):
-    email: str
-
-
 @router.post("/login")
 async def login(body: LoginRequest):
     """
-    Demo auth: enter any member email to log in.
-    Officers get full access; regular members get read-only access.
-    Returns a JWT — no password required.
+    Authenticate a member or officer.
+    Members: email-only login (no password required).
+    Officers without a password set: grace login + password_setup_required flag.
+    Officers with a password set: email + password required.
     """
-    import jwt as pyjwt
-
-    normalized_email = body.email.strip().lower()
+    normalized_email = str(body.email).strip().lower()
     sb = get_supabase()
     result = (
         sb.table("members")
-        .select("id, name, email, role, chapter_id")
+        .select("id, name, email, role, chapter_id, password_hash")
         .eq("email", normalized_email)
         .eq("status", "active")
         .single()
@@ -39,12 +35,46 @@ async def login(body: LoginRequest):
 
     member = result.data
 
+    if member["role"] == "officer" and member.get("password_hash"):
+        if not body.password:
+            raise HTTPException(403, detail={
+                "message": "Password required for officer login",
+                "code": "PASSWORD_REQUIRED",
+            })
+        if not bcrypt.checkpw(
+            body.password.encode("utf-8"),
+            member["password_hash"].encode("utf-8"),
+        ):
+            raise HTTPException(401, "Invalid credentials")
+
     token = pyjwt.encode(
         {"sub": member["id"], "exp": datetime.now(timezone.utc) + timedelta(days=30)},
         settings.SUPABASE_JWT_SECRET,
         algorithm="HS256",
     )
-    return {"access_token": token, "token_type": "bearer"}
+
+    response = {"access_token": token, "token_type": "bearer"}
+    if member["role"] == "officer" and not member.get("password_hash"):
+        response["password_setup_required"] = True
+
+    return response
+
+
+@router.post("/set-password")
+async def set_password(body: SetPasswordRequest, user=Depends(get_current_user)):
+    """Set or change password. Only officers can set passwords."""
+    if user["role"] != "officer":
+        raise HTTPException(403, "Only officers can set passwords")
+
+    hashed = bcrypt.hashpw(
+        body.password.encode("utf-8"),
+        bcrypt.gensalt(),
+    ).decode("utf-8")
+
+    sb = get_supabase()
+    sb.table("members").update({"password_hash": hashed}).eq("id", user["id"]).execute()
+
+    return {"message": "Password set successfully"}
 
 
 @router.get("/me", response_model=UserProfile)

@@ -18,7 +18,7 @@ async def get_current_user(authorization: str = Header(...)):
 
     result = (
         sb.table("members")
-        .select("*, chapters(*)")
+        .select("id, chapter_id, name, email, phone, role, status, created_at, chapters(*)")
         .eq("id", member_id)
         .eq("status", "active")
         .maybe_single()

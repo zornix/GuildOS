@@ -5,6 +5,22 @@ from typing import Optional
 from datetime import date, time
 
 
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: Optional[str] = None
+
+
+class SetPasswordRequest(BaseModel):
+    password: str
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        return v
+
+
 class InviteRequest(BaseModel):
     emails: list[EmailStr]
 

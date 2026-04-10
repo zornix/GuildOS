@@ -4,6 +4,7 @@ pydantic-settings
 pydantic[email]
 psycopg2-binary
 PyJWT
+bcrypt
 httpx
 pytest
 pytest-asyncio

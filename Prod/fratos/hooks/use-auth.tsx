@@ -15,8 +15,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Member | null>(null);
   const [loading, setLoading] = useState(true);
   const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [showPasswordField, setShowPasswordField] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
+
+  // Set-password flow (officer first login without password)
+  const [showSetPassword, setShowSetPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -45,17 +52,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const handleLogin = async (email: string) => {
+  const handleLogin = async (email: string, password?: string) => {
     setLoginError("");
     setLoginLoading(true);
     try {
       const normalizedEmail = email.trim().toLowerCase();
-      const res = await api.login(normalizedEmail);
+      const res = await api.login(normalizedEmail, password || undefined);
       if (res.access_token) {
         api.setToken(res.access_token);
-        const me = await api.getMe();
-        setUser(me);
+        if (res.password_setup_required) {
+          setShowSetPassword(true);
+        } else {
+          const me = await api.getMe();
+          setUser(me);
+        }
       }
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes("PASSWORD_REQUIRED")) {
+        setShowPasswordField(true);
+        setLoginError("Officers must enter a password");
+      } else {
+        setLoginError(msg);
+      }
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleSetPassword = async () => {
+    setLoginError("");
+    if (newPassword.length < 8) {
+      setLoginError("Password must be at least 8 characters");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setLoginError("Passwords do not match");
+      return;
+    }
+    setLoginLoading(true);
+    try {
+      await api.setPassword(newPassword);
+      const me = await api.getMe();
+      setShowSetPassword(false);
+      setNewPassword("");
+      setConfirmPassword("");
+      setUser(me);
     } catch (e) {
       setLoginError((e as Error).message);
     } finally {
@@ -65,8 +107,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     setUser(null);
+    setShowSetPassword(false);
+    setShowPasswordField(false);
+    setLoginPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
     api.setToken(null);
   };
+
+  const inputStyle = { width: "100%", padding: "12px 14px", borderRadius: 8, border: `1px solid ${T.bd}`, background: T.bg, color: T.tx, fontSize: 14, marginBottom: 12, boxSizing: "border-box" as const };
 
   if (loading)
     return (
@@ -74,6 +123,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         Loading...
       </div>
     );
+
+  if (showSetPassword) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: T.bg, fontFamily: "'Inter', -apple-system, sans-serif", padding: 20 }}>
+        <div style={{ background: T.sf, borderRadius: 16, padding: 32, maxWidth: 380, width: "100%", border: `1px solid ${T.bd}` }}>
+          <div style={{ textAlign: "center", marginBottom: 24 }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: T.tx }}>
+              <span style={{ color: T.ac }}>Fraternity</span>OS
+            </div>
+            <p style={{ color: T.txm, fontSize: 13, marginTop: 4 }}>Set your officer password</p>
+          </div>
+          <input
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            placeholder="New password (min 8 characters)"
+            style={inputStyle}
+          />
+          <input
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleSetPassword(); }}
+            placeholder="Confirm password"
+            style={inputStyle}
+          />
+          {loginError && <div style={{ color: T.err, fontSize: 12, marginBottom: 8 }}>{loginError}</div>}
+          <button
+            onClick={handleSetPassword}
+            disabled={loginLoading || !newPassword || !confirmPassword}
+            style={{ width: "100%", padding: "12px", borderRadius: 8, border: "none", background: T.ac, color: "#fff", fontSize: 14, fontWeight: 600, cursor: loginLoading ? "wait" : "pointer", opacity: loginLoading ? 0.6 : 1 }}
+          >
+            {loginLoading ? "Setting password..." : "Set Password & Continue"}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!user) {
     return (
@@ -83,19 +170,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             <div style={{ fontSize: 22, fontWeight: 800, color: T.tx }}>
               <span style={{ color: T.ac }}>Fraternity</span>OS
             </div>
-            <p style={{ color: T.txm, fontSize: 13, marginTop: 4 }}>Officer sign-in</p>
+            <p style={{ color: T.txm, fontSize: 13, marginTop: 4 }}>Sign in</p>
           </div>
           <input
             type="email"
             value={loginEmail}
             onChange={(e) => setLoginEmail(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && loginEmail) handleLogin(loginEmail); }}
-            placeholder="officer@chapter.org"
-            style={{ width: "100%", padding: "12px 14px", borderRadius: 8, border: `1px solid ${T.bd}`, background: T.bg, color: T.tx, fontSize: 14, marginBottom: 12, boxSizing: "border-box" }}
+            onKeyDown={(e) => { if (e.key === "Enter" && loginEmail) handleLogin(loginEmail, showPasswordField ? loginPassword : undefined); }}
+            placeholder="you@chapter.org"
+            style={inputStyle}
           />
+          {showPasswordField && (
+            <input
+              type="password"
+              value={loginPassword}
+              onChange={(e) => setLoginPassword(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && loginEmail) handleLogin(loginEmail, loginPassword); }}
+              placeholder="Password"
+              style={inputStyle}
+            />
+          )}
           {loginError && <div style={{ color: T.err, fontSize: 12, marginBottom: 8 }}>{loginError}</div>}
           <button
-            onClick={() => handleLogin(loginEmail)}
+            onClick={() => handleLogin(loginEmail, showPasswordField ? loginPassword : undefined)}
             disabled={loginLoading || !loginEmail}
             style={{ width: "100%", padding: "12px", borderRadius: 8, border: "none", background: T.ac, color: "#fff", fontSize: 14, fontWeight: 600, cursor: loginLoading ? "wait" : "pointer", opacity: loginLoading ? 0.6 : 1 }}
           >

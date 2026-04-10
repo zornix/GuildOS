@@ -14,6 +14,10 @@ import type {
 function formatApiErrorDetail(data: unknown): string {
   const d = (data as { detail?: unknown }).detail;
   if (typeof d === "string") return d;
+  if (d && typeof d === "object" && !Array.isArray(d)) {
+    const obj = d as { message?: string; code?: string };
+    if (obj.message) return obj.code ? `${obj.code}: ${obj.message}` : obj.message;
+  }
   if (Array.isArray(d)) {
     const parts = d
       .map((item) => (item && typeof item === "object" && "msg" in item ? String((item as { msg: string }).msg) : null))
@@ -78,10 +82,18 @@ class ApiClient {
   }
 
   // Auth
-  login(email: string) {
-    return this.request<{ access_token?: string; message?: string; ok?: boolean }>("/api/auth/login", {
+  login(email: string, password?: string) {
+    const body: { email: string; password?: string } = { email };
+    if (password) body.password = password;
+    return this.request<{ access_token?: string; message?: string; ok?: boolean; password_setup_required?: boolean }>("/api/auth/login", {
       method: "POST",
-      body: JSON.stringify({ email }),
+      body: JSON.stringify(body),
+    });
+  }
+  setPassword(password: string) {
+    return this.request<{ message: string }>("/api/auth/set-password", {
+      method: "POST",
+      body: JSON.stringify({ password }),
     });
   }
   getMe() {

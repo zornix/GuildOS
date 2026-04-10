@@ -7,9 +7,18 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "https://fraternity-os.vercel.app"
     BASE_URL: str = "https://guild-os-two.vercel.app"
     CHECKIN_LINK_TTL_MINUTES: int = 10
+    CRON_SECRET: str = ""
 
     class Config:
         env_file = ".env"
 
 
 settings = Settings()
+
+if not (settings.SUPABASE_JWT_SECRET or "").strip():
+    raise RuntimeError(
+        "SUPABASE_JWT_SECRET is missing or whitespace-only. "
+        "Set it in the environment or in a .env file next to the API (local dev: copy from "
+        "Supabase Project Settings → API → JWT Secret). The API refuses to start without a "
+        "non-empty signing key."
+    )

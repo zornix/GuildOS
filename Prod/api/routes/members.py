@@ -33,7 +33,7 @@ async def update_role(member_id: str, role: str, officer=Depends(require_officer
         .update({"role": role})
         .eq("id", member_id)
         .eq("chapter_id", officer["chapter_id"])
-        .select("*")
+        .select("id, chapter_id, name, email, phone, role, status, created_at")
         .execute()
     )
     if not result.data:
