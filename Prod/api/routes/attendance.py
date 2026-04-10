@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.dependencies import get_current_user, require_officer
-from api.models.schemas import PhoneCheckIn
+from api.models.schemas import PhoneCheckIn, ManualAttendance
 from api.services.checkin_links import validate_checkin_link
 from api.db import get_supabase
 
@@ -163,14 +163,67 @@ async def get_attendance(event_id: str, user=Depends(get_current_user)):
 
 
 @router.post("/event/{event_id}/manual/{member_id}")
-async def manual_checkin(event_id: str, member_id: str, officer=Depends(require_officer)):
-    """Officer manually marks a member as present."""
+async def manual_checkin(event_id: str, member_id: str, body: ManualAttendance, officer=Depends(require_officer)):
+    """Officer manually marks a member as present, excused, or absent."""
     sb = get_supabase()
-    sb.table("attendance").upsert({
-        "event_id": event_id,
-        "member_id": member_id,
-        "checked_in": True,
-        "checked_in_at": datetime.now(timezone.utc).isoformat(),
-        "method": "manual",
-    }, on_conflict="event_id,member_id").execute()
-    return {"status": "checked_in", "method": "manual"}
+    now = datetime.now(timezone.utc).isoformat()
+
+    if body.status == "excused":
+        if not body.reason or not body.reason.strip():
+            raise HTTPException(400, "Excuse reason is required when marking as excused")
+
+        # Mark as not checked in
+        sb.table("attendance").upsert({
+            "event_id": event_id,
+            "member_id": member_id,
+            "checked_in": False,
+            "checked_in_at": None,
+            "method": "manual",
+        }, on_conflict="event_id,member_id").execute()
+
+        # Remove any existing excuse for this event+member, then insert new one
+        sb.table("excuses") \
+            .delete() \
+            .eq("event_id", event_id) \
+            .eq("member_id", member_id) \
+            .execute()
+        sb.table("excuses").insert({
+            "event_id": event_id,
+            "member_id": member_id,
+            "reason": body.reason.strip(),
+            "status": "approved",
+            "reviewed_by": officer["id"],
+            "reviewed_at": now,
+            "submitted_at": now,
+        }).execute()
+
+        return {"status": "excused", "method": "manual"}
+
+    elif body.status == "absent":
+        # Mark as not checked in, remove any excuse
+        sb.table("attendance").upsert({
+            "event_id": event_id,
+            "member_id": member_id,
+            "checked_in": False,
+            "checked_in_at": None,
+            "method": "manual",
+        }, on_conflict="event_id,member_id").execute()
+
+        sb.table("excuses") \
+            .delete() \
+            .eq("event_id", event_id) \
+            .eq("member_id", member_id) \
+            .execute()
+
+        return {"status": "absent", "method": "manual"}
+
+    else:
+        # present
+        sb.table("attendance").upsert({
+            "event_id": event_id,
+            "member_id": member_id,
+            "checked_in": True,
+            "checked_in_at": now,
+            "method": "manual",
+        }, on_conflict="event_id,member_id").execute()
+        return {"status": "checked_in", "method": "manual"}

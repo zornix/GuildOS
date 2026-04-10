@@ -87,6 +87,18 @@ class FineSummary(BaseModel):
     count_unpaid: int
 
 
+class ManualAttendance(BaseModel):
+    status: str  # "present", "excused", or "absent"
+    reason: Optional[str] = None
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: str) -> str:
+        if v not in ("present", "excused", "absent"):
+            raise ValueError("Status must be 'present', 'excused', or 'absent'")
+        return v
+
+
 class PhoneCheckIn(BaseModel):
     phone: str
 

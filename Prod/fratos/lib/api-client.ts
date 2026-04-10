@@ -144,10 +144,10 @@ class ApiClient {
   getAttendance(eventId: string) {
     return this.request<RosterEntry[]>(`/api/attendance/event/${eventId}`);
   }
-  manualCheckin(eventId: string, memberId: string) {
+  manualCheckin(eventId: string, memberId: string, status: "present" | "excused" | "absent" = "present", reason?: string) {
     return this.request<{ status: string; method: string }>(
       `/api/attendance/event/${eventId}/manual/${memberId}`,
-      { method: "POST" },
+      { method: "POST", body: JSON.stringify({ status, reason }) },
     );
   }
 

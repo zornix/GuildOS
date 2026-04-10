@@ -97,7 +97,6 @@ async def get_active_link_for_event(event_id: str) -> dict | None:
         .eq("event_id", event_id)
         .eq("active", True)
         .gte("expires_at", now.isoformat())
-        .limit(1)
         .execute()
     )
     if not result.data:
@@ -117,9 +116,8 @@ async def list_active_links_for_chapter(chapter_id: str) -> list[dict]:
     now = datetime.now(timezone.utc)
     result = (
         sb.table("checkin_links")
-        .select("event_id, short_code, expires_at, events!inner(title, date, chapter_id)")
+        .select("event_id, short_code, expires_at, events(title, date, chapter_id)")
         .eq("active", True)
-        .eq("events.chapter_id", chapter_id)
         .gte("expires_at", now.isoformat())
         .execute()
     )
@@ -127,6 +125,8 @@ async def list_active_links_for_chapter(chapter_id: str) -> list[dict]:
     for row in result.data or []:
         ev = row.get("events") or {}
         if not ev:
+            continue
+        if ev.get("chapter_id") != chapter_id:
             continue
         rows.append({
             "event_id": row["event_id"],

@@ -90,6 +90,17 @@ async def update_event(event_id: str, body: EventUpdate, officer=Depends(require
 async def delete_event(event_id: str, officer=Depends(require_officer)):
     """Delete an event."""
     sb = get_supabase()
+    # Verify the event exists and belongs to this chapter before deleting
+    event = (
+        sb.table("events")
+        .select("id")
+        .eq("id", event_id)
+        .eq("chapter_id", officer["chapter_id"])
+        .maybe_single()
+        .execute()
+    )
+    if not event.data:
+        raise HTTPException(404, "Event not found")
     sb.table("events") \
         .delete() \
         .eq("id", event_id) \

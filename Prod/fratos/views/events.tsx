@@ -25,6 +25,9 @@ export function EventsPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [activeLink, setActiveLink] = useState<CheckinLink | null>(null);
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
+  const [manualTarget, setManualTarget] = useState<{ eventId: string; memberId: string; name: string } | null>(null);
+  const [manualStatus, setManualStatus] = useState<"present" | "excused" | "absent">("present");
+  const [manualReason, setManualReason] = useState("");
   const events = useApi<Event[]>(() => api.getEvents());
   const attendance = useApi<RosterEntry[]>(
     () => (selected ? api.getAttendance(selected) : Promise.resolve([])),
@@ -91,11 +94,15 @@ export function EventsPage() {
   const deleteSelectedEvent = async () => {
     if (!selected || user.role !== "officer") return;
     if (!window.confirm("Delete this event? This cannot be undone.")) return;
-    await api.deleteEvent(selected);
-    show("Event deleted");
-    setSelected(null);
-    setActiveLink(null);
-    events.reload();
+    try {
+      await api.deleteEvent(selected);
+      show("Event deleted");
+      setSelected(null);
+      setActiveLink(null);
+      events.reload();
+    } catch (e: unknown) {
+      show((e as Error).message || "Failed to delete event");
+    }
   };
 
   if (detail) {
@@ -191,14 +198,16 @@ export function EventsPage() {
                   ) : m.excuse_status ? (
                     <Badge color={m.excuse_status === "denied" ? "red" : "yellow"}>{m.excuse_status}</Badge>
                   ) : (
-                    <>
-                      <Badge color="red">Absent</Badge>
-                      {!isPast && user.role === "officer" && (
-                        <Btn variant="ghost" style={{ padding: "2px 8px", fontSize: 10 }} onClick={() => api.manualCheckin(detail.id, m.member_id).then(attendance.reload)}>
-                          Manual
-                        </Btn>
-                      )}
-                    </>
+                    <Badge color="red">Absent</Badge>
+                  )}
+                  {user.role === "officer" && (
+                    <Btn variant="ghost" style={{ padding: "2px 8px", fontSize: 10 }} onClick={() => {
+                      setManualTarget({ eventId: detail.id, memberId: m.member_id, name: m.name });
+                      setManualStatus("present");
+                      setManualReason("");
+                    }}>
+                      Set Status
+                    </Btn>
                   )}
                 </div>
               </div>
@@ -214,6 +223,52 @@ export function EventsPage() {
         {modal === "excuse" && (
           <Modal onClose={() => setModal(null)}>
             <ExcuseForm eventId={detail.id} eventTitle={detail.title} onSuccess={() => { show("Excuse submitted"); setModal(null); }} onClose={() => setModal(null)} />
+          </Modal>
+        )}
+        {manualTarget && (
+          <Modal onClose={() => setManualTarget(null)}>
+            <Card style={{ maxWidth: 400, margin: "0 auto" }}>
+              <h3 style={{ margin: "0 0 12px", color: T.tx, fontSize: 16 }}>Set Attendance — {manualTarget.name}</h3>
+              <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+                {(["present", "excused", "absent"] as const).map((s) => (
+                  <Btn key={s} variant={manualStatus === s ? "primary" : "ghost"} style={{ textTransform: "capitalize", padding: "6px 14px", flex: 1 }} onClick={() => setManualStatus(s)}>
+                    {s}
+                  </Btn>
+                ))}
+              </div>
+              {manualStatus === "excused" && (
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ fontSize: 12, color: T.txm, display: "block", marginBottom: 4 }}>Excuse reason (required)</label>
+                  <textarea
+                    value={manualReason}
+                    onChange={(e) => setManualReason(e.target.value)}
+                    placeholder="Enter excuse reason..."
+                    style={{ width: "100%", minHeight: 70, padding: 8, borderRadius: 8, border: `1px solid ${T.bd}`, background: T.bg, color: T.tx, fontSize: 13, resize: "vertical", fontFamily: "inherit" }}
+                  />
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <Btn variant="ghost" onClick={() => setManualTarget(null)}>Cancel</Btn>
+                <Btn
+                  onClick={async () => {
+                    if (manualStatus === "excused" && !manualReason.trim()) {
+                      show("Excuse reason is required");
+                      return;
+                    }
+                    try {
+                      await api.manualCheckin(manualTarget.eventId, manualTarget.memberId, manualStatus, manualStatus === "excused" ? manualReason : undefined);
+                      show(`Marked ${manualTarget.name} as ${manualStatus}`);
+                      setManualTarget(null);
+                      attendance.reload();
+                    } catch (e: unknown) {
+                      show((e as Error).message || "Failed to update attendance");
+                    }
+                  }}
+                >
+                  Confirm
+                </Btn>
+              </div>
+            </Card>
           </Modal>
         )}
         <Toast msg={toast} />
