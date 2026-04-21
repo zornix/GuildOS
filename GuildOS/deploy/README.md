@@ -65,6 +65,21 @@ than what the integration provisions. You must add these manually in
 | `NEXT_PUBLIC_API_BASE`                         | Backend project URL, e.g. `https://fratos-api.vercel.app` (required — frontend and backend are on different origins) | `http://127.0.0.1:8001` |
 | `NEXT_PUBLIC_SUPABASE_URL`                     | Auto-provisioned | Set in `fratos/.env.local` |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY` | Auto-provisioned as `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Set in `fratos/.env.local` |
+| `NEXT_PUBLIC_ENABLE_VP_MODULE`                 | `1` when VP module is enabled | `1` |
+| `NEXT_PUBLIC_ENABLE_SECRETARY_MODULE`          | `1` when Secretary module is enabled | `1` |
+
+For Secretary communications (local-first build), default local mode should stay dry-run:
+
+| Env Var | Local Default | Purpose |
+|---------|---------------|---------|
+| `MESSAGE_DELIVERY_MODE` | `dry_run` | Prevent live SMS/email sends during local testing |
+| `ESCALATION_DELAY_MINUTES` | `120` | Delay before resend/escalation job |
+| `TWILIO_ACCOUNT_SID` | empty | Required only in live mode |
+| `TWILIO_AUTH_TOKEN` | empty | Required only in live mode |
+| `TWILIO_FROM_PHONE` | empty | Required only in live mode |
+| `SENDGRID_API_KEY` | empty | Required only in live mode |
+| `SENDGRID_FROM_EMAIL` | empty | Required only in live mode |
+| `MESSAGE_WEBHOOK_SECRET` | set | Verify webhook payloads in live mode |
 
 ---
 
@@ -89,8 +104,10 @@ This script:
 2. Waits for DB readiness
 3. Runs migrations
 4. Installs Python and Node dependencies (if missing)
-5. Starts the FastAPI backend on `:8001`
-6. Starts the Next.js frontend on `:3000`
+5. Ensures local feature flags and dry-run messaging defaults exist in `.env`
+6. Ensures frontend API base + VP/Secretary feature flags exist in `fratos/.env.local`
+7. Starts the FastAPI backend on `:8001`
+8. Starts the Next.js frontend on `:3000`
 
 ### Manual Steps (if you prefer)
 

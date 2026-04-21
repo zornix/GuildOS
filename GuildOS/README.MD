@@ -59,6 +59,7 @@ ChapterAttendance/
 | Fines | `GET /api/fines`, `POST /api/fines/{id}/pay`, `POST /api/fines/{id}/waive`, `POST /api/fines/process-event/{id}`, `GET /api/fines/summary` |
 | Members | `GET /api/members`, `PUT /api/members/{id}/role` |
 | Standing | `GET /api/standing` |
+| Operations (VP) | `GET /api/operations/templates`, `POST /api/operations/events/{event_id}/apply-template/{template_id}`, `GET /api/operations/events/{event_id}/readiness` |
 | Cron | `GET /api/cron/process-fines` |
 | Check-in page | `GET /c/{code}` (HTML) |
 
@@ -97,3 +98,14 @@ See [.env.example](.env.example) for all variables. Key ones:
 | `JWT_SECRET` | `local-dev-secret-key-change-in-prod` | Strong random secret |
 | `FRONTEND_URL` | `http://localhost:3000` | Your Vercel domain |
 | `BASE_URL` | `http://localhost:8001` | Your Vercel domain |
+| `FEATURE_VP_OPERATIONS` | `1` | Enable VP module UI/API work |
+| `FEATURE_SECRETARY_COMMS` | `1` | Enable Secretary module UI/API work |
+| `MESSAGE_DELIVERY_MODE` | `dry_run` | `live` in production with provider keys |
+
+For upcoming Secretary features, set (or leave empty in local dry-run mode):
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_AUTH_TOKEN`
+- `TWILIO_FROM_PHONE`
+- `SENDGRID_API_KEY`
+- `SENDGRID_FROM_EMAIL`
+- `MESSAGE_WEBHOOK_SECRET`

@@ -63,3 +63,7 @@ playwright/.cache/
 # Cursor (local AI ignore lists; keep out of repo)
 .cursorignore
 .cursorindexingignore
+
+# Gemini Skills
+git-publish/
+*.skill
