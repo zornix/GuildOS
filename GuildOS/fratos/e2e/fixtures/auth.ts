@@ -25,13 +25,13 @@ interface Fixtures {
 }
 
 export const test = base.extend<Fixtures>({
-  officerPage: async ({ page }, use) => {
+  officerPage: async ({ page }, runFixture) => {
     await loginAsOfficer(page);
-    await use(page);
+    await runFixture(page);
   },
-  memberPage: async ({ page }, use) => {
+  memberPage: async ({ page }, runFixture) => {
     await loginAsMember(page);
-    await use(page);
+    await runFixture(page);
   },
 });
 

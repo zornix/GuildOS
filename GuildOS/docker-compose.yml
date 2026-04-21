@@ -1,7 +1,6 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: fraternityos-db
     environment:
       POSTGRES_USER: fraternityos
       POSTGRES_PASSWORD: localdev
@@ -10,7 +9,6 @@ services:
       - "5434:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./migrations/0001_initial_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U fraternityos"]
       interval: 2s

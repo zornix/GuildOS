@@ -18,6 +18,23 @@ echo ""
 BACKEND_PID=""
 FRONTEND_PID=""
 
+ensure_env_key() {
+  local file="$1"
+  local key="$2"
+  local value="$3"
+
+  if [ ! -f "$file" ]; then
+    printf "%s=%s\n" "$key" "$value" > "$file"
+    return
+  fi
+
+  if awk -F= -v key="$key" '$1 == key { found=1; exit } END { exit !found }' "$file"; then
+    return
+  fi
+
+  printf "%s=%s\n" "$key" "$value" >> "$file"
+}
+
 cleanup() {
   echo ""
   echo -e "${YELLOW}Shutting down ...${NC}"
@@ -33,6 +50,12 @@ if [ ! -f .env ]; then
   cp .env.example .env
   echo -e "${GREEN}Created .env with local defaults${NC}"
 fi
+
+ensure_env_key .env "FEATURE_VP_OPERATIONS" "1"
+ensure_env_key .env "FEATURE_SECRETARY_COMMS" "1"
+ensure_env_key .env "MESSAGE_DELIVERY_MODE" "dry_run"
+ensure_env_key .env "ESCALATION_DELAY_MINUTES" "120"
+ensure_env_key .env "MESSAGE_WEBHOOK_SECRET" "local-webhook-secret-change-in-prod"
 
 # ── 2. Docker / PostgreSQL ──────────────────────────
 echo "▸ Starting PostgreSQL via Docker Compose ..."
@@ -58,7 +81,14 @@ done
 
 # ── 3. Migrations ───────────────────────────────────
 echo "▸ Running database migrations ..."
-DATABASE_URL="$LOCAL_DB_URL"
+DATABASE_URL="$LOCAL_DB_URL" python3 scripts/migrate_db.py
+echo -e "  ${GREEN}Migrations OK${NC}"
+
+if [ "${SEED_LOCAL_DB:-0}" = "1" ]; then
+  echo "▸ Seeding local test data ..."
+  DATABASE_URL="$LOCAL_DB_URL" python3 -m scripts.seed
+  echo -e "  ${GREEN}Seed data OK${NC}"
+fi
 
 # ── 4. Python dependencies ──────────────────────────
 echo "▸ Checking Python dependencies ..."
@@ -77,10 +107,10 @@ fi
 echo -e "  ${GREEN}Node deps OK${NC}"
 
 # ── 6. Frontend env ────────────────────────────────
-if [ ! -f fratos/.env.local ]; then
-  echo "NEXT_PUBLIC_API_BASE=http://127.0.0.1:8001" > fratos/.env.local
-  echo -e "  ${GREEN}Created fratos/.env.local${NC}"
-fi
+ensure_env_key fratos/.env.local "NEXT_PUBLIC_API_BASE" "http://127.0.0.1:8001"
+ensure_env_key fratos/.env.local "NEXT_PUBLIC_ENABLE_VP_MODULE" "1"
+ensure_env_key fratos/.env.local "NEXT_PUBLIC_ENABLE_SECRETARY_MODULE" "1"
+echo -e "  ${GREEN}Checked fratos/.env.local${NC}"
 
 # ── 7. Start backend ───────────────────────────────
 echo ""
@@ -110,6 +140,7 @@ echo "  Frontend:  http://localhost:3000"
 echo "  Backend:   http://localhost:8001"
 echo "  API docs:  http://localhost:8001/api/docs"
 echo "  Database:  localhost:5434 (fraternityos/localdev)"
+echo "  Seed data: SEED_LOCAL_DB=1 bash deploy/local-dev.sh"
 echo ""
 echo "  Press Ctrl+C to stop all services"
 echo "═══════════════════════════════════════"

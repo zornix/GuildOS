@@ -85,8 +85,8 @@ EVENTS_DATA = [
 ]
 
 
-def generate_token(auth_id: str) -> str:
-    return jwt.encode({"sub": auth_id, "exp": datetime.now(timezone.utc) + timedelta(days=30)}, JWT_SECRET, algorithm="HS256")
+def generate_token(member_id: str) -> str:
+    return jwt.encode({"sub": member_id, "exp": datetime.now(timezone.utc) + timedelta(days=30)}, JWT_SECRET, algorithm="HS256")
 
 
 def seed():
@@ -186,17 +186,16 @@ def seed():
     print(f"\nMembers ({len(MEMBERS_DATA)}):")
     for i, m in enumerate(MEMBERS_DATA):
         mid = all_member_ids[i]
-        aid = all_auth_ids[i]
-        token = generate_token(aid)
+        token = generate_token(mid)
         role_tag = " [OFFICER]" if m["role"] == "officer" else ""
         print(f"  {m['name']}{role_tag}")
         print(f"    id:    {mid}")
         print(f"    phone: {m['phone']}")
         print(f"    token: {token[:40]}...")
     print(f"\nOfficer token (full):")
-    print(f"  {generate_token(OFFICER_AUTH_ID)}")
+    print(f"  {generate_token(OFFICER_ID)}")
     print(f"\nMember token (Ryan, full):")
-    print(f"  {generate_token(MEMBER_AUTH_IDS[0])}")
+    print(f"  {generate_token(MEMBER_IDS[0])}")
     print(f"\nEvents: {len(EVENTS_DATA)} ({sum(1 for e in EVENTS_DATA if e['date'] <= date.today())} past, {sum(1 for e in EVENTS_DATA if e['date'] > date.today())} upcoming)")
     print(f"Active checkin link: TsT123 (event: {EVENTS_DATA[3]['title']})")
     print(f"\nFines: unpaid={4}, paid={1}")
