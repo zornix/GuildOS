@@ -56,8 +56,8 @@ CREATE TABLE events (
     chapter_id UUID NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
     description TEXT,
-    event_date DATE NOT NULL,
-    event_time TIME NOT NULL,
+    date DATE NOT NULL,
+    time TIME NOT NULL,
     location TEXT NOT NULL,
     required BOOLEAN NOT NULL DEFAULT FALSE,
     fine_amount NUMERIC(10,2) NOT NULL DEFAULT 0,
@@ -66,7 +66,7 @@ CREATE TABLE events (
 );
 
 CREATE INDEX ix_events_chapter_id ON events(chapter_id);
-CREATE INDEX ix_events_event_date ON events(event_date);
+CREATE INDEX ix_events_date ON events(date);
 
 -- =========================================================
 -- Attendance
@@ -136,3 +136,19 @@ CREATE TABLE fines (
 CREATE INDEX ix_fines_member_id ON fines(member_id);
 CREATE INDEX ix_fines_chapter_id ON fines(chapter_id);
 CREATE INDEX ix_fines_status ON fines(status);
+
+-- =========================================================
+-- Check-in Links
+-- =========================================================
+CREATE TABLE checkin_links (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    short_code TEXT NOT NULL UNIQUE,
+    created_by UUID REFERENCES members(id) ON DELETE SET NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX ix_checkin_links_short_code ON checkin_links(short_code);
+CREATE INDEX ix_checkin_links_event_id ON checkin_links(event_id);
