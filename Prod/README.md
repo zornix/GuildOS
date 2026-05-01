@@ -30,6 +30,28 @@
 2. Success returns an HS256 JWT with `sub` = member UUID; `get_current_user` decodes via `_LocalAuth` and loads the member row **without** selecting `password_hash`.
 3. Officers can `POST /api/auth/set-password`; updates run by `user["id"]` from the dependency (no hash needed in the loaded profile).
 
+### Health and connectivity
+
+`GET /api/health` validates the API process **and** PostgreSQL connectivity:
+
+| Field | Meaning |
+|-------|---------|
+| `status` | `ok` if `SELECT 1` succeeds after bounded retries; `error` if the DB is unreachable. |
+| `version` | API version string (matches FastAPI app metadata). |
+| `checks.database` | `ok` or `error`. |
+| `detail` | Present when `status` is `error`: `database_unreachable` (no raw DB exception text). |
+
+The handler runs the DB ping in a worker thread and uses **3 attempts** with exponential backoff inside [`api/health_checks.py`](api/health_checks.py). A static 200 without a live DB is no longer possible.
+
+**CLI check (with HTTP + DB validation + retries):** from `Prod/`:
+
+```bash
+python scripts/check_prod_status.py
+python scripts/check_prod_status.py --base-url https://your-api.vercel.app --max-attempts 5 --backoff 0.3
+```
+
+The script requires `status=ok` **and** `checks.database=ok`. It retries on network errors, HTTP 408/429/5xx, and on health payloads that report DB failure (transient outages).
+
 ### Required configuration
 
 | Variable | Role |
@@ -50,11 +72,12 @@
 
 | File | Description |
 |------|-------------|
-| `index.py` | App factory: CORS, router mounts, `/api/health`. |
+| `index.py` | App factory: CORS, router mounts, `/api/health` (DB-aware). |
+| `health_checks.py` | Health payload builder: DB `ping()` with retries. |
 | `config.py` | `pydantic-settings` load from env/`.env`; **fails fast** if `SUPABASE_JWT_SECRET` is empty. |
 | `db.py` | Singleton `get_supabase()` → `PostgresClient` (name kept for compatibility). |
 | `dependencies.py` | `get_current_user` (Bearer JWT + active member lookup), `require_officer`. |
-| `postgres_client.py` | psycopg2 pool, query builder, nested joins, `_LocalAuth.get_user` (JWT decode). |
+| `postgres_client.py` | psycopg2 pool, query builder, nested joins, `_LocalAuth.get_user` (JWT decode), `ping()` for health. |
 | `models/schemas.py` | Pydantic request/response models. |
 | `routes/auth.py` | Login (selects `password_hash` only here), `/me`, `/set-password`, `/invite`. |
 | `routes/events.py` | Chapter events CRUD and check-in link metadata. |
@@ -78,8 +101,8 @@
 | `lib/api-client.ts` | Typed HTTP client to the FastAPI base URL. |
 | `lib/types.ts`, `lib/theme.ts`, `lib/event-time.ts` | Types, tokens, time helpers. |
 | `hooks/use-auth.tsx` | Auth state, login/logout, token storage. |
-| `hooks/use-api.ts` | Data-fetching helper. |
-| `components/` | UI primitives (`ui/`), forms, countdown for check-in windows. |
+| `hooks/use-api.ts` | Data-fetching helper (`loading` / `error` / `reload`). |
+| `components/` | UI primitives (`ui/`), forms, countdown, `api-error-banner` for failed fetches. |
 | `views/` | Feature screens: dashboard, events, fines, members, standing, active check-ins. |
 
 ### Other
