@@ -20,7 +20,7 @@
                                                             └─────────────────────┘
 ```
 
-- **Frontend** (`fratos/`): App Router UI, auth context, typed API client (`NEXT_PUBLIC_API_BASE` → backend).
+- **Frontend** (`fratos/`): App Router UI, auth context, typed API client (same-origin `/api` by default via Next rewrite to backend).
 - **Backend** (`api/`): REST API, JWT issuance on login (`/api/auth/login`), JWT validation on protected routes (`get_current_user`), business logic and cron hooks.
 - **Data layer**: `PostgresClient` in `postgres_client.py` — a Supabase-py–shaped query builder over raw PostgreSQL (no Supabase JS SDK in the server path).
 
@@ -37,6 +37,8 @@
 | `POSTGRES_URL_NON_POOLING` | PostgreSQL connection string for the API. |
 | `SUPABASE_JWT_SECRET` | **Required, non-empty.** Used to sign login JWTs and to validate them in `PostgresClient` auth. Must match the JWT secret your project uses (e.g. Supabase **Project Settings → API → JWT Secret**). **Local dev:** set this in `.env` in the directory from which you run uvicorn (or export it); the process exits at import time if it is missing or whitespace-only. |
 | `FRONTEND_URL` | CORS allow-origin for the Next app. |
+| `FRONTEND_URLS` | Optional comma-separated additional allowed CORS origins. |
+| `FRONTEND_ORIGIN_REGEX` | Optional regex for allowed CORS origins (use carefully, e.g. preview domains). |
 | `BASE_URL` | Public API base for absolute check-in links in emails/pages. |
 | `CRON_SECRET` | Optional bearer for `/api/cron/*` if used. |
 
@@ -85,7 +87,7 @@
 | Path | Description |
 |------|-------------|
 | `migrations/` | SQL migrations (e.g. schema, `password_hash` on `members`). |
-| `scripts/` | Operational scripts (`migrate_db.py`, `set_officer_password.py`, etc.). |
+| `scripts/` | Operational scripts (`migrate_db.py`, `set_officer_password.py`, `check_prod_status.py`, etc.). |
 | `docs/` | Additional notes (`ARCHITECTURE.md`, `FEATURES.md`, `PHONE_LOGIN.md`). |
 | `requirements.txt` | Python dependencies for the API. |
 

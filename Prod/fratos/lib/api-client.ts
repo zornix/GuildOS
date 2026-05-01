@@ -30,7 +30,12 @@ function formatApiErrorDetail(data: unknown): string {
 /** When unset, same-origin `/api` works on Vercel. In local dev, Next.js is on :3000 and the API is on :8001. */
 function apiBase(): string {
   const explicit = process.env.NEXT_PUBLIC_API_BASE;
-  if (explicit) return explicit;
+  const allowCrossOrigin = process.env.NEXT_PUBLIC_USE_CROSS_ORIGIN_API === "true";
+  if (explicit && allowCrossOrigin) return explicit;
+  if (explicit && typeof window !== "undefined") {
+    const h = window.location.hostname;
+    if (h === "localhost" || h === "127.0.0.1") return explicit;
+  }
   if (typeof window !== "undefined") {
     const h = window.location.hostname;
     if (h === "localhost" || h === "127.0.0.1") return "http://127.0.0.1:8001";
@@ -66,8 +71,15 @@ class ApiClient {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     const token = this.getToken();
     if (token) headers["Authorization"] = `Bearer ${token}`;
-
-    const res = await fetch(`${apiBase()}${path}`, { ...opts, headers });
+    const url = `${apiBase()}${path}`;
+    let res: Response;
+    try {
+      res = await fetch(url, { ...opts, headers });
+    } catch {
+      throw new Error(
+        `Network request failed for ${path}. Check API URL/CORS configuration and verify backend reachability.`,
+      );
+    }
     const text = await res.text();
     let data: unknown = {};
     try {

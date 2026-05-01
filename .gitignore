@@ -67,3 +67,6 @@ playwright/.cache/
 # Gemini Skills
 git-publish/
 *.skill
+
+# Local agent artifacts
+.agents/
