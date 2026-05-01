@@ -17,6 +17,7 @@ import { CheckInForm } from "../components/forms/check-in-form";
 import { ExcuseForm } from "../components/forms/excuse-form";
 import type { Event, RosterEntry, CheckinLink } from "../lib/types";
 import { isPastEvent } from "../lib/event-time";
+import { ApiErrorBanner } from "../components/api-error-banner";
 
 export function EventsPage() {
   const { user } = useAuth();
@@ -40,14 +41,14 @@ export function EventsPage() {
       attendance.reload();
     }, 12000);
     return () => clearInterval(t);
-  }, [selected, user.role, attendance.reload]);
+  }, [selected, user.role, attendance]);
 
   useEffect(() => {
     if (!selected) return;
     const onFocus = () => attendance.reload();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-  }, [selected, attendance.reload]);
+  }, [selected, attendance]);
 
   // Restore active check-in link from server when entering event detail
   useEffect(() => {
@@ -66,7 +67,7 @@ export function EventsPage() {
     const onFocus = () => events.reload();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-  }, [selected, events.reload]);
+  }, [selected, events]);
 
   const show = (m: string) => {
     setToast(m);
@@ -78,6 +79,26 @@ export function EventsPage() {
     tab === "upcoming" ? !isPastEvent(e, now) : isPastEvent(e, now),
   );
   const detail = selected ? (events.data || []).find((e) => e.id === selected) : null;
+
+  if (selected && !detail && !events.loading) {
+    return (
+      <div>
+        <button
+          type="button"
+          onClick={() => setSelected(null)}
+          style={{ background: "none", border: "none", color: T.acl, cursor: "pointer", fontSize: 13, marginBottom: 16, padding: 0 }}
+        >
+          ← Back to Events
+        </button>
+        {events.error && (
+          <ApiErrorBanner message={events.error} onRetry={events.reload} loading={events.loading} />
+        )}
+        <Card style={{ textAlign: "center", color: T.txm, padding: 40 }}>
+          {events.error ? "Events could not be loaded." : "This event is no longer available."}
+        </Card>
+      </div>
+    );
+  }
 
   const generateLink = async () => {
     if (!selected) return;
@@ -112,6 +133,9 @@ export function EventsPage() {
         <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: T.acl, cursor: "pointer", fontSize: 13, marginBottom: 16, padding: 0 }}>
           ← Back to Events
         </button>
+        {events.error && (
+          <ApiErrorBanner message={events.error} onRetry={events.reload} loading={events.loading} />
+        )}
         <Card style={{ marginBottom: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
             <div>
@@ -162,6 +186,9 @@ export function EventsPage() {
         )}
 
         <Card>
+          {attendance.error && (
+            <ApiErrorBanner message={attendance.error} onRetry={attendance.reload} loading={attendance.loading} />
+          )}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
             <h3 style={{ margin: 0, color: T.tx, fontSize: 15 }}>
               Attendance ({(attendance.data || []).filter((a) => a.checked_in).length}/{(attendance.data || []).length})
@@ -180,6 +207,11 @@ export function EventsPage() {
               </Btn>
             )}
           </div>
+          {attendance.loading && !(attendance.data || []).length ? (
+            <div style={{ color: T.txm, textAlign: "center", padding: 24 }}>Loading attendance…</div>
+          ) : attendance.error && !(attendance.data || []).length ? (
+            <div style={{ color: T.txm, fontSize: 13, padding: 16, textAlign: "center" }}>Could not load attendance. Use Retry above.</div>
+          ) : (
           <div style={{ display: "grid", gap: 6 }}>
             {(attendance.data || []).map((m) => (
               <div key={m.member_id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", borderRadius: 8, background: T.bg }}>
@@ -213,6 +245,7 @@ export function EventsPage() {
               </div>
             ))}
           </div>
+          )}
         </Card>
 
         {modal === "checkin" && (
@@ -288,10 +321,15 @@ export function EventsPage() {
         </div>
         {user.role === "officer" && <Btn onClick={() => setModal("create")}><Icon type="plus" size={14} /> New Event</Btn>}
       </div>
-      {events.loading ? (
-        <div style={{ color: T.txm, textAlign: "center", padding: 40 }}>Loading...</div>
+      {events.error && (
+        <ApiErrorBanner message={events.error} onRetry={events.reload} loading={events.loading} />
+      )}
+      {events.loading && !(events.data || []).length ? (
+        <div style={{ color: T.txm, textAlign: "center", padding: 40 }}>Loading events…</div>
       ) : list.length === 0 ? (
-        <Card style={{ textAlign: "center", color: T.txm, padding: 40 }}>No {tab} events</Card>
+        <Card style={{ textAlign: "center", color: T.txm, padding: 40 }}>
+          {events.error ? `Could not load events (${tab}). Use Retry above.` : `No ${tab} events`}
+        </Card>
       ) : (
         <div style={{ display: "grid", gap: 10 }}>
           {list.map((e) => (

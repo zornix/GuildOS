@@ -14,4 +14,11 @@ Production default uses same-origin `/api` calls and Next rewrites (`BACKEND_URL
 If you intentionally want direct cross-origin browser calls, set `NEXT_PUBLIC_USE_CROSS_ORIGIN_API=true`
 alongside `NEXT_PUBLIC_API_BASE`.
 
+### Resilience
+
+- **Read requests** (`GET` list/detail flows in `lib/api-client.ts`): up to **3 attempts** with exponential backoff on network failures and HTTP **408 / 429 / 5xx**. Mutations (`POST` / `PUT` / `DELETE`) are **not** auto-retried.
+- **UI:** Dashboard, Events, and Members show explicit **loading**, **error**, and **empty** states with a **Retry** action when fetches fail (so empty lists are not mistaken for a dead database).
+
+Unit tests: `npm run test:unit` (Vitest).
+
 E2E: `npm run test:e2e` (install browsers once with `npx playwright install chromium`).

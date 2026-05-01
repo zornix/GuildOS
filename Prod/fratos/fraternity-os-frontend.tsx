@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AuthProvider, useAuth } from "./hooks/use-auth";
 import { T } from "./lib/theme";
 import { Icon } from "./components/ui/icon";
@@ -23,16 +23,14 @@ const NAV: { id: PageId; label: string; icon: string }[] = [
   { id: "active-checkins", label: "Active Check-Ins", icon: "link" },
 ];
 
+const OFFICER_ONLY: PageId[] = ["standing", "active-checkins"];
+
 function AppShell() {
   const { user, logout } = useAuth();
   const [page, setPage] = useState<PageId>("dashboard");
 
-  const officerOnly: PageId[] = ["standing", "active-checkins"];
-  const navItems = NAV.filter((n) => !officerOnly.includes(n.id) || user.role === "officer");
-
-  useEffect(() => {
-    if (officerOnly.includes(page) && user.role !== "officer") setPage("dashboard");
-  }, [page, user.role]);
+  const activePage = OFFICER_ONLY.includes(page) && user.role !== "officer" ? "dashboard" : page;
+  const navItems = NAV.filter((n) => !OFFICER_ONLY.includes(n.id) || user.role === "officer");
 
   return (
     <div style={{ display: "flex", height: "100vh", background: T.bg, fontFamily: "'Inter', -apple-system, sans-serif", color: T.tx, overflow: "hidden" }}>
@@ -50,8 +48,8 @@ function AppShell() {
                 width: "100%", display: "flex", alignItems: "center", gap: 10,
                 padding: "10px 12px", borderRadius: 8, border: "none", cursor: "pointer",
                 fontSize: 13, fontWeight: 500, marginBottom: 2,
-                background: page === n.id ? T.ac + "22" : "transparent",
-                color: page === n.id ? T.acl : T.txm,
+                background: activePage === n.id ? T.ac + "22" : "transparent",
+                color: activePage === n.id ? T.acl : T.txm,
               }}
             >
               <Icon type={n.icon} size={16} /> {n.label}
@@ -74,15 +72,15 @@ function AppShell() {
       <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
         <div style={{ maxWidth: 900, margin: "0 auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>{NAV.find((n) => n.id === page)?.label}</h1>
+            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>{NAV.find((n) => n.id === activePage)?.label}</h1>
             <Badge color={user.role === "officer" ? "purple" : "blue"}>{user.role}</Badge>
           </div>
-          {page === "dashboard" && <DashboardPage />}
-          {page === "events" && <EventsPage />}
-          {page === "fines" && <FinesPage />}
-          {page === "members" && <MembersPage />}
-          {page === "standing" && <StandingPage />}
-          {page === "active-checkins" && <ActiveCheckInsPage />}
+          {activePage === "dashboard" && <DashboardPage />}
+          {activePage === "events" && <EventsPage />}
+          {activePage === "fines" && <FinesPage />}
+          {activePage === "members" && <MembersPage />}
+          {activePage === "standing" && <StandingPage />}
+          {activePage === "active-checkins" && <ActiveCheckInsPage />}
         </div>
       </div>
     </div>

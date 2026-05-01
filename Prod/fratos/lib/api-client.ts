@@ -11,6 +11,34 @@ import type {
   MemberStanding,
 } from "./types";
 
+/** Thrown for failed HTTP responses so callers can inspect `status` (e.g. retries). */
+export class ApiRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+  ) {
+    super(message);
+    this.name = "ApiRequestError";
+  }
+}
+
+const READ_RETRY_MAX_ATTEMPTS = 3;
+const READ_RETRY_BASE_MS = 150;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetriableReadFailure(err: unknown): boolean {
+  if (err instanceof ApiRequestError) {
+    const s = err.status;
+    if (s === undefined) return false;
+    return s === 408 || s === 429 || s >= 500;
+  }
+  if (err instanceof Error && err.message.includes("Network request failed")) return true;
+  return false;
+}
+
 function formatApiErrorDetail(data: unknown): string {
   const d = (data as { detail?: unknown }).detail;
   if (typeof d === "string") return d;
@@ -43,7 +71,7 @@ function apiBase(): string {
   return "";
 }
 
-class ApiClient {
+export class ApiClient {
   private token: string | null = null;
 
   setToken(t: string | null) {
@@ -85,12 +113,30 @@ class ApiClient {
     try {
       data = text ? JSON.parse(text) : {};
     } catch {
-      throw new Error(
+      throw new ApiRequestError(
         `API returned non-JSON (${res.status}). For local dev, run the FastAPI server on port 8001 or set NEXT_PUBLIC_API_BASE.`,
+        res.status,
       );
     }
-    if (!res.ok) throw new Error(formatApiErrorDetail(data));
+    if (!res.ok) throw new ApiRequestError(formatApiErrorDetail(data), res.status);
     return data as T;
+  }
+
+  /** Idempotent GET with bounded exponential backoff on transient failures. */
+  private async requestRead<T>(path: string): Promise<T> {
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < READ_RETRY_MAX_ATTEMPTS; attempt++) {
+      try {
+        return await this.request<T>(path, { method: "GET" });
+      } catch (e) {
+        lastErr = e;
+        if (!isRetriableReadFailure(e) || attempt === READ_RETRY_MAX_ATTEMPTS - 1) {
+          throw e;
+        }
+        await sleep(READ_RETRY_BASE_MS * 2 ** attempt);
+      }
+    }
+    throw lastErr;
   }
 
   // Auth
@@ -109,7 +155,7 @@ class ApiClient {
     });
   }
   getMe() {
-    return this.request<Member>("/api/auth/me");
+    return this.requestRead<Member>("/api/auth/me");
   }
   invite(emails: string[]) {
     return this.request<InviteResult>("/api/auth/invite", {
@@ -120,10 +166,10 @@ class ApiClient {
 
   // Events
   getEvents() {
-    return this.request<Event[]>("/api/events");
+    return this.requestRead<Event[]>("/api/events");
   }
   getEvent(id: string) {
-    return this.request<Event>(`/api/events/${id}`);
+    return this.requestRead<Event>(`/api/events/${id}`);
   }
   createEvent(data: Partial<Event>) {
     return this.request<Event>("/api/events", {
@@ -137,7 +183,7 @@ class ApiClient {
 
   // Check-in links
   getActiveCheckinLink(eventId: string) {
-    return this.request<CheckinLink | Record<string, never>>(`/api/events/${eventId}/checkin-link`);
+    return this.requestRead<CheckinLink | Record<string, never>>(`/api/events/${eventId}/checkin-link`);
   }
   createCheckinLink(eventId: string) {
     return this.request<CheckinLink>(`/api/events/${eventId}/checkin-link`, { method: "POST" });
@@ -146,7 +192,7 @@ class ApiClient {
     return this.request<{ deactivated: boolean }>(`/api/events/${eventId}/checkin-link`, { method: "DELETE" });
   }
   listActiveCheckinLinks() {
-    return this.request<ActiveCheckinLinkRow[]>("/api/checkin-links/active");
+    return this.requestRead<ActiveCheckinLinkRow[]>("/api/checkin-links/active");
   }
 
   // Attendance
@@ -154,7 +200,7 @@ class ApiClient {
     return this.request<{ status: string; event_title: string }>(`/api/attendance/checkin/${code}`, { method: "POST" });
   }
   getAttendance(eventId: string) {
-    return this.request<RosterEntry[]>(`/api/attendance/event/${eventId}`);
+    return this.requestRead<RosterEntry[]>(`/api/attendance/event/${eventId}`);
   }
   manualCheckin(eventId: string, memberId: string, status: "present" | "excused" | "absent" = "present", reason?: string) {
     return this.request<{ status: string; method: string }>(
@@ -171,7 +217,7 @@ class ApiClient {
     });
   }
   getExcuses(status?: string | null) {
-    return this.request<Excuse[]>(`/api/excuses${status ? `?status=${status}` : ""}`);
+    return this.requestRead<Excuse[]>(`/api/excuses${status ? `?status=${status}` : ""}`);
   }
   reviewExcuse(id: string, status: string) {
     return this.request<Excuse>(`/api/excuses/${id}/review`, {
@@ -182,13 +228,13 @@ class ApiClient {
 
   // Fines
   getFines(status?: string | null) {
-    return this.request<Fine[]>(`/api/fines${status ? `?status=${status}` : ""}`);
+    return this.requestRead<Fine[]>(`/api/fines${status ? `?status=${status}` : ""}`);
   }
   waiveFine(id: string) {
     return this.request<Fine>(`/api/fines/${id}/waive`, { method: "POST" });
   }
   getFineSummary() {
-    return this.request<FineSummary>("/api/fines/summary");
+    return this.requestRead<FineSummary>("/api/fines/summary");
   }
   processEventFines(eventId: string) {
     return this.request<{ event_id: string; fines_issued: number }>(
@@ -199,7 +245,7 @@ class ApiClient {
 
   // Members
   getMembers() {
-    return this.request<Member[]>("/api/members");
+    return this.requestRead<Member[]>("/api/members");
   }
   updateRole(memberId: string, role: string) {
     return this.request<Member>(`/api/members/${memberId}/role?role=${role}`, {
@@ -209,7 +255,7 @@ class ApiClient {
 
   // Standing
   getStandings() {
-    return this.request<MemberStanding[]>("/api/standing");
+    return this.requestRead<MemberStanding[]>("/api/standing");
   }
 }
 

@@ -9,6 +9,7 @@ import { Btn } from "../components/ui/btn";
 import { Icon } from "../components/ui/icon";
 import type { Event, Fine, Excuse } from "../lib/types";
 import { isUpcomingEvent } from "../lib/event-time";
+import { ApiErrorBanner } from "../components/api-error-banner";
 
 export function DashboardPage() {
   const { user } = useAuth();
@@ -21,20 +22,53 @@ export function DashboardPage() {
   const pendingExcuses = (excuses.data || []).filter((e) => e.status === "pending");
   const unpaidFines = (fines.data || []).filter((f) => f.status === "unpaid");
 
+  const upcomingStatValue =
+    events.loading && !(events.data || []).length
+      ? "…"
+      : events.error
+        ? "—"
+        : String(upcoming.length);
+
+  const officerExcuseStat =
+    excuses.loading && !(excuses.data || []).length
+      ? "…"
+      : excuses.error
+        ? "—"
+        : String(pendingExcuses.length);
+
+  const unpaidTotal = unpaidFines.reduce((s, f) => s + f.amount, 0);
+  const finesStatValue =
+    fines.loading && !(fines.data || []).length
+      ? "…"
+      : fines.error
+        ? "—"
+        : user.role === "officer"
+          ? `$${unpaidTotal}`
+          : String(unpaidFines.length);
+
   const stats =
     user.role === "officer"
       ? [
-          { label: "Upcoming Events", value: upcoming.length, icon: "cal", color: T.ac },
-          { label: "Pending Excuses", value: pendingExcuses.length, icon: "file", color: T.warn },
-          { label: "Unpaid Fines", value: `$${unpaidFines.reduce((s, f) => s + f.amount, 0)}`, icon: "dollar", color: T.err },
+          { label: "Upcoming Events", value: upcomingStatValue, icon: "cal", color: T.ac },
+          { label: "Pending Excuses", value: officerExcuseStat, icon: "file", color: T.warn },
+          { label: "Unpaid Fines", value: finesStatValue, icon: "dollar", color: T.err },
         ]
       : [
-          { label: "Upcoming Events", value: upcoming.length, icon: "cal", color: T.ac },
-          { label: "My Unpaid Fines", value: unpaidFines.length, icon: "dollar", color: T.err },
+          { label: "Upcoming Events", value: upcomingStatValue, icon: "cal", color: T.ac },
+          { label: "My Unpaid Fines", value: finesStatValue, icon: "dollar", color: T.err },
         ];
 
   return (
     <div>
+      {events.error && (
+        <ApiErrorBanner message={`Events: ${events.error}`} onRetry={events.reload} loading={events.loading} />
+      )}
+      {fines.error && (
+        <ApiErrorBanner message={`Fines: ${fines.error}`} onRetry={fines.reload} loading={fines.loading} />
+      )}
+      {excuses.error && (
+        <ApiErrorBanner message={`Excuses: ${excuses.error}`} onRetry={excuses.reload} loading={excuses.loading} />
+      )}
       <div style={{ display: "grid", gridTemplateColumns: `repeat(${stats.length}, 1fr)`, gap: 16, marginBottom: 24 }}>
         {stats.map((s, i) => (
           <Card key={i} style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -53,7 +87,11 @@ export function DashboardPage() {
           <div style={{ fontSize: 15, fontWeight: 700, color: T.tx, marginBottom: 14, display: "flex", alignItems: "center", gap: 8 }}>
             <Icon type="cal" /> Upcoming
           </div>
-          {upcoming.length === 0 ? (
+          {events.loading && !(events.data || []).length ? (
+            <div style={{ color: T.txm, fontSize: 13, padding: 16, textAlign: "center" }}>Loading events…</div>
+          ) : events.error ? (
+            <div style={{ color: T.txm, fontSize: 13, padding: 16, textAlign: "center" }}>Could not load events. Use Retry above.</div>
+          ) : upcoming.length === 0 ? (
             <div style={{ color: T.txm, fontSize: 13, padding: 16, textAlign: "center" }}>No upcoming events</div>
           ) : (
             upcoming.slice(0, 5).map((e) => (
@@ -76,7 +114,11 @@ export function DashboardPage() {
             )}
           </div>
           {user.role === "officer" ? (
-            pendingExcuses.length === 0 ? (
+            excuses.loading && !(excuses.data || []).length ? (
+              <div style={{ color: T.txm, fontSize: 13, padding: 16, textAlign: "center" }}>Loading excuses…</div>
+            ) : excuses.error ? (
+              <div style={{ color: T.txm, fontSize: 13, padding: 16, textAlign: "center" }}>Could not load excuses. Use Retry above.</div>
+            ) : pendingExcuses.length === 0 ? (
               <div style={{ color: T.txm, fontSize: 13, padding: 16, textAlign: "center" }}>All clear</div>
             ) : (
               pendingExcuses.slice(0, 5).map((exc) => (
@@ -94,6 +136,10 @@ export function DashboardPage() {
                 </div>
               ))
             )
+          ) : fines.loading && !(fines.data || []).length ? (
+            <div style={{ color: T.txm, fontSize: 13, padding: 16, textAlign: "center" }}>Loading fines…</div>
+          ) : fines.error ? (
+            <div style={{ color: T.txm, fontSize: 13, padding: 16, textAlign: "center" }}>Could not load fines. Use Retry above.</div>
           ) : unpaidFines.length === 0 ? (
             <div style={{ color: T.txm, fontSize: 13, padding: 16, textAlign: "center" }}>No fines — keep it up!</div>
           ) : (
