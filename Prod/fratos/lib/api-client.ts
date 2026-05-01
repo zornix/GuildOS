@@ -58,12 +58,9 @@ function formatApiErrorDetail(data: unknown): string {
 /** When unset, same-origin `/api` works on Vercel. In local dev, Next.js is on :3000 and the API is on :8001. */
 function apiBase(): string {
   const explicit = process.env.NEXT_PUBLIC_API_BASE;
-  const allowCrossOrigin = process.env.NEXT_PUBLIC_USE_CROSS_ORIGIN_API === "true";
-  if (explicit && allowCrossOrigin) return explicit;
-  if (explicit && typeof window !== "undefined") {
-    const h = window.location.hostname;
-    if (h === "localhost" || h === "127.0.0.1") return explicit;
-  }
+  // If explicitly configured, always honor it. This keeps prod behavior stable
+  // and avoids auth header loss across proxy/rewrite layers.
+  if (explicit) return explicit;
   if (typeof window !== "undefined") {
     const h = window.location.hostname;
     if (h === "localhost" || h === "127.0.0.1") return "http://127.0.0.1:8001";
