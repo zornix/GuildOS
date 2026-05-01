@@ -7,10 +7,14 @@ Deploy:  vercel --prod
 Local:   uvicorn api.index:app --reload
 """
 
+import asyncio
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.config import settings
+from api.db import get_supabase
+from api.health_checks import build_health_payload
 from api.routes import auth, events, attendance, excuses, fines, members, checkin_page, checkin_links, cron, standing
 
 app = FastAPI(
@@ -43,4 +47,5 @@ app.include_router(standing.router, prefix="/api/standing", tags=["Standing"])
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "version": "0.1.0"}
+    # Run sync DB ping in a thread so the event loop is not blocked.
+    return await asyncio.to_thread(build_health_payload, get_supabase())

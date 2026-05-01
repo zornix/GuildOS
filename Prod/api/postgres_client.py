@@ -478,3 +478,13 @@ class PostgresClient:
 
     def table(self, name: str) -> _TableAccessor:
         return _TableAccessor(self._pool, name)
+
+    def ping(self) -> None:
+        """Verify pool connectivity with a trivial query (for health checks)."""
+        conn = self._pool.getconn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+                cur.fetchone()
+        finally:
+            self._pool.putconn(conn)
