@@ -115,12 +115,14 @@ export function EventsPage() {
   const deleteSelectedEvent = async () => {
     if (!selected || user.role !== "officer") return;
     if (!window.confirm("Delete this event? This cannot be undone.")) return;
+    const eventId = selected;
     try {
-      await api.deleteEvent(selected);
+      await api.deleteEvent(eventId);
+      events.setData((prev) => (prev ? prev.filter((event) => event.id !== eventId) : prev));
+      await events.reload();
       show("Event deleted");
       setSelected(null);
       setActiveLink(null);
-      events.reload();
     } catch (e: unknown) {
       show((e as Error).message || "Failed to delete event");
     }

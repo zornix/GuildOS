@@ -26,4 +26,32 @@ describe("useApi", () => {
     expect(result.current.error).toBeNull();
     expect(result.current.data).toEqual([1, 2, 3]);
   });
+
+  it("reload resolves only after fetch completes", async () => {
+    let release!: () => void;
+    const fetchFn = vi.fn(
+      () =>
+        new Promise<number[]>((resolve) => {
+          release = () => resolve([42]);
+        }),
+    );
+
+    const { result } = renderHook(() => useApi(() => fetchFn(), []));
+    expect(result.current.loading).toBe(true);
+
+    let maybePromise: Promise<void> | undefined;
+    act(() => {
+      maybePromise = result.current.reload();
+    });
+    expect(maybePromise).toBeInstanceOf(Promise);
+
+    await Promise.resolve();
+    expect(result.current.loading).toBe(true);
+
+    release();
+    await maybePromise;
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.data).toEqual([42]);
+  });
 });

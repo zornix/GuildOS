@@ -6,13 +6,17 @@ export function useApi<T>(fetchFn: () => Promise<T>, deps: unknown[] = []) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const reload = useCallback(() => {
+  const reload = useCallback(async () => {
     setLoading(true);
     setError(null);
-    fetchFn()
-      .then(setData)
-      .catch((e: Error) => setError(e.message))
-      .finally(() => setLoading(false));
+    try {
+      const nextData = await fetchFn();
+      setData(nextData);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
