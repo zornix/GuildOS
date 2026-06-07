@@ -1,0 +1,63 @@
+name: LocalDev CI
+
+on:
+  push:
+    paths:
+      - "LocalDev/**"
+  pull_request:
+    paths:
+      - "LocalDev/**"
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: LocalDev
+
+jobs:
+  verify-sandbox:
+    name: Verify LocalDev sandbox
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: fraternityos
+          POSTGRES_PASSWORD: localdev
+          POSTGRES_DB: fraternityos
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U fraternityos"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: LocalDev/requirements.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: LocalDev/fratos/package-lock.json
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          echo "NEXT_PUBLIC_API_BASE=http://127.0.0.1:8001" > fratos/.env.local
+
+      - name: Run sandbox verification
+        env:
+          DATABASE_URL: postgresql://fraternityos:localdev@localhost:5434/fraternityos
+          KEEP_POSTGRES: "1"
+        run: bash deploy/verify-local.sh
