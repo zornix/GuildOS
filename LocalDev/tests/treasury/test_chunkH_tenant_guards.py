@@ -12,6 +12,7 @@ from __future__ import annotations
 import uuid
 
 import pytest
+from fastapi import HTTPException
 
 from api.treasury.services import adjustments as adj_svc
 from api.treasury.services import invoices as svc
@@ -113,3 +114,78 @@ def test_submit_payment_rejects_another_members_invoice(
             invoice_id=invoice_b["id"], claimed_amount_cents=5000, method="venmo",
             proof_ref=None, actor_id=member_a,
         )
+
+
+# ── balance read endpoint: capability + same-chapter (read-side guard) ───────
+# GET /members/{id}/balance previously let any role=="officer" read ANY member's
+# balance, including across chapters. The hardened guard (mirroring /statement)
+# requires the member themself OR a same-chapter treasury:read holder, and 404s
+# anything outside the caller's chapter so cross-chapter existence never leaks.
+# The endpoint reads `sb` from get_treasury_db(); we point it at the test client
+# and call the handler directly with a plain user dict (no FastAPI Depends).
+
+
+def _grant(cursor, chapter, member, capability):
+    cursor.execute(
+        "INSERT INTO treasury_grants (chapter_id, member_id, capability) VALUES (%s, %s, %s)",
+        (chapter, member, capability),
+    )
+
+
+async def test_balance_self_read_allowed(
+    sb_client, monkeypatch, chapter_id, member_factory
+):
+    from api.treasury.api import balances
+
+    monkeypatch.setattr(balances, "get_treasury_db", lambda: sb_client)
+    member = member_factory()
+    result = await balances.get_member_balance(
+        member, user={"id": member, "chapter_id": chapter_id}
+    )
+    assert result["member_id"] == member
+
+
+async def test_balance_read_requires_capability(
+    sb_client, monkeypatch, chapter_id, member_factory
+):
+    from api.treasury.api import balances
+
+    monkeypatch.setattr(balances, "get_treasury_db", lambda: sb_client)
+    target = member_factory()
+    requester = member_factory(role="officer")  # role alone no longer grants access
+    with pytest.raises(HTTPException) as exc:
+        await balances.get_member_balance(
+            target, user={"id": requester, "chapter_id": chapter_id}
+        )
+    assert exc.value.status_code == 403
+
+
+async def test_balance_read_allowed_for_same_chapter_treasury_read(
+    sb_client, cursor, monkeypatch, chapter_id, member_factory
+):
+    from api.treasury.api import balances
+
+    monkeypatch.setattr(balances, "get_treasury_db", lambda: sb_client)
+    target = member_factory()
+    requester = member_factory()
+    _grant(cursor, chapter_id, requester, "treasury:read")
+    result = await balances.get_member_balance(
+        target, user={"id": requester, "chapter_id": chapter_id}
+    )
+    assert result["member_id"] == target
+
+
+async def test_balance_read_404s_member_in_another_chapter(
+    sb_client, cursor, monkeypatch, chapter_id, other_chapter, member_factory
+):
+    from api.treasury.api import balances
+
+    monkeypatch.setattr(balances, "get_treasury_db", lambda: sb_client)
+    foreign_target = member_factory(chapter=other_chapter)
+    requester = member_factory()
+    _grant(cursor, chapter_id, requester, "treasury:read")  # holds the cap in their OWN chapter
+    with pytest.raises(HTTPException) as exc:
+        await balances.get_member_balance(
+            foreign_target, user={"id": requester, "chapter_id": chapter_id}
+        )
+    assert exc.value.status_code == 404
