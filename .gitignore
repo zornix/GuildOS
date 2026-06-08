@@ -68,5 +68,6 @@ playwright/.cache/
 git-publish/
 *.skill
 
-# Local agent artifacts
+# Local agent artifacts (any depth)
+.claude/
 .agents/
