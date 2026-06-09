@@ -16,6 +16,7 @@ from api.config import settings
 from api.db import get_supabase
 from api.health_checks import build_health_payload
 from api.routes import auth, events, attendance, excuses, fines, members, checkin_page, checkin_links, cron, standing, operations
+from api.memberadmin.api.router import router as memberadmin_router
 from api.treasury.api.router import router as treasury_router
 
 app = FastAPI(
@@ -43,6 +44,7 @@ app.include_router(checkin_page.router, prefix="/c", tags=["Check-In Page"])
 app.include_router(checkin_links.router, prefix="/api/checkin-links", tags=["Check-In Links"])
 app.include_router(cron.router, prefix="/api/cron", tags=["Cron"])
 app.include_router(standing.router, prefix="/api/standing", tags=["Standing"])
+app.include_router(memberadmin_router, prefix="/api/memberadmin", tags=["MemberAdmin"])
 app.include_router(operations.router, prefix="/api/operations", tags=["Operations"])
 app.include_router(treasury_router, prefix="/api/treasury", tags=["Treasury"])
 
