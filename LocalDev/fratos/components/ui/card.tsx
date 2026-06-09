@@ -1,6 +1,6 @@
 "use client";
 import type { CSSProperties, ReactNode } from "react";
-import { T } from "../../lib/theme";
+import { tokens } from "../../config/theme/tokens";
 
 interface CardProps {
   children: ReactNode;
@@ -13,11 +13,11 @@ export function Card({ children, style = {}, onClick }: CardProps) {
     <div
       onClick={onClick}
       style={{
-        background: T.sf,
-        borderRadius: 12,
-        border: `1px solid ${T.bd}`,
-        padding: 20,
-        transition: "border-color 0.2s",
+        background: tokens.color.surface,
+        borderRadius: tokens.radius.lg,
+        border: `1px solid ${tokens.color.border}`,
+        padding: tokens.space[5],
+        transition: `border-color ${tokens.transition.fast}`,
         cursor: onClick ? "pointer" : "default",
         ...style,
       }}

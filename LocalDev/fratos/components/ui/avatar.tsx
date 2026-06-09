@@ -1,5 +1,5 @@
 "use client";
-import { T } from "../../lib/theme";
+import { tokens } from "../../config/theme/tokens";
 
 interface AvatarProps {
   name?: string;
@@ -16,14 +16,14 @@ export function Avatar({ name, size = 32 }: AvatarProps) {
       style={{
         width: size,
         height: size,
-        borderRadius: 999,
-        background: T.ac + "33",
+        borderRadius: tokens.radius.pill,
+        background: "#6c5ce733",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         fontSize: size * 0.38,
         fontWeight: 700,
-        color: T.acl,
+        color: tokens.color.accentMuted,
         flexShrink: 0,
       }}
     >

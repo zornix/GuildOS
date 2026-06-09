@@ -1,16 +1,16 @@
 "use client";
 import type { ReactNode } from "react";
-import { T } from "../../lib/theme";
+import { tokens } from "../../config/theme/tokens";
 
 type BadgeColor = "green" | "red" | "yellow" | "blue" | "purple" | "gray";
 
 const COLOR_MAP: Record<BadgeColor, [string, string]> = {
-  green: [T.ok + "22", "#059669"],
-  red: [T.err + "22", "#dc2626"],
-  yellow: [T.warn + "22", "#b45309"],
+  green: ["#10b98122", "#059669"],
+  red: ["#ef444422", "#dc2626"],
+  yellow: ["#f59e0b22", "#b45309"],
   blue: ["#3b82f622", "#2563eb"],
-  purple: [T.ac + "22", T.acl],
-  gray: [T.bd, T.txm],
+  purple: ["#6c5ce722", tokens.color.accentMuted],
+  gray: [tokens.color.border, tokens.color.textMuted],
 };
 
 interface BadgeProps {
@@ -25,8 +25,8 @@ export function Badge({ children, color = "gray" }: BadgeProps) {
       style={{
         display: "inline-block",
         padding: "2px 10px",
-        borderRadius: 999,
-        fontSize: 11,
+        borderRadius: tokens.radius.pill,
+        fontSize: tokens.font.sizeSm,
         fontWeight: 600,
         background: bg,
         color: tx,

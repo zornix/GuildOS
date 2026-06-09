@@ -1,5 +1,5 @@
 "use client";
-import { T } from "../../lib/theme";
+import { tokens } from "../../config/theme/tokens";
 
 interface ToastProps {
   msg: string | null;
@@ -11,16 +11,16 @@ export function Toast({ msg }: ToastProps) {
     <div
       style={{
         position: "fixed",
-        bottom: 24,
+        bottom: tokens.space[6],
         left: "50%",
         transform: "translateX(-50%)",
-        background: T.ok,
+        background: tokens.color.success,
         color: "#fff",
-        padding: "10px 24px",
-        borderRadius: 10,
-        fontSize: 13,
+        padding: `10px ${tokens.space[6]}`,
+        borderRadius: tokens.radius.lg,
+        fontSize: tokens.font.sizeMd,
         fontWeight: 600,
-        boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
+        boxShadow: tokens.shadow.toast,
         zIndex: 9999,
       }}
     >

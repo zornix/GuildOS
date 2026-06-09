@@ -1,6 +1,6 @@
 "use client";
 import type { ReactNode } from "react";
-import { T } from "../../lib/theme";
+import { tokens } from "../../config/theme/tokens";
 
 interface ModalProps {
   children: ReactNode;
@@ -14,7 +14,7 @@ export function Modal({ children, onClose }: ModalProps) {
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,0.6)",
+        background: tokens.color.overlay,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -25,12 +25,12 @@ export function Modal({ children, onClose }: ModalProps) {
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: T.sf,
-          borderRadius: 16,
-          padding: 24,
-          maxWidth: 440,
+          background: tokens.color.surface,
+          borderRadius: tokens.radius.xl,
+          padding: tokens.space[6],
+          maxWidth: tokens.layout.modalMaxWidth,
           width: "90%",
-          border: `1px solid ${T.bd}`,
+          border: `1px solid ${tokens.color.border}`,
           maxHeight: "85vh",
           overflowY: "auto",
         }}
