@@ -3,11 +3,15 @@ import { useState } from "react";
 import { useAuth } from "../hooks/use-auth";
 import { useApi } from "../hooks/use-api";
 import { api } from "../lib/api-client";
-import { T } from "../lib/theme";
+import { tokens } from "../config/theme/tokens";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Btn } from "../components/ui/btn";
 import { Toast } from "../components/ui/toast";
+import { SegmentedControl } from "../components/ui/segmented-control";
+import { LoadingState } from "../components/ui/loading-state";
+import { EmptyState } from "../components/ui/empty-state";
+import { formatMoney } from "../lib/formatters/money";
 import type { Fine } from "../lib/types";
 
 export function FinesPage() {
@@ -21,41 +25,44 @@ export function FinesPage() {
     setTimeout(() => setToast(null), 2500);
   };
 
-  const filtered = (fines.data || []).filter((f) => filter === "all" || f.status === filter);
+  const allData = fines.data || [];
+  const filterOptions = [
+    { value: "all", label: `all (${allData.length})` },
+    { value: "unpaid", label: `unpaid (${allData.filter((x) => x.status === "unpaid").length})` },
+    { value: "paid", label: `paid (${allData.filter((x) => x.status === "paid").length})` },
+    { value: "waived", label: `waived (${allData.filter((x) => x.status === "waived").length})` },
+  ];
+
+  const filtered = allData.filter((f) => filter === "all" || f.status === filter);
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 4, background: T.sf, borderRadius: 8, padding: 3, marginBottom: 16, flexWrap: "wrap" }}>
-        {["all", "unpaid", "paid", "waived"].map((f) => (
-          <Btn
-            key={f}
-            variant={filter === f ? "primary" : "ghost"}
-            style={{ textTransform: "capitalize", padding: "6px 12px", fontSize: 12 }}
-            onClick={() => setFilter(f)}
-          >
-            {f} ({f === "all" ? (fines.data || []).length : (fines.data || []).filter((x) => x.status === f).length})
-          </Btn>
-        ))}
-      </div>
+      <SegmentedControl options={filterOptions} value={filter} onChange={setFilter} />
       {fines.loading ? (
-        <div style={{ color: T.txm, textAlign: "center", padding: 40 }}>Loading...</div>
+        <LoadingState />
       ) : filtered.length === 0 ? (
-        <Card style={{ textAlign: "center", color: T.txm, padding: 40 }}>No fines</Card>
+        <EmptyState message="No fines" />
       ) : (
-        <div style={{ display: "grid", gap: 10 }}>
+        <div style={{ display: "grid", gap: tokens.space[2] }}>
           {filtered.map((f) => (
-            <Card key={f.id} style={{ padding: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <Card key={f.id} style={{ padding: tokens.space[4], display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
-                {user.role === "officer" && f.members && <div style={{ fontSize: 14, fontWeight: 700, color: T.tx }}>{f.members.name}</div>}
-                <div style={{ fontSize: 13, color: T.tx }}>{f.reason}</div>
-                <div style={{ fontSize: 11, color: T.txm }}>{f.events?.title} · {f.events?.date}</div>
+                {user.role === "officer" && f.members && (
+                  <div style={{ fontSize: tokens.font.sizeLg, fontWeight: tokens.font.weightBold, color: tokens.color.text }}>
+                    {f.members.name}
+                  </div>
+                )}
+                <div style={{ fontSize: tokens.font.sizeMd, color: tokens.color.text }}>{f.reason}</div>
+                <div style={{ fontSize: tokens.font.sizeSm, color: tokens.color.textMuted }}>{f.events?.title} · {f.events?.date}</div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ fontSize: 18, fontWeight: 800, color: f.status === "unpaid" ? T.err : T.txm }}>${f.amount}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: tokens.space[2] }}>
+                <div style={{ fontSize: tokens.font.size2xl, fontWeight: tokens.font.weightExtrabold, color: f.status === "unpaid" ? tokens.color.danger : tokens.color.textMuted }}>
+                  {formatMoney(f.amount)}
+                </div>
                 <Badge color={f.status === "paid" ? "green" : f.status === "waived" ? "blue" : "red"}>{f.status}</Badge>
                 {f.status === "unpaid" && user.role === "officer" && (
-                  <div style={{ display: "flex", gap: 4, marginLeft: 4 }}>
-                    <Btn variant="ghost" style={{ padding: "4px 10px", fontSize: 11 }} onClick={() => api.waiveFine(f.id).then(() => { fines.reload(); show("Waived"); })}>Waive</Btn>
+                  <div style={{ display: "flex", gap: tokens.space[1], marginLeft: tokens.space[1] }}>
+                    <Btn variant="ghost" style={{ padding: "4px 10px", fontSize: tokens.font.sizeSm }} onClick={() => api.waiveFine(f.id).then(() => { fines.reload(); show("Waived"); })}>Waive</Btn>
                   </div>
                 )}
               </div>
