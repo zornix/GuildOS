@@ -89,13 +89,69 @@ def generate_token(member_id: str) -> str:
     return jwt.encode({"sub": member_id, "exp": datetime.now(timezone.utc) + timedelta(days=30)}, JWT_SECRET, algorithm="HS256")
 
 
+def _seed_fine_invoice(
+    cur,
+    member_id: str,
+    event_id: str,
+    amount_dollars: float,
+    reason: str,
+    status: str,
+    issued_at: str,
+) -> None:
+    """Create a fine as unpaid_invoices(kind=fine) with matching ledger entries."""
+    amount_cents = int(round(amount_dollars * 100))
+    invoice_status = "paid" if status == "paid" else "unpaid"
+
+    cur.execute(
+        'INSERT INTO unpaid_invoices '
+        '(chapter_id, member_id, kind, amount_cents, status, description, source_event_id, created_at) '
+        'VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id',
+        (CHAPTER_ID, member_id, "fine", amount_cents, invoice_status, reason, event_id, issued_at),
+    )
+    invoice_id = cur.fetchone()[0]
+
+    cur.execute(
+        'INSERT INTO big_ledger '
+        '(chapter_id, created_at, entry_type, amount_cents, member_id, source_table, source_id, status) '
+        'VALUES (%s, %s, %s, %s, %s, %s, %s, %s)',
+        (CHAPTER_ID, issued_at, "INVOICE_CREATED", amount_cents, member_id, "unpaid_invoices", invoice_id, "active"),
+    )
+
+    if status == "paid":
+        cur.execute(
+            'INSERT INTO verified_payments '
+            '(chapter_id, member_id, invoice_id, submission_id, amount_cents, verified_by, verified_at, created_at) '
+            'VALUES (%s, %s, %s, NULL, %s, %s, %s, %s)',
+            (CHAPTER_ID, member_id, invoice_id, amount_cents, OFFICER_ID, issued_at, issued_at),
+        )
+        cur.execute(
+            'INSERT INTO big_ledger '
+            '(chapter_id, created_at, entry_type, amount_cents, member_id, source_table, source_id, status) '
+            'VALUES (%s, %s, %s, %s, %s, %s, %s, %s)',
+            (CHAPTER_ID, issued_at, "PAYMENT_RECEIVED", amount_cents, member_id, "unpaid_invoices", invoice_id, "active"),
+        )
+
+
+def _clear_demo_seed(cur) -> None:
+    """Remove prior demo rows (fixed UUIDs) without touching other chapter/test data."""
+    demo_member_ids = tuple([OFFICER_ID, *MEMBER_IDS])
+    demo_event_ids = tuple(EVENT_IDS)
+
+    cur.execute('DELETE FROM unpaid_invoices WHERE chapter_id = %s', (CHAPTER_ID,))
+    cur.execute('DELETE FROM excuses WHERE event_id IN %s', (demo_event_ids,))
+    cur.execute('DELETE FROM attendance WHERE event_id IN %s', (demo_event_ids,))
+    cur.execute('DELETE FROM checkin_links WHERE event_id IN %s', (demo_event_ids,))
+    cur.execute('DELETE FROM events WHERE chapter_id = %s', (CHAPTER_ID,))
+    cur.execute('DELETE FROM members WHERE id IN %s', (demo_member_ids,))
+    cur.execute('DELETE FROM chapters WHERE id = %s', (CHAPTER_ID,))
+
+
 def seed():
     conn = psycopg2.connect(DATABASE_URL)
     conn.autocommit = True
     cur = conn.cursor()
 
-    for tbl in ["fines", "excuses", "attendance", "checkin_links", "events", "members", "chapters"]:
-        cur.execute(f'DELETE FROM "{tbl}"')
+    _clear_demo_seed(cur)
 
     cur.execute(
         'INSERT INTO chapters (id, name, organization, school) VALUES (%s, %s, %s, %s)',
@@ -149,27 +205,22 @@ def seed():
         (EVENT_IDS[1], MEMBER_IDS[4], "Car broke down", "pending", (now - timedelta(days=7)).isoformat()),
     )
 
-    # Fines for members who missed event 1 (members 7, 8 missed)
+    issued_at = now.isoformat()
+
+    # Fine invoices for members who missed event 1 (Ethan, Noah)
     for mid in all_member_ids[6:]:
-        cur.execute(
-            'INSERT INTO fines (event_id, member_id, chapter_id, amount, reason, status, issued_at) '
-            'VALUES (%s, %s, %s, %s, %s, %s, %s)',
-            (EVENT_IDS[0], mid, CHAPTER_ID, 25.00, f"Missed {EVENTS_DATA[0]['title']} (unexcused)", "unpaid", now.isoformat()),
+        status = "paid" if mid == MEMBER_IDS[5] else "unpaid"
+        _seed_fine_invoice(
+            cur, mid, EVENT_IDS[0], 25.00,
+            f"Missed {EVENTS_DATA[0]['title']} (unexcused)", status, issued_at,
         )
 
-    # Fines for members who missed event 2 without excuse (Chris, Ethan, Noah)
+    # Fine invoices for members who missed event 2 without excuse (Alex, Chris, Ethan)
     for mid in [MEMBER_IDS[4], MEMBER_IDS[5], MEMBER_IDS[6]]:
-        cur.execute(
-            'INSERT INTO fines (event_id, member_id, chapter_id, amount, reason, status, issued_at) '
-            'VALUES (%s, %s, %s, %s, %s, %s, %s)',
-            (EVENT_IDS[1], mid, CHAPTER_ID, 50.00, f"Missed {EVENTS_DATA[1]['title']} (unexcused)", "unpaid", now.isoformat()),
+        _seed_fine_invoice(
+            cur, mid, EVENT_IDS[1], 50.00,
+            f"Missed {EVENTS_DATA[1]['title']} (unexcused)", "unpaid", issued_at,
         )
-
-    # One paid fine (Ethan paid his event 0 fine)
-    cur.execute(
-        'UPDATE fines SET status = %s, paid_at = %s WHERE member_id = %s AND event_id = %s',
-        ("paid", now.isoformat(), MEMBER_IDS[5], EVENT_IDS[0]),
-    )
 
     # Active checkin link for upcoming event 4
     expires_at = now + timedelta(minutes=10)
@@ -198,7 +249,7 @@ def seed():
     print(f"  {generate_token(MEMBER_IDS[0])}")
     print(f"\nEvents: {len(EVENTS_DATA)} ({sum(1 for e in EVENTS_DATA if e['date'] <= date.today())} past, {sum(1 for e in EVENTS_DATA if e['date'] > date.today())} upcoming)")
     print(f"Active checkin link: TsT123 (event: {EVENTS_DATA[3]['title']})")
-    print(f"\nFines: unpaid={4}, paid={1}")
+    print(f"\nFine invoices: unpaid={4}, paid={1}")
     print(f"Excuses: approved={1}, pending={1}")
 
 
