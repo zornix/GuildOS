@@ -63,7 +63,7 @@ export function DashboardPage() {
         <ApiErrorBanner message={`Excuses: ${excuses.error}`} onRetry={excuses.reload} loading={excuses.loading} />
       )}
       <DashboardStats stats={stats} />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: tokens.space[4] }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: tokens.space[4] }}>
         <UpcomingEventsWidget events={upcoming} loading={events.loading} error={events.error} />
         {user.role === "officer" ? (
           <PendingExcusesWidget excuses={excuses.data} loading={excuses.loading} error={excuses.error} onReload={excuses.reload} />

@@ -33,7 +33,7 @@ export function ActiveCheckInsPage() {
             <Badge color="green">Active</Badge>
           </div>
           <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: tokens.space[4], flexWrap: "wrap" }}>
-            <div style={{ fontFamily: "monospace", fontSize: tokens.font.size2xl, fontWeight: tokens.font.weightBlack, color: tokens.color.text, letterSpacing: 3, background: tokens.color.bg, padding: "6px 16px", borderRadius: tokens.radius.md }}>
+            <div style={{ fontFamily: "monospace", fontSize: tokens.font.size2xl, fontWeight: tokens.font.weightExtrabold, color: tokens.color.text, letterSpacing: 3, background: tokens.color.bg, padding: "6px 16px", borderRadius: tokens.radius.md }}>
               /c/{link.short_code}
             </div>
             <div style={{ fontSize: tokens.font.sizeSm, color: tokens.color.textMuted }}>

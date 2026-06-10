@@ -15,7 +15,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Member | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [showPasswordField, setShowPasswordField] = useState(false);
@@ -29,12 +29,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     async function initSession() {
-      if (typeof window === "undefined") {
-        setLoading(false);
-        return;
-      }
-
       const token = api.getToken();
+      if (!token) return;
+      setLoading(true);
+
       if (token) {
         try {
           const me = await api.getMe();

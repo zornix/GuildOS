@@ -28,7 +28,7 @@ export function StandingPage() {
 
   if (user.role !== "officer") {
     return (
-      <Card style={{ textAlign: "center", color: tokens.color.textMuted, padding: tokens.space[7] }}>
+      <Card style={{ textAlign: "center", color: tokens.color.textMuted, padding: tokens.space[8] }}>
         Officer access required to view member standing.
       </Card>
     );
@@ -40,7 +40,7 @@ export function StandingPage() {
 
   return (
     <div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: tokens.space[4], marginBottom: tokens.space[5] }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: tokens.space[4], marginBottom: tokens.space[5] }}>
         <StatCard label="Delinquent" value={String(delinquent)} icon="alert" color={T.err} />
         <StatCard label="Warning" value={String(warning)} icon="alert" color={T.warn} />
         <StatCard label="Good Standing" value={String(data.length - delinquent - warning)} icon="check" color={T.ok} />

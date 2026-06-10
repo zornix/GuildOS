@@ -36,18 +36,21 @@ export function EventsPage() {
     [selected],
   );
 
+  const reloadAttendance = attendance.reload;
+  const reloadEvents = events.reload;
+
   useEffect(() => {
     if (!selected || user.role !== "officer") return;
-    const t = setInterval(() => { attendance.reload(); }, 12000);
+    const t = setInterval(() => { reloadAttendance(); }, 12000);
     return () => clearInterval(t);
-  }, [selected, user.role, attendance]);
+  }, [selected, user.role, reloadAttendance]);
 
   useEffect(() => {
     if (!selected) return;
-    const onFocus = () => attendance.reload();
+    const onFocus = () => reloadAttendance();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-  }, [selected, attendance]);
+  }, [selected, reloadAttendance]);
 
   useEffect(() => {
     if (!selected) return;
@@ -61,10 +64,10 @@ export function EventsPage() {
 
   useEffect(() => {
     if (selected) return;
-    const onFocus = () => events.reload();
+    const onFocus = () => reloadEvents();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-  }, [selected, events]);
+  }, [selected, reloadEvents]);
 
   const show = (m: string) => {
     setToast(m);
@@ -192,7 +195,7 @@ export function EventsPage() {
       <EventList events={list} loading={events.loading} error={events.error} tab={tab} onSelectEvent={setSelected} />
       {modal === "create" && (
         <Modal onClose={() => setModal(null)}>
-          <CreateEventForm onSuccess={() => { events.reload(); setModal(null); }} onClose={() => setModal(null)} />
+          <CreateEventForm onSuccess={() => { reloadEvents(); setModal(null); }} onClose={() => setModal(null)} />
         </Modal>
       )}
       <Toast msg={toast} />

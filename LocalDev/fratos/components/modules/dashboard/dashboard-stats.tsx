@@ -17,7 +17,7 @@ export function DashboardStats({ stats }: DashboardStatsProps) {
   return (
     <div style={{
       display: "grid",
-      gridTemplateColumns: `repeat(${stats.length}, 1fr)`,
+      gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
       gap: tokens.space[4],
       marginBottom: tokens.space[6],
     }}>
