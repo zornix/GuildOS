@@ -2,8 +2,11 @@
 import { useApi } from "../hooks/use-api";
 import { api } from "../lib/api-client";
 import { T } from "../lib/theme";
+import { tokens } from "../config/theme/tokens";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
+import { LoadingState } from "../components/ui/loading-state";
+import { EmptyState } from "../components/ui/empty-state";
 import { Countdown } from "../components/countdown";
 import type { ActiveCheckinLinkRow } from "../lib/types";
 
@@ -11,33 +14,33 @@ export function ActiveCheckInsPage() {
   const links = useApi<ActiveCheckinLinkRow[]>(() => api.listActiveCheckinLinks());
 
   if (links.loading) {
-    return <div style={{ color: T.txm, textAlign: "center", padding: 40 }}>Loading...</div>;
+    return <LoadingState />;
   }
 
   if (!links.data?.length) {
-    return <Card style={{ textAlign: "center", color: T.txm, padding: 40 }}>No active check-in links</Card>;
+    return <EmptyState message="No active check-in links" />;
   }
 
   return (
-    <div style={{ display: "grid", gap: 10 }}>
+    <div style={{ display: "grid", gap: tokens.space[3] }}>
       {links.data.map((link) => (
-        <Card key={link.short_code} style={{ padding: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+        <Card key={link.short_code} style={{ padding: tokens.space[4] }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: tokens.space[3] }}>
             <div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: T.tx }}>{link.event_title}</div>
-              <div style={{ fontSize: 12, color: T.txm, marginTop: 2 }}>{link.date}</div>
+              <div style={{ fontSize: tokens.font.sizeLg, fontWeight: tokens.font.weightBold, color: tokens.color.text }}>{link.event_title}</div>
+              <div style={{ fontSize: tokens.font.sizeSm, color: tokens.color.textMuted, marginTop: 2 }}>{link.date}</div>
             </div>
             <Badge color="green">Active</Badge>
           </div>
-          <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-            <div style={{ fontFamily: "monospace", fontSize: 22, fontWeight: 800, color: T.tx, letterSpacing: 3, background: T.bg, padding: "6px 16px", borderRadius: 8 }}>
+          <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: tokens.space[4], flexWrap: "wrap" }}>
+            <div style={{ fontFamily: "monospace", fontSize: tokens.font.size2xl, fontWeight: tokens.font.weightBlack, color: tokens.color.text, letterSpacing: 3, background: tokens.color.bg, padding: "6px 16px", borderRadius: tokens.radius.md }}>
               /c/{link.short_code}
             </div>
-            <div style={{ fontSize: 12, color: T.txm }}>
+            <div style={{ fontSize: tokens.font.sizeSm, color: tokens.color.textMuted }}>
               <span style={{ color: T.acl, fontFamily: "monospace" }}>{link.url}</span>
             </div>
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontSize: 12, color: T.txm }}>Expires in:</span>
+              <span style={{ fontSize: tokens.font.sizeSm, color: tokens.color.textMuted }}>Expires in:</span>
               <Countdown expiresAt={link.expires_at} />
             </div>
           </div>
