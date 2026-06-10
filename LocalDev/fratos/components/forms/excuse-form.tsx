@@ -1,8 +1,10 @@
 "use client";
 import { useState } from "react";
 import { api } from "../../lib/api-client";
-import { T } from "../../lib/theme";
+import { tokens } from "../../config/theme/tokens";
 import { Btn } from "../ui/btn";
+import { Textarea } from "../ui/textarea";
+import { FormActions } from "../ui/form-actions";
 
 interface ExcuseFormProps {
   eventId: string;
@@ -32,32 +34,19 @@ export function ExcuseForm({ eventId, eventTitle, onSuccess, onClose }: ExcuseFo
 
   return (
     <>
-      <h3 style={{ margin: "0 0 4px", color: T.tx }}>Submit Excuse</h3>
-      <p style={{ color: T.txm, fontSize: 13, margin: "0 0 16px" }}>{eventTitle}</p>
-      <textarea
+      <h3 style={{ margin: "0 0 4px", color: tokens.color.text }}>Submit Excuse</h3>
+      <p style={{ color: tokens.color.textMuted, fontSize: tokens.font.sizeMd, margin: "0 0 16px" }}>{eventTitle}</p>
+      <Textarea
         value={reason}
         onChange={(e) => setReason(e.target.value)}
         placeholder="Explain your reason..."
         rows={4}
-        style={{
-          width: "100%",
-          padding: 12,
-          borderRadius: 8,
-          border: `1px solid ${T.bd}`,
-          background: T.bg,
-          color: T.tx,
-          fontSize: 14,
-          resize: "vertical",
-          boxSizing: "border-box",
-          fontFamily: "inherit",
-          marginBottom: 8,
-        }}
+        error={error}
       />
-      {error && <div style={{ color: T.err, fontSize: 12, marginBottom: 8 }}>{error}</div>}
-      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+      <FormActions>
         <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
         <Btn onClick={submit} disabled={loading}>{loading ? "Submitting..." : "Submit"}</Btn>
-      </div>
+      </FormActions>
     </>
   );
 }
