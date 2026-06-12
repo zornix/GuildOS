@@ -98,6 +98,20 @@ EVENTS_DATA = [
 def generate_token(member_id: str) -> str:
     return jwt.encode({"sub": member_id, "exp": datetime.now(timezone.utc) + timedelta(days=30)}, JWT_SECRET, algorithm="HS256")
 
+def _seed_expense(cur, vendor, amount_dollars, date_iso):
+    amount_cents = int(amount_dollars * 100)
+    cur.execute(
+        'INSERT INTO chapter_expenses (chapter_id, category, amount_cents, status, description, created_by, created_at) '
+        'VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id',
+        (CHAPTER_ID, 'supplies', amount_cents, 'active', vendor, OFFICER_ID, date_iso)
+    )
+    expense_id = cur.fetchone()[0]
+    cur.execute(
+        'INSERT INTO big_ledger (chapter_id, created_at, entry_type, amount_cents, member_id, source_table, source_id, status) '
+        'VALUES (%s, %s, %s, %s, %s, %s, %s, %s)',
+        (CHAPTER_ID, date_iso, 'EXPENSE_APPROVED', -amount_cents, None, 'chapter_expenses', expense_id, 'active')
+    )
+
 
 def _seed_fine_invoice(
     cur,
@@ -147,12 +161,19 @@ def _clear_demo_seed(cur) -> None:
     demo_member_ids = tuple([OFFICER_ID, *MEMBER_IDS])
     demo_event_ids = tuple(EVENT_IDS)
 
+    cur.execute('DELETE FROM verified_payments WHERE chapter_id = %s', (CHAPTER_ID,))
+    cur.execute('DELETE FROM chapter_expenses WHERE chapter_id = %s', (CHAPTER_ID,))
     cur.execute('DELETE FROM unpaid_invoices WHERE chapter_id = %s', (CHAPTER_ID,))
     cur.execute('DELETE FROM excuses WHERE event_id IN %s', (demo_event_ids,))
     cur.execute('DELETE FROM attendance WHERE event_id IN %s', (demo_event_ids,))
     cur.execute('DELETE FROM checkin_links WHERE event_id IN %s', (demo_event_ids,))
+    cur.execute('ALTER TABLE fines DISABLE TRIGGER USER')
+    cur.execute('ALTER TABLE big_ledger DISABLE TRIGGER USER')
+    cur.execute('DELETE FROM big_ledger WHERE chapter_id = %s', (CHAPTER_ID,))
     cur.execute('DELETE FROM events WHERE chapter_id = %s', (CHAPTER_ID,))
     cur.execute('DELETE FROM members WHERE id IN %s', (demo_member_ids,))
+    cur.execute('ALTER TABLE big_ledger ENABLE TRIGGER USER')
+    cur.execute('ALTER TABLE fines ENABLE TRIGGER USER')
     cur.execute('DELETE FROM chapters WHERE id = %s', (CHAPTER_ID,))
 
 
@@ -264,6 +285,15 @@ def seed():
         'INSERT INTO checkin_links (event_id, short_code, created_by, expires_at, active) VALUES (%s, %s, %s, %s, %s)',
         (EVENT_IDS[3], "TsT123", OFFICER_ID, expires_at.isoformat(), True),
     )
+
+    import random
+    for i in range(50):
+        days_ago = random.randint(0, 60)
+        d_iso = (now - timedelta(days=days_ago, minutes=random.randint(0, 1440))).isoformat()
+        _seed_expense(cur, f"Vendor/Service {i}", random.randint(10, 500), d_iso)
+        mid = random.choice(all_member_ids)
+        _seed_fine_invoice(cur, mid, EVENT_IDS[0], random.randint(10, 100), f"Random invoice {i}", "paid", d_iso)
+
 
     cur.close()
     conn.close()
