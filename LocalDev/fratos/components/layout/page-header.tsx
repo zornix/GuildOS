@@ -12,7 +12,7 @@ interface PageHeaderProps {
 export function PageHeader({ activePage, user }: PageHeaderProps) {
   const label = NAV.find((n) => n.id === activePage)?.label ?? "";
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tokens.space[5] }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: tokens.space[3], flexWrap: "wrap", marginBottom: tokens.space[5] }}>
       <h1 style={{ margin: 0, fontSize: tokens.font.size3xl, fontWeight: 800 }}>{label}</h1>
       <Badge color={user.role === "officer" ? "purple" : "blue"}>{user.role}</Badge>
     </div>
