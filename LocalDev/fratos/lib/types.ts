@@ -105,4 +105,105 @@ export interface MemberStanding {
   unexcused_absences: number;
   unpaid_fines: number;
   unpaid_amount: number;
+  reason_codes?: string[];
+}
+
+// RBAC
+export interface MyPermissions {
+  permissions: string[];
+  roles: string[];
+}
+
+export interface RoleCatalogEntry {
+  key: string;
+  label: string;
+}
+
+export interface MemberRole {
+  id: string;
+  chapter_id: string;
+  member_id: string;
+  role_key: string;
+  assigned_by: string | null;
+  assigned_at: string;
+}
+
+// Tasks
+export type TaskStatus = "open" | "in_progress" | "done" | "cancelled";
+
+export interface Task {
+  id: string;
+  chapter_id: string;
+  group_id: string | null;
+  title: string;
+  description: string | null;
+  assigned_member_id: string | null;
+  created_by: string | null;
+  status: TaskStatus;
+  required: boolean;
+  due_at: string | null;
+  created_at: string;
+}
+
+// Announcements
+export type AnnouncementAudience = "chapter" | "officers" | "members_with_balance";
+
+export interface Announcement {
+  id: string;
+  chapter_id: string;
+  title: string;
+  body: string;
+  audience: AnnouncementAudience;
+  status: "draft" | "sent";
+  created_by: string | null;
+  sent_at: string | null;
+  created_at: string;
+}
+
+// Recruitment
+export type RecruitStage = "lead" | "contacted" | "attended_event" | "bid_extended" | "bid_accepted" | "dropped";
+
+export interface Recruit {
+  id: string;
+  chapter_id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  stage: RecruitStage;
+  notes: string | null;
+  created_at: string;
+}
+
+// Bylaws
+export interface BylawsDocument {
+  id: string;
+  chapter_id: string;
+  title: string;
+  content: string;
+  created_at: string;
+}
+
+/** Honest stub contract: `answer` stays null until a real retrieval layer exists. */
+export interface BylawsQueryResult {
+  status: "not_implemented";
+  answer: null;
+  question: string;
+  documents_available: number;
+  detail: string;
+}
+
+// NL controller
+export type CommandStatus = "pending_approval" | "approved" | "rejected" | "executed" | "failed";
+
+export interface CommandRequest {
+  id: string;
+  chapter_id: string;
+  requested_by: string | null;
+  input_text: string;
+  proposed_actions: unknown[];
+  status: CommandStatus;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  executed_at: string | null;
+  created_at: string;
 }

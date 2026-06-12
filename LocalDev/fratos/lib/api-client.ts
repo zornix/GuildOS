@@ -9,7 +9,25 @@ import type {
   InviteResult,
   RosterEntry,
   MemberStanding,
+  MyPermissions,
+  RoleCatalogEntry,
+  MemberRole,
+  Task,
+  TaskStatus,
+  Announcement,
+  AnnouncementAudience,
+  Recruit,
+  RecruitStage,
+  BylawsDocument,
+  BylawsQueryResult,
+  CommandRequest,
 } from "./types";
+import type {
+  TreasuryDashboardApiResponse,
+  TreasuryPaymentSubmissionsPage,
+  TreasuryReportDataset,
+  TreasurySubmissionStatus,
+} from "./contracts/treasury";
 
 /** Thrown for failed HTTP responses so callers can inspect `status` (e.g. retries). */
 export class ApiRequestError extends Error {
@@ -92,14 +110,18 @@ export class ApiClient {
     return null;
   }
 
-  async request<T = unknown>(path: string, opts: RequestInit = {}): Promise<T> {
+  private headers(): Record<string, string> {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     const token = this.getToken();
-    if (token) headers["Authorization"] = `Bearer ${token}`;
+    if (token) headers.Authorization = `Bearer ${token}`;
+    return headers;
+  }
+
+  async request<T = unknown>(path: string, opts: RequestInit = {}): Promise<T> {
     const url = `${apiBase()}${path}`;
     let res: Response;
     try {
-      res = await fetch(url, { ...opts, headers });
+      res = await fetch(url, { ...opts, headers: this.headers() });
     } catch {
       throw new Error(
         `Network request failed for ${path}. Check API URL/CORS configuration and verify backend reachability.`,
@@ -117,6 +139,28 @@ export class ApiClient {
     }
     if (!res.ok) throw new ApiRequestError(formatApiErrorDetail(data), res.status);
     return data as T;
+  }
+
+  async requestText(path: string, opts: RequestInit = {}): Promise<string> {
+    const url = `${apiBase()}${path}`;
+    let res: Response;
+    try {
+      res = await fetch(url, { ...opts, headers: this.headers() });
+    } catch {
+      throw new Error(
+        `Network request failed for ${path}. Check API URL/CORS configuration and verify backend reachability.`,
+      );
+    }
+    const text = await res.text();
+    if (!res.ok) {
+      try {
+        throw new ApiRequestError(formatApiErrorDetail(JSON.parse(text)), res.status);
+      } catch (e) {
+        if (e instanceof ApiRequestError) throw e;
+        throw new ApiRequestError(text || "Request failed", res.status);
+      }
+    }
+    return text;
   }
 
   /** Idempotent GET with bounded exponential backoff on transient failures. */
@@ -253,6 +297,128 @@ export class ApiClient {
   // Standing
   getStandings() {
     return this.requestRead<MemberStanding[]>("/api/standing");
+  }
+
+  // Treasury
+  getTreasuryDashboard() {
+    return this.requestRead<TreasuryDashboardApiResponse>("/api/treasury/dashboard");
+  }
+  getTreasuryPaymentSubmissions(
+    status: TreasurySubmissionStatus = "pending",
+    limit = 10,
+    cursor?: string | null,
+  ) {
+    const params = new URLSearchParams({ status, limit: String(limit) });
+    if (cursor) params.set("cursor", cursor);
+    return this.requestRead<TreasuryPaymentSubmissionsPage>(`/api/treasury/payments/submissions?${params.toString()}`);
+  }
+  getTreasuryReport(period: string, dataset: TreasuryReportDataset) {
+    const params = new URLSearchParams({ period, dataset });
+    return this.requestText(`/api/treasury/report?${params.toString()}`, { method: "GET" });
+  }
+
+  // RBAC
+  getMyPermissions() {
+    return this.requestRead<MyPermissions>("/api/rbac/me/permissions");
+  }
+  getRoleCatalog() {
+    return this.requestRead<RoleCatalogEntry[]>("/api/rbac/roles");
+  }
+  getMemberRoles(memberId: string) {
+    return this.requestRead<MemberRole[]>(`/api/rbac/members/${memberId}/roles`);
+  }
+  assignRole(memberId: string, roleKey: string) {
+    return this.request<MemberRole>(`/api/rbac/members/${memberId}/roles`, {
+      method: "POST",
+      body: JSON.stringify({ role_key: roleKey }),
+    });
+  }
+  revokeRole(memberId: string, roleKey: string) {
+    return this.request<{ revoked: boolean }>(`/api/rbac/members/${memberId}/roles/${roleKey}`, {
+      method: "DELETE",
+    });
+  }
+
+  // Tasks
+  getTasks() {
+    return this.requestRead<Task[]>("/api/tasks/");
+  }
+  createTask(data: { title: string; description?: string; assigned_member_id?: string; required?: boolean; due_at?: string }) {
+    return this.request<Task>("/api/tasks/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+  updateTaskStatus(taskId: string, status: TaskStatus) {
+    return this.request<Task>(`/api/tasks/${taskId}/status`, {
+      method: "POST",
+      body: JSON.stringify({ status }),
+    });
+  }
+
+  // Announcements
+  getAnnouncements() {
+    return this.requestRead<Announcement[]>("/api/announcements/");
+  }
+  createAnnouncement(data: { title: string; body: string; audience?: AnnouncementAudience }) {
+    return this.request<Announcement>("/api/announcements/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+  sendAnnouncement(id: string) {
+    return this.request<Announcement>(`/api/announcements/${id}/send`, { method: "POST" });
+  }
+
+  // Recruitment
+  getRecruits() {
+    return this.requestRead<Recruit[]>("/api/recruitment/recruits");
+  }
+  createRecruit(data: { name: string; email?: string; phone?: string; notes?: string }) {
+    return this.request<Recruit>("/api/recruitment/recruits", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+  updateRecruitStage(id: string, stage: RecruitStage) {
+    return this.request<Recruit>(`/api/recruitment/recruits/${id}/stage`, {
+      method: "POST",
+      body: JSON.stringify({ stage }),
+    });
+  }
+
+  // Bylaws
+  getBylawsDocuments() {
+    return this.requestRead<BylawsDocument[]>("/api/bylaws/documents");
+  }
+  createBylawsDocument(data: { title: string; content: string }) {
+    return this.request<BylawsDocument>("/api/bylaws/documents", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+  queryBylaws(question: string) {
+    return this.request<BylawsQueryResult>("/api/bylaws/query", {
+      method: "POST",
+      body: JSON.stringify({ question }),
+    });
+  }
+
+  // NL controller
+  getCommands() {
+    return this.requestRead<CommandRequest[]>("/api/nl-controller/commands");
+  }
+  submitCommand(inputText: string) {
+    return this.request<CommandRequest>("/api/nl-controller/commands", {
+      method: "POST",
+      body: JSON.stringify({ input_text: inputText }),
+    });
+  }
+  reviewCommand(id: string, decision: "approve" | "reject") {
+    return this.request<CommandRequest>(`/api/nl-controller/commands/${id}/review`, {
+      method: "POST",
+      body: JSON.stringify({ decision }),
+    });
   }
 }
 
