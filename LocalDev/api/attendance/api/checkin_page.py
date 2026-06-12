@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 
-from api.services.checkin_links import validate_checkin_link
+from api.attendance.services.checkin_links import validate_checkin_link
 from api.config import settings
 
 router = APIRouter()

@@ -8,7 +8,7 @@ from pydantic import ValidationError
 from api.announcements.api.schemas import AnnouncementCreate
 from api.attendance.api.schemas import SessionCreate
 from api.bylaws.api.schemas import BylawsQuery
-from api.models.schemas import EventCreate
+from api.events.api.schemas import EventCreate
 from api.nl_controller.api.schemas import CommandReview
 from api.recruitment.api.schemas import RecruitStageUpdate
 from api.tasks.api.schemas import TaskCreate, TaskStatusUpdate

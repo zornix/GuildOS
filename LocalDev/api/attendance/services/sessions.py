@@ -10,7 +10,7 @@ from __future__ import annotations
 from fastapi import HTTPException
 
 from api.db import get_supabase_admin
-from api.services.checkin_links import create_checkin_link
+from api.attendance.services.checkin_links import create_checkin_link
 
 
 def get_attendance_db():

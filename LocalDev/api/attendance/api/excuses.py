@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.dependencies import get_current_user, require_officer
-from api.models.schemas import ExcuseCreate, ExcuseReview
+from .schemas import ExcuseCreate, ExcuseReview
 from api.db import get_supabase
 
 router = APIRouter()

@@ -14,7 +14,7 @@ vercel.json cron config:
 """
 
 from api.db import get_supabase_admin
-from api.models.schemas import FineToInvoice
+from api.treasury.api.schemas import FineToInvoice
 from api.treasury.db.rpc import call_rpc
 
 

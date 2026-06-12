@@ -10,10 +10,10 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from api.routes.attendance import router as _legacy_attendance_router
-from api.routes.checkin_links import router as checkin_links_router  # noqa: F401
-from api.routes.checkin_page import router as checkin_page_router  # noqa: F401
-from api.routes.excuses import router as excuses_router  # noqa: F401
+from .attendance import router as _legacy_attendance_router
+from .checkin_links import router as checkin_links_router  # noqa: F401
+from .checkin_page import router as checkin_page_router  # noqa: F401
+from .excuses import router as excuses_router  # noqa: F401
 
 from api.attendance.api.sessions import router as _sessions_router
 

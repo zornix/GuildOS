@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from api.routes.events import router as _legacy_events_router
+from .events import router as _legacy_events_router
 
 router = APIRouter()
 router.include_router(_legacy_events_router)

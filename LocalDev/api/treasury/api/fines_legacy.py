@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from api.db import get_supabase
 from api.dependencies import get_current_user, require_officer
-from api.services.fine_processor import process_event_fines
+from api.treasury.services.fine_processor import process_event_fines
 from api.treasury.db.session import get_treasury_db
 from api.treasury.services import invoices as invoice_svc
 

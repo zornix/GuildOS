@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from api.dependencies import get_current_user, require_officer
-from api.services.operations import (
+from api.tasks.services.templates import (
     apply_template_to_event,
     get_event_readiness,
     list_event_templates,

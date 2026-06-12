@@ -9,3 +9,4 @@ router = APIRouter()
 from api.tasks.api.tasks import router as _tasks_router  # noqa: E402
 
 router.include_router(_tasks_router)
+

@@ -5,7 +5,8 @@ import jwt as pyjwt
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.dependencies import get_current_user, require_officer
-from api.models.schemas import UserProfile, InviteRequest, LoginRequest, SetPasswordRequest
+from .schemas import InviteRequest, LoginRequest, SetPasswordRequest
+from api.members.api.schemas import UserProfile
 from api.db import get_supabase
 from api.config import settings
 

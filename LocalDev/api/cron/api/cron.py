@@ -4,7 +4,7 @@ from fastapi import APIRouter, Header, HTTPException
 
 from api.config import settings
 from api.db import get_supabase_admin
-from api.services.fine_processor import process_event_fines
+from api.treasury.services.fine_processor import process_event_fines
 
 router = APIRouter()
 

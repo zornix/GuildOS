@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.dependencies import get_current_user, require_officer
-from api.models.schemas import EventCreate, EventUpdate, CheckInLinkResponse
-from api.services.checkin_links import create_checkin_link, deactivate_checkin_link, get_active_link_for_event
+from .schemas import EventCreate, EventUpdate, CheckInLinkResponse
+from api.attendance.services.checkin_links import create_checkin_link, deactivate_checkin_link, get_active_link_for_event
 from api.db import get_supabase
 
 router = APIRouter()

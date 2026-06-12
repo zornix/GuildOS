@@ -3,8 +3,8 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.dependencies import get_current_user, require_officer
-from api.models.schemas import PhoneCheckIn, ManualAttendance
-from api.services.checkin_links import validate_checkin_link
+from .schemas import PhoneCheckIn, ManualAttendance
+from api.attendance.services.checkin_links import validate_checkin_link
 from api.db import get_supabase
 
 router = APIRouter()

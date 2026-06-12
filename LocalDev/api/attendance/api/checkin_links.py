@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from api.dependencies import require_officer
-from api.services.checkin_links import list_active_links_for_chapter
+from api.attendance.services.checkin_links import list_active_links_for_chapter
 
 router = APIRouter()
 

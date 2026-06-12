@@ -11,7 +11,7 @@ import uuid
 
 import pytest
 
-from api.models.schemas import FineToInvoice
+from api.treasury.api.schemas import FineToInvoice
 from api.treasury.core.money import Money
 from api.treasury.services import invoices as svc
 
@@ -211,7 +211,7 @@ def test_legacy_fines_table_is_frozen(cursor, chapter_id, member_id):
 
 
 async def test_fine_processor_creates_fine_invoices_and_dedups(sb_client, cursor, chapter_id, member_factory, monkeypatch):
-    import api.services.fine_processor as fp
+    import api.treasury.services.fine_processor as fp
 
     monkeypatch.setattr(fp, "get_supabase_admin", lambda: sb_client)
 
