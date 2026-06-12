@@ -5,13 +5,15 @@ export function isDevAuthBypassEnabled() {
 }
 
 export const devAuthUser: Member = {
-  id: "local-dev-officer",
-  name: "Local Dev Officer",
+  id: "00000000-0000-0000-0000-000000000010",
+  name: "Jake Martinez",
   role: "officer",
-  email: "dev@greekos.local",
-  chapter_id: "local-dev-chapter",
+  email: "jake@tke.org",
+  chapter_id: "00000000-0000-0000-0000-000000000001",
   status: "active",
 };
+
+export const devAuthEmail = "jake@tke.org";
 
 export const devAuthPermissions: MyPermissions = {
   permissions: ["*"],

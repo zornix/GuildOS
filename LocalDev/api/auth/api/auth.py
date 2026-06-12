@@ -13,6 +13,14 @@ from api.config import settings
 router = APIRouter()
 
 
+def _issue_member_token(member_id: str) -> str:
+    return pyjwt.encode(
+        {"sub": member_id, "exp": datetime.now(timezone.utc) + timedelta(days=30)},
+        settings.JWT_SECRET,
+        algorithm="HS256",
+    )
+
+
 @router.post("/login")
 async def login(body: LoginRequest):
     """
@@ -48,17 +56,38 @@ async def login(body: LoginRequest):
         ):
             raise HTTPException(401, "Invalid credentials")
 
-    token = pyjwt.encode(
-        {"sub": member["id"], "exp": datetime.now(timezone.utc) + timedelta(days=30)},
-        settings.JWT_SECRET,
-        algorithm="HS256",
-    )
+    token = _issue_member_token(member["id"])
 
     response = {"access_token": token, "token_type": "bearer"}
     if member["role"] == "officer" and not member.get("password_hash"):
         response["password_setup_required"] = True
 
     return response
+
+
+@router.post("/dev-login")
+async def dev_login(body: LoginRequest):
+    """Passwordless local dev login for direct-Postgres demo environments."""
+    if not settings.DEV_AUTH_BYPASS or not settings.use_local_db:
+        raise HTTPException(404, "Not found")
+
+    normalized_email = str(body.email).strip().lower()
+    sb = get_supabase()
+    result = (
+        sb.table("members")
+        .select("id, name, email, role, chapter_id")
+        .eq("email", normalized_email)
+        .eq("status", "active")
+        .single()
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(401, "No active member found with that email")
+
+    return {
+        "access_token": _issue_member_token(result.data["id"]),
+        "token_type": "bearer",
+    }
 
 
 @router.post("/set-password")

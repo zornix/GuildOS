@@ -189,6 +189,12 @@ export class ApiClient {
       body: JSON.stringify(body),
     });
   }
+  devLogin(email: string) {
+    return this.request<{ access_token?: string; token_type?: string }>("/api/auth/dev-login", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+  }
   setPassword(password: string) {
     return this.request<{ message: string }>("/api/auth/set-password", {
       method: "POST",

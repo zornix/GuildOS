@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:3000"
     BASE_URL: str = "http://localhost:8001"
     CHECKIN_LINK_TTL_MINUTES: int = 10
+    DEV_AUTH_BYPASS: bool = False
     # Shared secret for the Vercel Cron caller (api/routes/cron.py). Empty disables
     # the cron endpoint (returns 401) so an unconfigured deploy can't be triggered.
     CRON_SECRET: str = ""

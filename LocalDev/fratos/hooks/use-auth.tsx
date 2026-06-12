@@ -4,7 +4,7 @@ import { api } from "../lib/api-client";
 import { AuthLoading } from "../components/modules/auth/auth-loading";
 import { LoginForm } from "../components/modules/auth/login-form";
 import { SetPasswordForm } from "../components/modules/auth/set-password-form";
-import { devAuthUser, isDevAuthBypassEnabled } from "../lib/dev-auth";
+import { devAuthEmail, devAuthUser, isDevAuthBypassEnabled } from "../lib/dev-auth";
 import type { Member } from "../lib/types";
 
 interface AuthContextValue {
@@ -16,8 +16,8 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const devAuthBypass = isDevAuthBypassEnabled();
-  const [user, setUser] = useState<Member | null>(() => (devAuthBypass ? devAuthUser : null));
-  const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState<Member | null>(null);
+  const [loading, setLoading] = useState(devAuthBypass);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [showPasswordField, setShowPasswordField] = useState(false);
@@ -29,9 +29,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (devAuthBypass) {
-      api.setToken(null);
-      setUser(devAuthUser);
-      return;
+      let cancelled = false;
+
+      async function initDevSession() {
+        setLoading(true);
+        let sessionUser: Member | null = null;
+        try {
+          const res = await api.devLogin(devAuthEmail);
+          if (res.access_token) {
+            api.setToken(res.access_token);
+            sessionUser = await api.getMe();
+          }
+        } catch {
+          if (!cancelled) api.setToken(null);
+        } finally {
+          if (!cancelled) {
+            setUser(sessionUser ?? devAuthUser);
+            setLoading(false);
+          }
+        }
+      }
+
+      void initDevSession();
+      return () => {
+        cancelled = true;
+      };
     }
 
     let cancelled = false;
@@ -113,7 +135,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     if (devAuthBypass) {
-      api.setToken(null);
       setUser(devAuthUser);
       return;
     }
