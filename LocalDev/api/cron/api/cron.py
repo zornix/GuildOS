@@ -1,43 +1,17 @@
-from datetime import datetime, timezone
-
-from fastapi import APIRouter, Header, HTTPException
-
-from api.config import settings
-from api.db import get_supabase_admin
-from api.treasury.services.fine_processor import process_event_fines
+from fastapi import APIRouter
 
 router = APIRouter()
 
 
 @router.get("/process-fines")
-async def cron_process_fines(authorization: str = Header(None)):
+async def cron_process_fines():
+    """DISABLED (GreekOS V1, spec §5 Fines): fines are never automatic.
+
+    The route stays registered (route-registration regression tests) but is a
+    no-op. Fine issuance is the manual, permission-gated POST /api/fines/issue
+    (≥24h after a required event; flat $25), driven by GET /api/fines/missed/{event_id}.
     """
-    Called by Vercel Cron every 15 minutes.
-    Finds required events whose check-in window just closed and issues fines.
-    """
-    if not settings.CRON_SECRET:
-        raise HTTPException(401, "CRON_SECRET not configured")
-    if authorization != f"Bearer {settings.CRON_SECRET}":
-        raise HTTPException(401, "Unauthorized")
-
-    sb = get_supabase_admin()
-    now = datetime.now(timezone.utc)
-
-    events = (
-        sb.table("events")
-        .select("id")
-        .eq("required", True)
-        .lte("date", now.date().isoformat())
-        .execute()
-    ).data
-
-    results = []
-    for event in events:
-        fines = await process_event_fines(event["id"])
-        if fines:
-            results.append({
-                "event_id": event["id"],
-                "fines_issued": len(fines),
-            })
-
-    return {"processed": len(results), "details": results}
+    return {
+        "status": "disabled",
+        "reason": "V1: fines are never automatic; use POST /api/fines/issue",
+    }

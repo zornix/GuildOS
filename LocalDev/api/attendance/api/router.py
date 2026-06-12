@@ -16,7 +16,11 @@ from .checkin_page import router as checkin_page_router  # noqa: F401
 from .excuses import router as excuses_router  # noqa: F401
 
 from api.attendance.api.sessions import router as _sessions_router
+from api.attendance.api.summary import router as _summary_router
 
 router = APIRouter()
+# /summary is a fixed path: include it before the legacy router so it is never
+# shadowed by parameterized legacy routes.
+router.include_router(_summary_router)
 router.include_router(_legacy_attendance_router)
 router.include_router(_sessions_router)
