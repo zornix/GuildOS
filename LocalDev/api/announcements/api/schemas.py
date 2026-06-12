@@ -12,3 +12,9 @@ class AnnouncementCreate(BaseModel):
     audience: str = Field(
         default="chapter", pattern="^(chapter|officers|members_with_balance)$"
     )
+
+
+class SmsSendConfirm(BaseModel):
+    """Two-phase confirm: the recipient count the sender saw on the preview."""
+
+    confirmed_recipient_count: int = Field(ge=0)
