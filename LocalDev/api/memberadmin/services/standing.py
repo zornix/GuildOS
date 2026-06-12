@@ -1,28 +1,46 @@
-"""Member standing buckets derived from shared engagement aggregates."""
+"""Member standing buckets derived from shared engagement aggregates.
+
+Statuses + reason codes come from core.standing_rules (pure); the tasks signal
+is read from the tasks service seam (§7) and currently contributes reason codes
+only — see the TODO in standing_rules.
+"""
 
 from __future__ import annotations
 
 from api.memberadmin.core.engagement import load_member_engagement
+from api.memberadmin.core.standing_rules import derive_standing
 
 
-def _classify_standing(unpaid_count: int, unpaid_total: float, unexcused: int) -> str:
-    if unpaid_count >= 2 or unpaid_total >= 50 or unexcused >= 3:
-        return "delinquent"
-    if unpaid_count >= 1 or unexcused >= 1:
-        return "warning"
-    return "good_standing"
+def _incomplete_required_tasks_by_member(chapter_id: str) -> dict[str, int]:
+    from api.tasks.db.session import get_tasks_db
+    from api.tasks.services.tasks import incomplete_required_tasks
+
+    counts: dict[str, int] = {}
+    for task in incomplete_required_tasks(get_tasks_db(), chapter_id=chapter_id):
+        mid = task.get("assigned_member_id")
+        if mid:
+            counts[mid] = counts.get(mid, 0) + 1
+    return counts
 
 
 async def compute_member_standings(chapter_id: str) -> list[dict]:
     engagements = await load_member_engagement(chapter_id, include_role=True)
+    task_counts = _incomplete_required_tasks_by_member(chapter_id)
 
     results = []
     for row in engagements:
+        status, reason_codes = derive_standing(
+            unpaid_count=row.unpaid_fines,
+            unpaid_total=row.unpaid_amount,
+            unexcused=row.missed,
+            incomplete_required_tasks=task_counts.get(row.member_id, 0),
+        )
         results.append({
             "member_id": row.member_id,
             "name": row.name,
             "email": row.email,
-            "standing": _classify_standing(row.unpaid_fines, row.unpaid_amount, row.missed),
+            "standing": status,
+            "reason_codes": reason_codes,
             "attended": row.attended,
             "total_required": row.total_required,
             "unexcused_absences": row.missed,
