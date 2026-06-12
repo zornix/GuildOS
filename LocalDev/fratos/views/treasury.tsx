@@ -6,7 +6,7 @@ import { EmptyState } from "../components/ui/empty-state";
 import { useApi } from "../hooks/use-api";
 import { adaptTreasuryDashboard } from "../lib/adapters/treasury";
 import { api } from "../lib/api-client";
-import type { TreasuryDashboardData, TreasuryPaymentSubmissionsPage } from "../lib/contracts/treasury";
+import { type TreasuryDashboardData, type TreasuryPaymentSubmissionsPage, type TreasuryReportDataset, type TreasurySubmissionStatus } from "../lib/contracts/treasury";
 
 const emptySubmissions = (total: number): TreasuryPaymentSubmissionsPage => ({
   data: [],
@@ -56,13 +56,13 @@ export function TreasuryPage() {
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
 
-  const handleExportReport = async () => {
+  const handleExportReport = async (dataset: TreasuryReportDataset) => {
     const period = currentPeriod();
     setExporting(true);
     setExportError(null);
     try {
-      const csv = await api.getTreasuryReport(period, "ledger");
-      downloadCsv(`treasury_ledger_${period}.csv`, csv);
+      const csv = await api.getTreasuryReport(period, dataset);
+      downloadCsv(`treasury_${dataset}_${period}.csv`, csv);
     } catch (e) {
       setExportError((e as Error).message);
     } finally {
@@ -70,14 +70,23 @@ export function TreasuryPage() {
     }
   };
 
+  const fetchSubmissions = async (status: TreasurySubmissionStatus, cursor?: string | null) => {
+    return api.getTreasuryPaymentSubmissions(status, 20, cursor);
+  };
+
   return (
     <>
       {treasury.error && <ApiErrorBanner message={treasury.error} onRetry={treasury.reload} loading={treasury.loading} />}
-      {exportError && <ApiErrorBanner message={exportError} onRetry={handleExportReport} loading={exporting} />}
+      {exportError && <ApiErrorBanner message={exportError} onRetry={() => setExportError(null)} loading={exporting} />}
       {treasury.loading && !treasury.data ? (
         <EmptyState message="Loading treasury data..." />
       ) : treasury.data ? (
-        <TreasuryDashboard data={treasury.data} onExportReport={handleExportReport} exporting={exporting} />
+        <TreasuryDashboard 
+          data={treasury.data} 
+          onExportReport={handleExportReport} 
+          exporting={exporting} 
+          fetchSubmissions={fetchSubmissions}
+        />
       ) : treasury.error ? null : (
         <EmptyState message="No treasury data available." />
       )}
