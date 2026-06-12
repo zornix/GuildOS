@@ -37,6 +37,8 @@ from api.tasks.api.router import router as tasks_router
 from api.tasks.api.operations import router as operations_router
 from api.treasury.api.router import router as treasury_router
 from api.treasury.api.fines_legacy import router as fines_router
+from api.calendar.api.router import router as calendar_router
+from api.instrumentation.api.router import router as usage_router
 
 app = FastAPI(
     title="FraternityOS API",
@@ -74,6 +76,8 @@ app.include_router(announcements_router, prefix="/api/announcements", tags=["Ann
 app.include_router(recruitment_router, prefix="/api/recruitment", tags=["Recruitment"])
 app.include_router(bylaws_router, prefix="/api/bylaws", tags=["Bylaws"])
 app.include_router(nl_controller_router, prefix="/api/nl-controller", tags=["NL Controller"])
+app.include_router(calendar_router, prefix="/api/calendar", tags=["Calendar"])
+app.include_router(usage_router, prefix="/api/usage", tags=["Usage"])
 
 
 @app.get("/api/health")
