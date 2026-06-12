@@ -1,27 +1,29 @@
-# Events — remaining conformance work
+# Events — conformance status
 
-Status: package boundary + delegation in place; handlers not yet relocated.
+Status: **conformed** (V1 events build, June 2026). The package now follows the
+canonical domain shape end to end.
 
 Done
-- `api/events/api/router.py` is the mount point (`/api/events` in `api/index.py`);
-  it delegates to `api/routes/events.py` unchanged.
-- `events` table extended (migration 0090): `event_type`, `visibility`,
-  `linked_task_group_id`, `linked_attendance_session_id`, `linked_announcement_id`,
-  `linked_budget_id` — all nullable/defaulted.
-- `EventCreate`/`EventUpdate` accept optional `event_type`/`visibility` and the
-  handlers pass them through.
-- `api/events/auth.py` defines the calendar permissions.
+- `api/events/api/router.py` is the mount point (`/api/events` in `api/index.py`).
+- Handlers live in `api/events/api/events.py` and are thin; business logic and
+  authorization live in `api/events/services/events.py`.
+- Domain-local schemas in `api/events/api/schemas.py` (nothing event-shaped is
+  left in `api/models/schemas.py`).
+- `require_officer` swapped for `require_permission(EVENT_CREATE/UPDATE/DELETE)`
+  on create/update/delete (legacy officers resolve via the compatibility
+  mapping). The check-in-link handlers intentionally keep `require_officer`
+  (legacy surface, unchanged).
+- `visibility` IS enforced in list/get (`calendar:officer:view` for
+  visibility='officer'; 'custom' audiences via `event_audience_members`;
+  supervisors/organizers/creators always see their events).
+- V1 model (migrations 0100/0101): `event_types` (case-insensitive unique,
+  seeded defaults), `event_groups`, `event_organizers`, `event_audience_members`,
+  `finable`, `supervisor_member_id` (chair-gated via CHAIR_ROLES in auth.py),
+  ev_* RPCs with tenant guards + idempotency + audit_logs.
 
-TODO (behavior-preserving, move one route at a time, keep e2e green)
-- Move handlers from `api/routes/events.py` into `api/events/api/events.py`;
-  move `EventCreate`/`EventUpdate`/`EventResponse` out of `api/models/schemas.py`
-  into `api/events/api/schemas.py`.
-- Swap `require_officer` for `require_permission(EVENT_CREATE)` etc. — only after
-  verifying e2e specs still pass (legacy officers resolve these permissions via
-  the compatibility mapping, so this is safe but must be verified).
-- Add a service layer (`api/events/services/events.py`); handlers become thin.
-- Enforce `visibility` in list/get queries (`calendar:officer:view` for
-  visibility='officer'); currently visibility is stored but not yet filtered.
+Remaining
 - Wire `linked_*` columns when creating sessions/task groups from an event
   (the attendance sessions service already backfills
   `linked_attendance_session_id`).
+- TODO(events): event delete is still a plain delete with no audit entry;
+  consider an ev_delete_event RPC if delete becomes consequential.
