@@ -25,6 +25,16 @@ MEMBER_AUTH_IDS = [f"aaaaaaaa-0000-0000-0000-0000000001{i:02d}" for i in range(1
 
 EVENT_IDS = [f"00000000-0000-0000-0000-000000000e{i:02d}" for i in range(1, 6)]
 
+TREASURY_OFFICER_CAPABILITIES = [
+    "treasury:read",
+    "invoice:create",
+    "payment:review",
+    "expense:create",
+    "adjustment:create",
+    "refund:create",
+    "rebuild:run",
+]
+
 MEMBERS_DATA = [
     {"name": "Jake Martinez", "email": "jake@tke.org", "phone": "555111001", "role": "officer"},
     {"name": "Ryan Chen", "email": "ryan@tke.org", "phone": "555111002", "role": "member"},
@@ -166,6 +176,32 @@ def seed():
             'INSERT INTO members (id, auth_id, chapter_id, name, email, phone, role, status) '
             'VALUES (%s, %s, %s, %s, %s, %s, %s, %s)',
             (all_member_ids[i], all_auth_ids[i], CHAPTER_ID, m["name"], m["email"], m["phone"], m["role"], "active"),
+        )
+
+    for capability in TREASURY_OFFICER_CAPABILITIES:
+        cur.execute(
+            'INSERT INTO treasury_grants (chapter_id, member_id, capability) '
+            'VALUES (%s, %s, %s) '
+            'ON CONFLICT (chapter_id, member_id, capability) DO NOTHING',
+            (CHAPTER_ID, OFFICER_ID, capability),
+        )
+
+    # RBAC: the role/permission catalogs are seeded by migration 0083. Here we
+    # mirror each demo member's legacy role into member_roles and make the demo
+    # officer the chapter admin (so role assignment is exercisable locally).
+    for i, m in enumerate(MEMBERS_DATA):
+        cur.execute(
+            'INSERT INTO member_roles (chapter_id, member_id, role_key) '
+            'VALUES (%s, %s, %s) '
+            'ON CONFLICT (member_id, role_key, chapter_id) DO NOTHING',
+            (CHAPTER_ID, all_member_ids[i], m["role"]),
+        )
+    for role_key in ("admin", "president"):
+        cur.execute(
+            'INSERT INTO member_roles (chapter_id, member_id, role_key) '
+            'VALUES (%s, %s, %s) '
+            'ON CONFLICT (member_id, role_key, chapter_id) DO NOTHING',
+            (CHAPTER_ID, OFFICER_ID, role_key),
         )
 
     for i, ev in enumerate(EVENTS_DATA):
