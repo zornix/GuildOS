@@ -16,6 +16,7 @@ def create_task(
     required: bool,
     due_at: str | None,
     actor_id: str,
+    event_id: str | None = None,
     idempotency_key: str | None = None,
 ) -> dict:
     result = call_rpc(
@@ -26,6 +27,7 @@ def create_task(
             "p_description": description,
             "p_assigned_member_id": assigned_member_id,
             "p_group_id": group_id,
+            "p_event_id": event_id,
             "p_required": required,
             "p_due_at": due_at,
             "p_actor_id": actor_id,
@@ -72,10 +74,19 @@ def get_task(sb, *, chapter_id: str, task_id: str) -> dict | None:
 
 
 def list_tasks(sb, *, chapter_id: str, status: str | None = None) -> list[dict]:
+    """Chapter tasks, newest first. Additive V1 fields: every row carries
+    event_id (select *) plus a committed_member_ids summary (active commitments)."""
+    from api.tasks.services.commitments import active_commitments_by_task
+
     query = sb.table("tasks").select("*").eq("chapter_id", chapter_id)
     if status:
         query = query.eq("status", status)
-    return query.order("created_at", desc=True).execute().data or []
+    rows = query.order("created_at", desc=True).execute().data or []
+
+    summary = active_commitments_by_task(sb, chapter_id=chapter_id)
+    for row in rows:
+        row["committed_member_ids"] = summary.get(str(row["id"]), [])
+    return rows
 
 
 def incomplete_required_tasks(sb, *, chapter_id: str) -> list[dict]:

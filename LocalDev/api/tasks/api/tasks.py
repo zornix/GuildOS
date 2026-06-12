@@ -33,6 +33,7 @@ async def create_task(
         description=body.description,
         assigned_member_id=body.assigned_member_id,
         group_id=body.group_id,
+        event_id=body.event_id,
         required=body.required,
         due_at=body.due_at.isoformat() if body.due_at else None,
         actor_id=user["id"],
