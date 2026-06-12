@@ -1,141 +1,142 @@
-# Architecture — FraternityOS Attendance MVP
+# GuildOS System Architecture
 
-Last updated: 2026-06-07
+Last updated: 2026-06-12
 
-> The **Treasury** subsystem (dues/fines, payments, expenses, adjustments, refunds,
-> reporting) mounts at `/api/treasury` and has its own design reference:
-> [TREASURY_ARCHITECTURE.md](TREASURY_ARCHITECTURE.md).
+This document provides a high-level overview of the FraternityOS (GuildOS) architecture. For treasury-specific details, see [TREASURY_ARCHITECTURE.md](TREASURY_ARCHITECTURE.md).
 
 ---
 
-## System Overview
+## 1. System Overview
 
-**Local demo**
+GuildOS is a monolithic Next.js and FastAPI application backed by PostgreSQL.
 
+```mermaid
+flowchart TD
+    Client[Web Browser / Mobile Phone] -->|HTTP / REST| Frontend
+    
+    subgraph LocalDev [Deployment Boundary]
+        Frontend[Next.js App Router\nPort: 3000]
+        Backend[FastAPI Backend\nPort: 8001]
+        DB[(PostgreSQL)]
+        
+        Frontend -->|API Calls\nNEXT_PUBLIC_API_BASE| Backend
+        Backend -->|psycopg2\nDATABASE_URL| DB
+    end
+
+    style Frontend fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style Backend fill:#0f172a,stroke:#10b981,stroke-width:2px,color:#fff
+    style DB fill:#0f172a,stroke:#f59e0b,stroke-width:2px,color:#fff
 ```
-┌──────────────────┐      HTTP (NEXT_PUBLIC_API_BASE)      ┌──────────────────┐
-│  Next.js (fratos)│ ─────────────────────────────────────▶│  FastAPI (api/)  │
-│  Port 3000       │                                      │  Port 8001       │
-└──────────────────┘                                      └────────┬─────────┘
-                                                                   │ psycopg2
-                                                                   ▼
-                                                        ┌──────────────────┐
-                                                        │  PostgreSQL       │
-                                                        │  (Docker / hosted)│
-                                                        └──────────────────┘
-```
 
-### Layer responsibilities
+### Layer Responsibilities
 
-| Layer | Tech | Role |
-|-------|------|------|
-| Frontend | Next.js 16, React 19 | UI shell, pages, forms |
-| Backend API | FastAPI (Python) | Business logic, auth, CRUD, check-in validation, fine processing, cron endpoint |
-| Database | PostgreSQL | Persistence via `DATABASE_URL` |
+| Layer | Technology | Responsibilities |
+|-------|------------|------------------|
+| **Frontend** | Next.js 16, React 19, Tailwind/CSS | UI shell, dashboard views, short-link check-in forms. |
+| **Backend** | Python, FastAPI | Business logic, authentication, CRUD operations, cron jobs. |
+| **Database** | PostgreSQL | Persistence, atomic multi-row mutations via plpgsql RPCs, audit logging. |
 
 ---
 
-## Backend Structure
+## 2. Phone Check-In Architecture (No-Auth Flow)
 
-```
-api/
-  index.py              # App factory, CORS, router registration
-  config.py             # Settings via pydantic-settings (.env)
-  db.py                 # PostgresClient singleton (legacy `get_supabase` naming)
-  dependencies.py       # Auth: get_current_user, require_officer
-  postgres_client.py    # psycopg2-backed data access
-  models/schemas.py     # Pydantic request/response models
-  routes/
-    auth.py             # /api/auth/* — login, me
-    events.py           # /api/events/* — CRUD + check-in links
-    attendance.py       # /api/attendance/* — check-in, roster, manual
-    excuses.py          # /api/excuses/* — submit, list, review
-    fines.py            # /api/fines/* — list, pay, waive, process, summary
-    members.py          # /api/members/* — roster, role change
-    checkin_page.py     # /c/{code} — HTML phone check-in page
-    cron.py             # /api/cron/* — fine processing trigger
-    standing.py         # /api/standing/* — member standings
-  services/
-    checkin_links.py    # Short link generation + validation
-    fine_processor.py   # Auto-fine generation after events
-```
+One of the core features is the frictionless, zero-login phone check-in for members attending events.
 
-### Data access
+```mermaid
+sequenceDiagram
+    participant Officer
+    participant DB as PostgreSQL
+    participant FastAPI
+    participant MemberPhone as Member's Phone
 
-The app uses **`PostgresClient`** (`postgres_client.py`) with **psycopg2** and **`DATABASE_URL`**. There is no Supabase client SDK in the current dependency set; local and production both use a standard Postgres connection string.
-
----
-
-## Frontend Structure
-
-```
-fratos/
-  app/                          # Next.js App Router
-    layout.tsx, page.tsx
-  fraternity-os-frontend.tsx    # App shell: sidebar nav + page routing
-  lib/
-    api-client.ts               # Typed API client
-    types.ts                    # TypeScript interfaces for entities
-    theme.ts                    # Design tokens
-  hooks/
-    use-auth.tsx                # AuthProvider context, login/logout
-    use-api.ts                  # Generic data-fetching hook
-  components/
-    ui/                         # Primitives: btn, card, badge, input, avatar, modal, toast, icon
-    forms/                      # create-event, check-in, excuse
-    countdown.tsx               # Check-in link timer
-  views/
-    dashboard.tsx, events.tsx, fines.tsx, members.tsx, standing.tsx
+    Officer->>FastAPI: POST /api/attendance/sessions (Open Check-In)
+    FastAPI->>DB: Create short-lived checkin_link
+    FastAPI-->>Officer: Returns 6-char short code (e.g., "ABCDEF")
+    
+    Note over Officer,MemberPhone: Officer verbally shares code or shows QR
+    
+    MemberPhone->>FastAPI: Opens /c/ABCDEF
+    FastAPI-->>MemberPhone: Serves lightweight HTML page
+    
+    MemberPhone->>FastAPI: POST /api/attendance/checkin/ABCDEF/phone {phone: "5551234567"}
+    FastAPI->>DB: 1. Validate Link TTL & Active Status
+    FastAPI->>DB: 2. Lookup Member by Phone
+    FastAPI->>DB: 3. Upsert Attendance Record
+    FastAPI-->>MemberPhone: 200 OK (Checked In!)
 ```
 
 ---
 
-## Auth Flow
+## 3. Backend Module Structure
 
-### Officer / member login (JWT)
+The backend is migrating towards a **Domain-Driven Design (DDD)** pattern, where each domain has its own independent router, services, and schemas.
 
-1. User enters email → `POST /api/auth/login`
-2. Backend verifies email exists in `members` (officer-only routes require `role=officer`)
-3. Returns JWT (HS256) with `sub=member.id`
-4. Frontend stores token in localStorage, attaches to API requests
+```mermaid
+graph TD
+    API[api/index.py (App Factory)] --> Auth[api/auth/]
+    API --> Treasury[api/treasury/]
+    API --> RBAC[api/rbac/]
+    API --> Operations[api/routes/operations.py]
+    API --> Events[api/events/]
+    
+    subgraph Canonical Domain Shape [e.g. api/treasury/]
+        Router[router.py]
+        Services[services/]
+        Schemas[schemas.py]
+        Core[core/]
+        DB_Helpers[db/]
+    end
+    
+    Treasury --> Canonical Domain Shape
+```
 
-### Phone check-in (no auth)
+### Key Architectural Rules for Backend Services
 
-1. Officer opens check-in → generates 6-char short code with TTL
-2. Member opens `/c/{code}` on phone → FastAPI serves HTML page
-3. Member enters 10-digit phone → `POST /api/attendance/checkin/{code}/phone`
-4. Backend validates link + looks up member by phone + chapter → records attendance
-
----
-
-## Database Schema
-
-7 tables. See `migrations/0001_initial_schema.sql` for full DDL.
-
-| Table | Key columns | Notes |
-|-------|-------------|-------|
-| chapters | id, name, organization, school | Multi-tenancy root |
-| members | id, chapter_id, email, phone, role, status | phone used for check-in |
-| events | id, chapter_id, title, date, time, location, required, fine_amount | required events trigger fines |
-| attendance | id, event_id, member_id, checked_in, method | unique(event_id, member_id) |
-| excuses | id, event_id, member_id, reason, status | unique(event_id, member_id) |
-| fines | id, event_id, member_id, chapter_id, amount, status | unpaid/paid/waived |
-| checkin_links | id, event_id, short_code, expires_at, active | TTL-based expiry |
+1. **Isolation**: A domain (like `api/treasury/`) should not import schemas or logic from another domain directly if it can be avoided. Seams should use clear public interfaces.
+2. **RPC Mutations**: Multi-row writes must be handled via PostgreSQL RPCs (`call_rpc`) to ensure atomic rollbacks and proper `audit_logs` tracking.
+3. **Tenant Integrity**: Every tenant table carries `chapter_id`. Requests resolve `chapter_id` from the authenticated user token, *never* from the client payload.
 
 ---
 
-## Member Standing Rules
+## 4. Frontend Structure (`fratos/`)
 
-Simple explicit rules (in `routes/standing.py`):
+The frontend uses Next.js App Router but keeps most logic abstracted in hooks and typed API clients.
 
-- **good_standing**: no issues
-- **warning**: 1 unpaid fine OR 1+ unexcused absence
-- **delinquent**: 2+ unpaid fines OR $50+ unpaid OR 3+ unexcused absences
+```mermaid
+graph LR
+    A[app/layout.tsx] --> B[Views]
+    
+    subgraph Views [views/]
+        Dash[dashboard.tsx]
+        Events[events.tsx]
+        Fines[fines.tsx]
+        Members[members.tsx]
+        Standing[standing.tsx]
+    end
+    
+    B --> C[Components]
+    
+    subgraph Shared [Shared UI]
+        C[components/ui/]
+        Forms[components/forms/]
+        Hooks[hooks/use-api.ts]
+        APIClient[lib/api-client.ts]
+    end
+```
 
 ---
 
-## Deployment
+## 5. Security & Auth Flow
 
-Run the FastAPI app and Next.js app behind your host’s process manager or serverless platform. Set **`DATABASE_URL`**, **`JWT_SECRET`**, **`FRONTEND_URL`** (CORS), and **`BASE_URL`** (absolute check-in URLs). A scheduled job or cron can call `GET /api/cron/process-fines` on your chosen interval.
+1. **JWT Auth**: Officers/Members log in via `POST /api/auth/login`. The server returns an HS256 JWT containing `sub=member.id`.
+2. **RBAC Guard**: The `api/rbac` module verifies permissions. API endpoints use `require_permission("domain:action")`.
+3. **Service Role DB**: The API uses a service-role PostgreSQL client. Row-Level Security (RLS) is present but bypassed by the backend; instead, backend routes strictly filter by the token's `chapter_id`.
 
-**Local demo:** see [README.md](../README.md) and `deploy/local-dev.sh`.
+```mermaid
+flowchart LR
+    Request[HTTP Request + JWT] --> AuthDep[FastAPI Dependency: get_current_user]
+    AuthDep --> Token[Decode JWT -> member_id, chapter_id]
+    Token --> PermCheck[has_permission(member_id, 'action')]
+    PermCheck -->|Allowed| Handler[Execute Route Handler]
+    PermCheck -->|Denied| 403[403 Forbidden]
+```
