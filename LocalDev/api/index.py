@@ -15,8 +15,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.config import settings
 from api.db import get_supabase
 from api.health_checks import build_health_payload
-from api.routes import auth, events, attendance, excuses, fines, members, checkin_page, checkin_links, cron, standing, operations
+from api.routes import auth, fines, members, cron, standing, operations
+from api.announcements.api.router import router as announcements_router
+from api.attendance.api.router import (
+    router as attendance_router,
+    checkin_links_router,
+    checkin_page_router,
+    excuses_router,
+)
+from api.bylaws.api.router import router as bylaws_router
+from api.events.api.router import router as events_router
 from api.memberadmin.api.router import router as memberadmin_router
+from api.nl_controller.api.router import router as nl_controller_router
+from api.rbac.api.router import router as rbac_router
+from api.recruitment.api.router import router as recruitment_router
+from api.tasks.api.router import router as tasks_router
 from api.treasury.api.router import router as treasury_router
 
 app = FastAPI(
@@ -35,18 +48,24 @@ app.add_middleware(
 )
 
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
-app.include_router(events.router, prefix="/api/events", tags=["Events"])
-app.include_router(attendance.router, prefix="/api/attendance", tags=["Attendance"])
-app.include_router(excuses.router, prefix="/api/excuses", tags=["Excuses"])
+app.include_router(events_router, prefix="/api/events", tags=["Events"])
+app.include_router(attendance_router, prefix="/api/attendance", tags=["Attendance"])
+app.include_router(excuses_router, prefix="/api/excuses", tags=["Excuses"])
 app.include_router(fines.router, prefix="/api/fines", tags=["Fines"])
 app.include_router(members.router, prefix="/api/members", tags=["Members"])
-app.include_router(checkin_page.router, prefix="/c", tags=["Check-In Page"])
-app.include_router(checkin_links.router, prefix="/api/checkin-links", tags=["Check-In Links"])
+app.include_router(checkin_page_router, prefix="/c", tags=["Check-In Page"])
+app.include_router(checkin_links_router, prefix="/api/checkin-links", tags=["Check-In Links"])
 app.include_router(cron.router, prefix="/api/cron", tags=["Cron"])
 app.include_router(standing.router, prefix="/api/standing", tags=["Standing"])
 app.include_router(memberadmin_router, prefix="/api/memberadmin", tags=["MemberAdmin"])
 app.include_router(operations.router, prefix="/api/operations", tags=["Operations"])
 app.include_router(treasury_router, prefix="/api/treasury", tags=["Treasury"])
+app.include_router(rbac_router, prefix="/api/rbac", tags=["RBAC"])
+app.include_router(tasks_router, prefix="/api/tasks", tags=["Tasks"])
+app.include_router(announcements_router, prefix="/api/announcements", tags=["Announcements"])
+app.include_router(recruitment_router, prefix="/api/recruitment", tags=["Recruitment"])
+app.include_router(bylaws_router, prefix="/api/bylaws", tags=["Bylaws"])
+app.include_router(nl_controller_router, prefix="/api/nl-controller", tags=["NL Controller"])
 
 
 @app.get("/api/health")

@@ -42,6 +42,15 @@ class EventCreate(BaseModel):
     location: str
     required: bool = False
     fine_amount: float = 0.0
+    event_type: Optional[str] = None
+    visibility: str = "chapter"
+
+    @field_validator("visibility")
+    @classmethod
+    def validate_visibility(cls, v: str) -> str:
+        if v not in ("chapter", "officer", "role_specific", "private"):
+            raise ValueError("visibility must be chapter, officer, role_specific, or private")
+        return v
 
 
 class EventUpdate(BaseModel):
@@ -52,6 +61,15 @@ class EventUpdate(BaseModel):
     location: Optional[str] = None
     required: Optional[bool] = None
     fine_amount: Optional[float] = None
+    event_type: Optional[str] = None
+    visibility: Optional[str] = None
+
+    @field_validator("visibility")
+    @classmethod
+    def validate_visibility(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in ("chapter", "officer", "role_specific", "private"):
+            raise ValueError("visibility must be chapter, officer, role_specific, or private")
+        return v
 
 
 class EventResponse(BaseModel):

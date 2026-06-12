@@ -35,6 +35,8 @@ async def create_event(body: EventCreate, officer=Depends(require_officer)):
         "location": body.location,
         "required": body.required,
         "fine_amount": body.fine_amount,
+        "event_type": body.event_type,
+        "visibility": body.visibility,
         "created_by": officer["id"],
     }).execute()
     return result.data[0]
