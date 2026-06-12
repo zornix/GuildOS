@@ -86,6 +86,193 @@ def reject_payment(
     return submission
 
 
+# ── TREASURY V1: balance-level submissions, allocation, evidence ──────────────
+
+MAX_EVIDENCE_BYTES = 2 * 1024 * 1024  # spec: evidence uploads capped at 2 MiB
+
+
+def submit_balance_payment(
+    sb,
+    *,
+    chapter_id: str,
+    member_id: str,
+    claimed_amount_cents: int,
+    method: str,
+    proof_ref: str | None = None,
+    idempotency_key: str | None = None,
+) -> dict:
+    """Member submits a payment against their OVERALL balance (invoice_id NULL).
+
+    Enters 'pending' — no money moves, no ledger (spec §5 Payments).
+    """
+    result = call_rpc(
+        "tr_submit_balance_payment",
+        {
+            "p_chapter_id": chapter_id,
+            "p_member_id": member_id,
+            "p_claimed_amount_cents": claimed_amount_cents,
+            "p_method": method,
+            "p_proof_ref": proof_ref,
+            "p_idempotency_key": idempotency_key,
+        },
+        sb=sb,
+    )
+    return result.data
+
+
+def verify_payment_v2(
+    sb,
+    *,
+    chapter_id: str,
+    submission_id: str,
+    actor_id: str,
+    idempotency_key: str | None = None,
+) -> dict:
+    """Verify an invoice-targeted OR balance-level submission, then allocate
+    the amount across the member's open invoices oldest-first (decision #2 path).
+    Leftover stays as member credit (balance is computed, never stored)."""
+    result = call_rpc(
+        "tr_verify_payment_v2",
+        {
+            "p_chapter_id": chapter_id,
+            "p_submission_id": submission_id,
+            "p_actor_id": actor_id,
+            "p_idempotency_key": idempotency_key,
+        },
+        sb=sb,
+    )
+    vp = result.data
+    created = bool(vp.get("_created"))
+    clean = _strip_internal(vp)
+
+    BalanceEngine(sb).recompute_member(clean["member_id"])
+
+    if created:
+        notify_payment_approved(
+            chapter_id=chapter_id,
+            member_id=clean["member_id"],
+            submission_id=submission_id,
+            sb=sb,
+        )
+    return clean
+
+
+def reallocate_payment(
+    sb,
+    *,
+    chapter_id: str,
+    verified_payment_id: str,
+    allocations: list[dict],
+    actor_id: str,
+    reason: str,
+    idempotency_key: str | None = None,
+) -> dict:
+    """Treasurer override of a verified payment's allocation (append-only:
+    reversal rows + a new allocation set; reason REQUIRED, audit-logged)."""
+    if reason is None or not str(reason).strip():
+        raise ValueError("a reason is required to reallocate a payment")
+    result = call_rpc(
+        "tr_reallocate_payment",
+        {
+            "p_chapter_id": chapter_id,
+            "p_verified_payment_id": verified_payment_id,
+            "p_allocations": allocations,
+            "p_actor_id": actor_id,
+            "p_reason": reason,
+            "p_idempotency_key": idempotency_key,
+        },
+        sb=sb,
+    )
+    payload = result.data
+    # Allocation moves coverage between invoices of ONE member; refresh their cache.
+    vp = (
+        sb.table("verified_payments")
+        .select("member_id")
+        .eq("chapter_id", chapter_id)
+        .eq("id", verified_payment_id)
+        .maybe_single()
+        .execute()
+    ).data
+    if vp:
+        BalanceEngine(sb).recompute_member(vp["member_id"])
+    return payload
+
+
+def list_allocations(sb, *, chapter_id: str, verified_payment_id: str) -> list[dict]:
+    return (
+        sb.table("payment_allocations")
+        .select("*")
+        .eq("chapter_id", chapter_id)
+        .eq("verified_payment_id", verified_payment_id)
+        .order("created_at")
+        .execute()
+    ).data or []
+
+
+def get_submission(sb, *, chapter_id: str, submission_id: str) -> dict | None:
+    row = (
+        sb.table("payment_submissions")
+        .select("*")
+        .eq("chapter_id", chapter_id)
+        .eq("id", submission_id)
+        .maybe_single()
+        .execute()
+    ).data
+    return row or None
+
+
+def add_evidence(
+    sb, *, chapter_id: str, submission_id: str, content_type: str, data: bytes
+) -> dict:
+    """Attach evidence bytes to a submission (append-only; ≤ 2 MiB).
+
+    Single-row insert — no RPC needed; the DB CHECK + append-only triggers
+    enforce the invariants.
+    """
+    if not data:
+        raise ValueError("evidence payload is empty")
+    if len(data) > MAX_EVIDENCE_BYTES:
+        raise ValueError(f"evidence exceeds the {MAX_EVIDENCE_BYTES} byte limit")
+    inserted = (
+        sb.table("payment_evidence")
+        .insert(
+            {
+                "chapter_id": chapter_id,
+                "submission_id": submission_id,
+                "content_type": content_type,
+                "data": data,
+                "size_bytes": len(data),
+            }
+        )
+        .execute()
+    ).data
+    row = inserted[0] if isinstance(inserted, list) else inserted
+    return {k: v for k, v in row.items() if k != "data"}
+
+
+def get_evidence(sb, *, chapter_id: str, evidence_id: str) -> dict | None:
+    """Fetch one evidence row, data returned base64-encoded."""
+    import base64
+
+    row = (
+        sb.table("payment_evidence")
+        .select("*")
+        .eq("chapter_id", chapter_id)
+        .eq("id", evidence_id)
+        .maybe_single()
+        .execute()
+    ).data
+    if not row:
+        return None
+    raw = row.pop("data")
+    if isinstance(raw, memoryview):
+        raw = bytes(raw)
+    elif isinstance(raw, str):  # psycopg2 may surface bytea as hex text via some paths
+        raw = bytes.fromhex(raw[2:]) if raw.startswith("\\x") else raw.encode()
+    row["data_base64"] = base64.b64encode(raw).decode()
+    return row
+
+
 def get_receipt(sb, *, chapter_id: str, receipt_id: str) -> dict | None:
     row = (
         sb.table("receipts")

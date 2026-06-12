@@ -1,16 +1,12 @@
 """
 Auto-fine generation for required events.
 
-Runs after check-in window closes. Deploy as: Supabase Edge Function
-with pg_cron, or Vercel Cron.
-
-vercel.json cron config:
-{
-  "crons": [{
-    "path": "/api/cron/process-fines",
-    "schedule": "*/15 * * * *"
-  }]
-}
+NOTE (GreekOS V1, spec §5 Fines): automatic fines are CUT from V1. The
+process-fines Vercel cron entry was removed and /api/cron/process-fines is a
+disabled no-op — nothing calls this module on a schedule anymore. It remains
+only behind the legacy officer-triggered POST /api/fines/process-event/{event_id}
+route. The V1 path is manual: GET /api/fines/missed/{event_id} +
+POST /api/fines/issue (flat $25, ≥24h gate, treasury:fines:issue).
 """
 
 from api.db import get_supabase_admin
