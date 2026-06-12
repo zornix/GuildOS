@@ -4,6 +4,7 @@ import { api } from "../lib/api-client";
 import { AuthLoading } from "../components/modules/auth/auth-loading";
 import { LoginForm } from "../components/modules/auth/login-form";
 import { SetPasswordForm } from "../components/modules/auth/set-password-form";
+import { devAuthUser, isDevAuthBypassEnabled } from "../lib/dev-auth";
 import type { Member } from "../lib/types";
 
 interface AuthContextValue {
@@ -14,7 +15,8 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<Member | null>(null);
+  const devAuthBypass = isDevAuthBypassEnabled();
+  const [user, setUser] = useState<Member | null>(() => (devAuthBypass ? devAuthUser : null));
   const [loading, setLoading] = useState(false);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -26,6 +28,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [confirmPassword, setConfirmPassword] = useState("");
 
   useEffect(() => {
+    if (devAuthBypass) {
+      api.setToken(null);
+      setUser(devAuthUser);
+      return;
+    }
+
     let cancelled = false;
 
     async function initSession() {
@@ -48,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [devAuthBypass]);
 
   const handleLogin = async (email: string, password?: string) => {
     setLoginError("");
@@ -104,6 +112,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
+    if (devAuthBypass) {
+      api.setToken(null);
+      setUser(devAuthUser);
+      return;
+    }
+
     setUser(null);
     setShowSetPassword(false);
     setShowPasswordField(false);

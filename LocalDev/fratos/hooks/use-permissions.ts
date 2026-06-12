@@ -2,6 +2,7 @@
 import { useCallback } from "react";
 import { useApi } from "./use-api";
 import { api } from "../lib/api-client";
+import { devAuthPermissions, isDevAuthBypassEnabled } from "../lib/dev-auth";
 import type { MyPermissions } from "../lib/types";
 
 /**
@@ -9,13 +10,25 @@ import type { MyPermissions } from "../lib/types";
  * `can(undefined)` is true so nav items without a requiredPermission stay visible.
  */
 export function usePermissions() {
-  const { data, loading, error, reload } = useApi<MyPermissions>(() => api.getMyPermissions(), []);
-  const permissions = data?.permissions;
+  const devAuthBypass = isDevAuthBypassEnabled();
+  const { data, loading, error, reload } = useApi<MyPermissions>(
+    () => (devAuthBypass ? Promise.resolve(devAuthPermissions) : api.getMyPermissions()),
+    [devAuthBypass],
+  );
+  const resolved = devAuthBypass ? devAuthPermissions : data;
+  const permissions = resolved?.permissions;
 
   const can = useCallback(
-    (permission?: string) => !permission || (permissions ?? []).includes(permission),
-    [permissions],
+    (permission?: string) => !permission || devAuthBypass || (permissions ?? []).includes(permission),
+    [devAuthBypass, permissions],
   );
 
-  return { permissions: permissions ?? [], roles: data?.roles ?? [], loading, error, reload, can };
+  return {
+    permissions: permissions ?? [],
+    roles: resolved?.roles ?? [],
+    loading: devAuthBypass ? false : loading,
+    error: devAuthBypass ? null : error,
+    reload,
+    can,
+  };
 }
