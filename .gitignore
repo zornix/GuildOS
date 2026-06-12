@@ -60,14 +60,16 @@ htmlcov/
 **/.playwright/
 playwright/.cache/
 
-# Cursor (local AI ignore lists; keep out of repo)
+# AI tooling (Cursor, Codex, Claude, agents — local only)
+.cursor/
 .cursorignore
 .cursorindexingignore
+.claude/
+.agents/
+.codex/
+.agent/
+*.agent
 
 # Gemini Skills
 git-publish/
 *.skill
-
-# Local agent artifacts (any depth)
-.claude/
-.agents/
