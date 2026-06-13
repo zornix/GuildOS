@@ -267,7 +267,7 @@ function ExpenseTable({ rows }: { rows: TreasuryExpense[] }) {
     { key: "vendor", header: "Description / Vendor", render: (row) => <span style={{ fontWeight: 700 }}>{row.vendor}</span> },
     { key: "category", header: "Category", render: (row) => <Badge color="blue">{row.category}</Badge> },
     { key: "date", header: "Date", render: (row) => <span style={{ color: tokens.color.textMuted }}>{row.clearsAt}</span>, width: "140px" },
-    { key: "amount", header: "Amount", render: (row) => <span style={{ fontWeight: 800, color: tokens.color.error }}>-{money(row.amountCents)}</span>, width: "120px" },
+    { key: "amount", header: "Amount", render: (row) => <span style={{ fontWeight: 800, color: tokens.color.danger }}>-{money(row.amountCents)}</span>, width: "120px" },
     { key: "status", header: "Status", render: (row) => statusBadge(row.status), width: "110px" },
   ];
 
@@ -308,7 +308,7 @@ function BigLedgerTable({ payments, expenses }: { payments: TreasuryPayment[], e
     { key: "desc", header: "Description", render: (row) => <span style={{ fontWeight: 700 }}>{row.description}</span> },
     { key: "cat", header: "Category", render: (row) => <Badge color={row.type === "in" ? "green" : "purple"}>{row.category}</Badge>, width: "160px" },
     { key: "amount", header: "Net Amount", render: (row) => (
-      <span style={{ fontWeight: 800, color: row.type === "in" ? tokens.color.success : tokens.color.error }}>
+      <span style={{ fontWeight: 800, color: row.type === "in" ? tokens.color.success : tokens.color.danger }}>
         {row.type === "in" ? "+" : "-"}{money(row.amountCents)}
       </span>
     ), width: "140px" },
