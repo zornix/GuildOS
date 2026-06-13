@@ -10,13 +10,17 @@ import { ApiErrorBanner } from "../components/api-error-banner";
 import { CreateEventForm } from "../components/forms/create-event-form";
 import { EventTabs } from "../components/modules/events/event-tabs";
 import { EventList } from "../components/modules/events/event-list";
+import { EventCalendar } from "../components/modules/events/event-calendar";
 import { EventDetail } from "../components/modules/events/event-detail";
+import { Btn } from "../components/ui/btn";
+import { Icon } from "../components/ui/icon";
 import type { Event, RosterEntry, CheckinLink } from "../lib/types";
 import { isPastEvent } from "../lib/event-time";
 import { tokens } from "../config/theme/tokens";
 
 type ModalType = "create" | "checkin" | "excuse" | null;
 type AttendanceStatus = "present" | "excused" | "absent";
+type ViewMode = "list" | "calendar";
 type ManualTarget = { eventId: string; memberId: string; name: string };
 
 export function EventsPage() {
@@ -26,6 +30,7 @@ export function EventsPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [activeLink, setActiveLink] = useState<CheckinLink | null>(null);
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [manualTarget, setManualTarget] = useState<ManualTarget | null>(null);
   const [manualStatus, setManualStatus] = useState<AttendanceStatus>("present");
   const [manualReason, setManualReason] = useState("");
@@ -188,11 +193,39 @@ export function EventsPage() {
 
   return (
     <div>
-      <EventTabs tab={tab} onTabChange={setTab} isOfficer={user.role === "officer"} onCreateEvent={() => setModal("create")} />
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: tokens.space[3], marginBottom: tokens.space[4], flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: tokens.space[1], background: tokens.color.surface, borderRadius: tokens.radius.md, padding: 3, width: "fit-content" }}>
+          {(["list", "calendar"] as const).map((mode) => (
+            <Btn
+              key={mode}
+              variant={viewMode === mode ? "primary" : "ghost"}
+              style={{ textTransform: "capitalize", padding: "6px 14px" }}
+              onClick={() => setViewMode(mode)}
+            >
+              <Icon type={mode === "list" ? "check" : "cal"} size={14} /> {mode}
+            </Btn>
+          ))}
+        </div>
+        {user.role === "officer" && (
+          <Btn onClick={() => setModal("create")}><Icon type="plus" size={14} /> New Event</Btn>
+        )}
+      </div>
       {events.error && (
         <ApiErrorBanner message={events.error} onRetry={events.reload} loading={events.loading} />
       )}
-      <EventList events={list} loading={events.loading} error={events.error} tab={tab} onSelectEvent={setSelected} />
+      {viewMode === "list" ? (
+        <>
+          <EventTabs tab={tab} onTabChange={setTab} />
+          <EventList events={list} loading={events.loading} error={events.error} tab={tab} onSelectEvent={setSelected} />
+        </>
+      ) : (
+        <EventCalendar
+          events={events.data || []}
+          loading={events.loading}
+          error={events.error}
+          onSelectEvent={setSelected}
+        />
+      )}
       {modal === "create" && (
         <Modal onClose={() => setModal(null)}>
           <CreateEventForm onSuccess={() => { reloadEvents(); setModal(null); }} onClose={() => setModal(null)} />
