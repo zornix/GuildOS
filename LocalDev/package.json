@@ -6,8 +6,6 @@
     "dev:docker": "USE_DOCKER_DB=1 bash ../local-dev/scripts/local-dev.sh",
     "migrate": "bash ../local-dev/scripts/with-demo-db.sh python3 scripts/migrate_db.py",
     "seed": "bash ../local-dev/scripts/with-demo-db.sh python3 -m scripts.seed",
-    "preflight": "bash deploy/preflight.sh",
-    "verify": "bash deploy/verify-local.sh",
     "test:e2e": "cd fratos && npm run test:e2e"
   }
 }

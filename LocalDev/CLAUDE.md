@@ -27,8 +27,6 @@ npm run dev:docker   # offline: Docker postgres + migrate + FastAPI + Next.js
 npm run dev:seed     # dev:docker with fake seed data (SEED_LOCAL_DB=1)
 npm run migrate      # apply pending migrations/*.sql against demo db
 npm run seed         # seed demo db only (usually unnecessary — demo has data)
-npm run verify       # CI-equivalent sandbox check (deploy/verify-local.sh)
-npm run preflight    # deploy/preflight.sh
 ```
 
 Local ports: **frontend 3000**, **backend 8001** (`/api/docs` for Swagger).
