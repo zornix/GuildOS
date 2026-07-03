@@ -21,6 +21,20 @@ Done
   `finable`, `supervisor_member_id` (chair-gated via CHAIR_ROLES in auth.py),
   ev_* RPCs with tenant guards + idempotency + audit_logs.
 
+Phase 1 (V1, migrations 0141/0142 — July 2026)
+- Co-supervisors: `event_supervisors` join table is now the source of truth
+  (creator locked in as `is_creator`, min-1 invariant). `ev_add_supervisor` /
+  `ev_remove_supervisor` RPCs; `ev_create_event` seeds the creator row.
+- **DEPRECATED — `events.supervisor_member_id`**: no longer written; all reads
+  moved to `event_supervisors`. Column kept in place for the legacy backfill;
+  drop in a later phase once no consumer references it.
+- **DEPRECATED — `POST /{event_id}/supervisor`**: kept for back-compat but now
+  delegates to add-supervisor (a co-supervisor add, not a single-slot replace).
+  New callers should use `POST /{event_id}/supervisors` and
+  `DELETE /{event_id}/supervisors/{member_id}`.
+- Events gained `end_date` / `end_time` / `invite_link` (nullable; end>start
+  validated in the service, not a DB CHECK).
+
 Remaining
 - Wire `linked_*` columns when creating sessions/task groups from an event
   (the attendance sessions service already backfills

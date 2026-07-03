@@ -23,3 +23,12 @@ CHAIR_ROLES: tuple[str, ...] = (
     "philanthropy_chair",
     "standards_chair",
 )
+
+# Co-supervisor eligibility (spec §2.1: co-supervisors must hold an officer role).
+# Superset of CHAIR_ROLES plus the executive board.
+OFFICER_ROLES: tuple[str, ...] = CHAIR_ROLES + (
+    "president",
+    "vice_president",
+    "treasurer",
+    "secretary",
+)

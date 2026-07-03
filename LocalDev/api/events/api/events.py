@@ -31,6 +31,7 @@ from .schemas import (
     EventCreate,
     EventUpdate,
     OrganizerAdd,
+    SupervisorAdd,
     SupervisorSet,
 )
 
@@ -45,7 +46,9 @@ def _map_domain_errors():
         raise HTTPException(404, str(exc) or "Event not found")
     except svc.NotPermitted as exc:
         raise HTTPException(403, str(exc))
-    except svc.NotEligible as exc:
+    except svc.SupervisorRuleViolation as exc:
+        raise HTTPException(409, str(exc))
+    except (svc.NotEligible, svc.InvalidTimeRange) as exc:
         raise HTTPException(422, str(exc))
 
 
@@ -79,6 +82,9 @@ async def create_event(
             description=body.description,
             date=body.date.isoformat(),
             time=body.time.isoformat(),
+            end_date=body.end_date.isoformat() if body.end_date else None,
+            end_time=body.end_time.isoformat() if body.end_time else None,
+            invite_link=body.invite_link,
             location=body.location,
             required=body.required,
             finable=body.finable,
@@ -148,13 +154,50 @@ async def set_supervisor(
     user=Depends(get_current_user),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
-    """Volunteer yourself, or (with calendar:event:update) assign any chair."""
+    """DEPRECATED (see CONFORM_TODO.md): now adds a co-supervisor. Use
+    POST /{event_id}/supervisors."""
     with _map_domain_errors():
         return svc.set_supervisor(
             get_events_db(),
             actor=user,
             event_id=event_id,
             member_id=body.member_id,
+            idempotency_key=idempotency_key,
+        )
+
+
+@router.post("/{event_id}/supervisors")
+async def add_supervisor(
+    event_id: str,
+    body: SupervisorAdd,
+    user=Depends(get_current_user),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
+    """Add a co-supervisor (a current supervisor or calendar:event:update)."""
+    with _map_domain_errors():
+        return svc.add_supervisor(
+            get_events_db(),
+            actor=user,
+            event_id=event_id,
+            member_id=body.member_id,
+            idempotency_key=idempotency_key,
+        )
+
+
+@router.delete("/{event_id}/supervisors/{member_id}")
+async def remove_supervisor(
+    event_id: str,
+    member_id: str,
+    user=Depends(get_current_user),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
+    """Remove a co-supervisor (creator/min-1 violations surface as 409)."""
+    with _map_domain_errors():
+        return svc.remove_supervisor(
+            get_events_db(),
+            actor=user,
+            event_id=event_id,
+            member_id=member_id,
             idempotency_key=idempotency_key,
         )
 

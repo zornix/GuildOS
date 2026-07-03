@@ -8,7 +8,7 @@ never leak into them.
 
 from __future__ import annotations
 
-from api.events.auth import CHAIR_ROLES, EVENT_UPDATE, OFFICER_VIEW
+from api.events.auth import CHAIR_ROLES, EVENT_UPDATE, OFFICER_ROLES, OFFICER_VIEW
 from api.events.core.rules import (
     DEFAULT_EVENT_TYPES,
     organizers_needed,
@@ -32,6 +32,14 @@ class NotPermitted(EventsError):
 
 class NotEligible(EventsError):
     """Target member fails an eligibility rule, e.g. supervisor chair (HTTP 422)."""
+
+
+class InvalidTimeRange(EventsError):
+    """Event end is not strictly after its start (HTTP 422)."""
+
+
+class SupervisorRuleViolation(EventsError):
+    """Creator/min-1 supervisor invariant would be violated (HTTP 409)."""
 
 
 # ── Event types ────────────────────────────────────────────────────────────────
@@ -98,6 +106,56 @@ def _organizers_for_event(sb, event_id: str) -> list[dict]:
     ).data or []
 
 
+def _supervisors_for_event(sb, event_id: str) -> list[dict]:
+    """Supervisor rows for an event as SupervisorOut-shaped dicts (with names)."""
+    rows = (
+        sb.table("event_supervisors")
+        .select("member_id, is_creator, created_at")
+        .eq("event_id", event_id)
+        .order("created_at")
+        .execute()
+    ).data or []
+    names = _member_names(sb, [r["member_id"] for r in rows])
+    return [
+        {
+            "member_id": str(r["member_id"]),
+            "is_creator": bool(r["is_creator"]),
+            "name": names.get(str(r["member_id"])),
+        }
+        for r in rows
+    ]
+
+
+def _member_names(sb, member_ids: list[str]) -> dict[str, str]:
+    ids = [str(m) for m in member_ids if m]
+    if not ids:
+        return {}
+    rows = (
+        sb.table("members").select("id, name").in_("id", ids).execute()
+    ).data or []
+    return {str(r["id"]): r.get("name") for r in rows}
+
+
+def _decorate_supervisors(sb, event: dict) -> dict:
+    event["supervisors"] = _supervisors_for_event(sb, event["id"])
+    return event
+
+
+def _validate_time_range(
+    *, date: str, time: str, end_date: str | None, end_time: str | None
+) -> None:
+    """end must be strictly after start when provided; end_date defaults to date."""
+    if end_time is None and end_date is None:
+        return
+    from datetime import date as _date, datetime as _dt, time as _time
+
+    start = _dt.combine(_date.fromisoformat(date), _time.fromisoformat(time))
+    e_date = _date.fromisoformat(end_date) if end_date else _date.fromisoformat(date)
+    e_time = _time.fromisoformat(end_time) if end_time else _time(0, 0)
+    if _dt.combine(e_date, e_time) <= start:
+        raise InvalidTimeRange("Event end must be after its start")
+
+
 def _decorate_counts(event: dict, organizer_count: int) -> dict:
     event["organizer_count"] = organizer_count
     event["organizers_needed"] = organizers_needed(organizer_count)
@@ -109,7 +167,16 @@ def _can_view(sb, user: dict, event: dict, *, granted: set[str] | None = None) -
     if event.get("visibility", "chapter") == "chapter":
         return True
     uid = user["id"]
-    if uid in (event.get("created_by"), event.get("supervisor_member_id")):
+    if uid == event.get("created_by"):
+        return True
+    supervisor = (
+        sb.table("event_supervisors")
+        .select("id")
+        .eq("event_id", event["id"])
+        .eq("member_id", uid)
+        .execute()
+    ).data
+    if supervisor:
         return True
     if granted is None:
         granted = get_member_permissions(user, sb=sb)
@@ -165,6 +232,17 @@ def list_events(sb, *, user: dict, upcoming: bool = True) -> list[dict]:
             ).data
             or []
         }
+        sup_event_ids = {
+            r["event_id"]
+            for r in (
+                sb.table("event_supervisors")
+                .select("event_id")
+                .eq("chapter_id", user["chapter_id"])
+                .eq("member_id", uid)
+                .execute()
+            ).data
+            or []
+        }
         aud_event_ids = {
             r["event_id"]
             for r in (
@@ -180,7 +258,8 @@ def list_events(sb, *, user: dict, upcoming: bool = True) -> list[dict]:
             e
             for e in rows
             if e.get("visibility", "chapter") == "chapter"
-            or uid in (e.get("created_by"), e.get("supervisor_member_id"))
+            or uid == e.get("created_by")
+            or e["id"] in sup_event_ids
             or e["id"] in org_event_ids
             or (e.get("visibility") == "custom" and e["id"] in aud_event_ids)
         ]
@@ -230,6 +309,7 @@ def get_event(sb, *, user: dict, event_id: str) -> dict:
     organizers = _organizers_for_event(sb, event_id)
     event["organizers"] = organizers
     _decorate_counts(event, len(organizers))
+    _decorate_supervisors(sb, event)
 
     event["group_events"] = []
     if event.get("event_group_id"):
@@ -270,6 +350,9 @@ def create_event(
     date: str,
     time: str,
     location: str,
+    end_date: str | None = None,
+    end_time: str | None = None,
+    invite_link: str | None = None,
     description: str | None = None,
     required: bool = False,
     finable: bool = False,
@@ -284,6 +367,11 @@ def create_event(
     idempotency_key: str | None = None,
 ) -> dict:
     chapter_id = actor["chapter_id"]
+    _validate_time_range(
+        date=str(date), time=str(time),
+        end_date=str(end_date) if end_date else None,
+        end_time=str(end_time) if end_time else None,
+    )
     resolved_visibility = resolve_visibility(audience=audience, visibility=visibility)
 
     event_type_id = None
@@ -312,10 +400,14 @@ def create_event(
             "p_audience_member_ids": audience_member_ids,
             "p_actor_id": actor["id"],
             "p_idempotency_key": idempotency_key,
+            "p_end_date": str(end_date) if end_date else None,
+            "p_end_time": str(end_time) if end_time else None,
+            "p_invite_link": invite_link,
         },
         sb=sb,
     )
-    return _decorate_counts(result.data, 0)
+    event = _decorate_counts(result.data, 0)
+    return _decorate_supervisors(sb, event)
 
 
 def update_event(
@@ -328,7 +420,7 @@ def update_event(
 ) -> dict:
     """Single-row update; a custom audience list goes through ev_set_audience."""
     chapter_id = actor["chapter_id"]
-    _get_event_row(sb, chapter_id=chapter_id, event_id=event_id)
+    existing = _get_event_row(sb, chapter_id=chapter_id, event_id=event_id)
 
     updates = dict(updates)
     audience = updates.pop("audience", None)
@@ -342,9 +434,22 @@ def update_event(
         updates.setdefault("event_type", event_type_name)
     if audience:
         updates["visibility"] = resolve_visibility(audience=audience, visibility=None)
-    for key in ("date", "time"):
+    for key in ("date", "time", "end_date", "end_time"):
         if key in updates and updates[key] is not None:
             updates[key] = str(updates[key])
+
+    # Validate the effective range (merge incoming fields over the stored row).
+    def _eff(field: str):
+        val = updates.get(field, existing.get(field))
+        return str(val) if val is not None else None
+
+    if any(k in updates for k in ("date", "time", "end_date", "end_time")):
+        eff_date, eff_time = _eff("date"), _eff("time")
+        if eff_date and eff_time:
+            _validate_time_range(
+                date=eff_date, time=eff_time,
+                end_date=_eff("end_date"), end_time=_eff("end_time"),
+            )
 
     if updates:
         (
@@ -369,45 +474,106 @@ def update_event(
         )
 
     event = _get_event_row(sb, chapter_id=chapter_id, event_id=event_id)
-    return _decorate_counts(event, len(_organizers_for_event(sb, event_id)))
+    _decorate_counts(event, len(_organizers_for_event(sb, event_id)))
+    return _decorate_supervisors(sb, event)
 
 
-def set_supervisor(sb, *, actor: dict, event_id: str, member_id: str,
+def _actor_is_supervisor(sb, *, event_id: str, member_id: str) -> bool:
+    return bool(
+        (
+            sb.table("event_supervisors")
+            .select("id")
+            .eq("event_id", event_id)
+            .eq("member_id", member_id)
+            .execute()
+        ).data
+    )
+
+
+def _require_supervisor_manage(sb, *, actor: dict, event_id: str) -> None:
+    """Managing supervisors: be a current supervisor OR hold calendar:event:update."""
+    if _actor_is_supervisor(sb, event_id=event_id, member_id=actor["id"]):
+        return
+    if has_permission(actor, EVENT_UPDATE, sb=sb):
+        return
+    raise NotPermitted(
+        "Managing supervisors requires being a supervisor of this event "
+        "or holding calendar:event:update"
+    )
+
+
+def add_supervisor(sb, *, actor: dict, event_id: str, member_id: str,
                    idempotency_key: str | None = None) -> dict:
-    """Volunteer (self) or assign (calendar:event:update); target must hold a chair."""
+    """Add a co-supervisor. Target must hold an officer role (spec §2.1)."""
     chapter_id = actor["chapter_id"]
-    _get_event_row(sb, chapter_id=chapter_id, event_id=event_id)
+    event = _get_event_row(sb, chapter_id=chapter_id, event_id=event_id)
+    _require_supervisor_manage(sb, actor=actor, event_id=event_id)
 
-    if member_id != actor["id"] and not has_permission(actor, EVENT_UPDATE, sb=sb):
-        raise NotPermitted(
-            "Assigning a supervisor requires calendar:event:update; "
-            "members may only volunteer themselves"
-        )
-
-    chair_rows = (
+    officer_rows = (
         sb.table("member_roles")
         .select("role_key")
         .eq("chapter_id", chapter_id)
         .eq("member_id", member_id)
-        .in_("role_key", list(CHAIR_ROLES))
+        .in_("role_key", list(OFFICER_ROLES))
         .execute()
     ).data or []
-    if not chair_rows:
-        raise NotEligible("Supervisor must hold a chair role")
+    if not officer_rows:
+        raise NotEligible("Co-supervisor must hold an officer role")
 
-    result = call_rpc(
-        "ev_set_supervisor",
+    call_rpc(
+        "ev_add_supervisor",
         {
             "p_chapter_id": chapter_id,
             "p_event_id": event_id,
             "p_member_id": member_id,
-            "p_required_role_keys": list(CHAIR_ROLES),
+            "p_required_role_keys": list(OFFICER_ROLES),
             "p_actor_id": actor["id"],
             "p_idempotency_key": idempotency_key,
         },
         sb=sb,
     )
-    return _decorate_counts(result.data, len(_organizers_for_event(sb, event_id)))
+    _decorate_counts(event, len(_organizers_for_event(sb, event_id)))
+    return _decorate_supervisors(sb, event)
+
+
+def remove_supervisor(sb, *, actor: dict, event_id: str, member_id: str,
+                      idempotency_key: str | None = None) -> dict:
+    """Remove a co-supervisor. Creator/min-1 violations surface from the RPC."""
+    chapter_id = actor["chapter_id"]
+    event = _get_event_row(sb, chapter_id=chapter_id, event_id=event_id)
+    _require_supervisor_manage(sb, actor=actor, event_id=event_id)
+
+    try:
+        call_rpc(
+            "ev_remove_supervisor",
+            {
+                "p_chapter_id": chapter_id,
+                "p_event_id": event_id,
+                "p_member_id": member_id,
+                "p_actor_id": actor["id"],
+                "p_idempotency_key": idempotency_key,
+            },
+            sb=sb,
+        )
+    except Exception as exc:  # creator/min-1 guard violations
+        msg = str(exc)
+        if "creator_supervisor_locked" in msg:
+            raise SupervisorRuleViolation("The creator supervisor cannot be removed") from exc
+        if "last_supervisor_locked" in msg:
+            raise SupervisorRuleViolation("An event must keep at least one supervisor") from exc
+        raise
+    _decorate_counts(event, len(_organizers_for_event(sb, event_id)))
+    return _decorate_supervisors(sb, event)
+
+
+def set_supervisor(sb, *, actor: dict, event_id: str, member_id: str,
+                   idempotency_key: str | None = None) -> dict:
+    """DEPRECATED (see CONFORM_TODO.md): single-supervisor endpoint now delegates
+    to add_supervisor so the join table stays the source of truth."""
+    return add_supervisor(
+        sb, actor=actor, event_id=event_id, member_id=member_id,
+        idempotency_key=idempotency_key,
+    )
 
 
 def add_organizer(sb, *, actor: dict, event_id: str, member_id: str | None = None,

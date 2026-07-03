@@ -18,6 +18,9 @@ class EventCreate(BaseModel):
     description: Optional[str] = None
     date: date
     time: time
+    end_date: Optional[date] = None           # defaults to `date` when only end_time given
+    end_time: Optional[time] = None
+    invite_link: Optional[str] = None
     location: str
     required: bool = False
     finable: bool = False
@@ -50,6 +53,9 @@ class EventUpdate(BaseModel):
     description: Optional[str] = None
     date: Optional[date] = None
     time: Optional[time] = None
+    end_date: Optional[date] = None
+    end_time: Optional[time] = None
+    invite_link: Optional[str] = None
     location: Optional[str] = None
     required: Optional[bool] = None
     finable: Optional[bool] = None
@@ -75,11 +81,20 @@ class EventUpdate(BaseModel):
         return v
 
 
+class SupervisorOut(BaseModel):
+    member_id: str
+    is_creator: bool = False
+    name: Optional[str] = None
+
+
 class EventResponse(BaseModel):
     id: str
     title: str
     date: str
     time: str
+    end_date: Optional[str] = None
+    end_time: Optional[str] = None
+    invite_link: Optional[str] = None
     location: str
     required: bool
     finable: bool = False
@@ -89,10 +104,15 @@ class EventResponse(BaseModel):
     organizer_count: int = 0
     organizers_needed: int = 0
     group_id: Optional[str] = None
-    supervisor_member_id: Optional[str] = None
+    supervisor_member_id: Optional[str] = None  # deprecated (see CONFORM_TODO.md)
+    supervisors: list[SupervisorOut] = []
 
 
 class SupervisorSet(BaseModel):
+    member_id: str
+
+
+class SupervisorAdd(BaseModel):
     member_id: str
 
 
