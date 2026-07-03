@@ -23,7 +23,12 @@ def _rpc_http_error(exc: Exception) -> HTTPException:
     msg = str(exc)
     if "not found" in msg:
         return HTTPException(404, msg)
-    if "active commitment" in msg or "cannot be committed" in msg:
+    if (
+        "active commitment" in msg
+        or "cannot be committed" in msg
+        or "job_full" in msg
+        or "unclaim_locked" in msg
+    ):
         return HTTPException(409, msg)
     return HTTPException(400, msg)
 

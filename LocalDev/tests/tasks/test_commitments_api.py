@@ -58,7 +58,7 @@ def test_member_self_commit(harness, cursor, chapter_id, member_id, task_factory
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["commitment"]["status"] == "active"
-    assert body["task_status"] == "committed"
+    assert body["task_status"] == "in_progress"
 
 
 def test_member_cannot_commit_someone_else(harness, cursor, chapter_id, member_factory, task_factory):
@@ -91,10 +91,23 @@ def test_double_commit_maps_to_409(harness, cursor, chapter_id, member_id, task_
 # ── uncommit ─────────────────────────────────────────────────────────────────
 
 
-def test_uncommit_response_includes_late_and_hours(
+def test_uncommit_within_lock_returns_409(
     harness, cursor, chapter_id, member_id, task_factory, event_factory
 ):
-    event_id = event_factory(hours_from_now=5)
+    event_id = event_factory(hours_from_now=5)  # inside T-36h → hard lock
+    task_id = task_factory(event_id=event_id)
+    client = harness.login(member_id, chapter_id)
+    client.post(f"/api/tasks/{task_id}/commit", json={})
+
+    resp = client.post(f"/api/tasks/{task_id}/uncommit", json={"reason": "exam"})
+    assert resp.status_code == 409, resp.text
+    assert "unclaim_locked" in resp.json()["detail"]
+
+
+def test_uncommit_outside_lock_returns_hours(
+    harness, cursor, chapter_id, member_id, task_factory, event_factory
+):
+    event_id = event_factory(hours_from_now=48)  # outside T-36h
     task_id = task_factory(event_id=event_id)
     client = harness.login(member_id, chapter_id)
     client.post(f"/api/tasks/{task_id}/commit", json={})
@@ -102,12 +115,12 @@ def test_uncommit_response_includes_late_and_hours(
     resp = client.post(f"/api/tasks/{task_id}/uncommit", json={"reason": "exam"})
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert body["late"] is True
-    assert 4 < float(body["hours_before_event"]) < 6
+    assert body["commitment"]["status"] == "uncommitted"
+    assert 47 < float(body["hours_before_event"]) < 49
 
 
 def test_member_cannot_uncommit_someone_else(harness, cursor, chapter_id, member_factory, task_factory):
-    task_id = task_factory()
+    task_id = task_factory(people_needed=2)
     m1, m2 = member_factory(), member_factory()
     commit_task(cursor, chapter_id, task_id, m2)
     client = harness.login(m1, chapter_id, role="member")
@@ -132,7 +145,7 @@ def test_officer_can_uncommit_someone_else(harness, cursor, chapter_id, member_f
 
 
 def test_task_commitments_listing(harness, cursor, chapter_id, member_factory, task_factory):
-    task_id = task_factory()
+    task_id = task_factory(people_needed=2)
     m1, m2 = member_factory(), member_factory()
     commit_task(cursor, chapter_id, task_id, m1)
     commit_task(cursor, chapter_id, task_id, m2)
@@ -170,7 +183,7 @@ def test_uncommit_log_visible_to_all_members(
 
 
 def _build_attribution_data(cursor, chapter_id, member_id, task_factory, event_factory):
-    # committed 3 tasks: one completed, one uncommitted late, one still active
+    # committed 3 tasks: one completed, one uncommitted (outside lock), one active
     done_task = task_factory()
     commit_task(cursor, chapter_id, done_task, member_id)
     cursor.execute(
@@ -178,10 +191,10 @@ def _build_attribution_data(cursor, chapter_id, member_id, task_factory, event_f
     )
     cursor.fetchone()
 
-    event_id = event_factory(hours_from_now=2)
-    late_task = task_factory(event_id=event_id)
-    commit_task(cursor, chapter_id, late_task, member_id)
-    uncommit_task(cursor, chapter_id, late_task, member_id, reason="bail")
+    event_id = event_factory(hours_from_now=48)  # outside T-36h so the uncommit is allowed
+    bail_task = task_factory(event_id=event_id)
+    commit_task(cursor, chapter_id, bail_task, member_id)
+    uncommit_task(cursor, chapter_id, bail_task, member_id, reason="bail")
 
     active_task = task_factory()
     commit_task(cursor, chapter_id, active_task, member_id)
@@ -198,7 +211,7 @@ def test_attribution_math(harness, cursor, chapter_id, member_id, task_factory, 
     assert body["tasks_committed"] == 3
     assert body["tasks_completed"] == 1
     assert body["uncommits"] == 1
-    assert body["late_uncommits"] == 1
+    assert body["late_uncommits"] == 0  # `late` superseded by the hard T-36h lock
     assert len(body["recent_log"]) == 4  # 3 commits + 1 uncommit, newest first
     assert body["recent_log"][0]["action"] == "uncommit" or body["recent_log"][0]["action"] == "commit"
 
@@ -230,12 +243,14 @@ def test_create_task_accepts_event_id_and_list_includes_summary(
     commit = client.post(f"/api/tasks/{task['id']}/commit", json={})
     assert commit.status_code == 200, commit.text
 
-    listing = client.get("/api/tasks/?status=committed")
+    listing = client.get("/api/tasks/?status=in_progress")
     assert listing.status_code == 200
     rows = [t for t in listing.json() if t["id"] == task["id"]]
     assert len(rows) == 1
     assert rows[0]["event_id"] == event_id
     assert rows[0]["committed_member_ids"] == [officer]
+    assert rows[0]["claimed_count"] == 1
+    assert rows[0]["people_needed"] == 1
 
 
 def test_list_status_filter_open_excludes_committed(

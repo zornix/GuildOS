@@ -19,12 +19,13 @@ def task_factory(cursor, chapter_id):
         event_id: str | None = None,
         status: str = "open",
         assigned_member_id: str | None = None,
+        people_needed: int = 1,
         chapter: str | None = None,
     ) -> str:
         cursor.execute(
             """
-            INSERT INTO tasks (chapter_id, title, status, event_id, assigned_member_id)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO tasks (chapter_id, title, status, event_id, assigned_member_id, people_needed)
+            VALUES (%s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
             (
@@ -33,6 +34,7 @@ def task_factory(cursor, chapter_id):
                 status,
                 event_id,
                 assigned_member_id,
+                people_needed,
             ),
         )
         return str(cursor.fetchone()["id"])

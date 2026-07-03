@@ -23,7 +23,7 @@ def test_commit_creates_active_commitment_log_and_status(cursor, chapter_id, mem
 
     assert result["commitment"]["status"] == "active"
     assert result["commitment"]["member_id"] == member_id
-    assert result["task_status"] == "committed"
+    assert result["task_status"] == "in_progress"
 
     cursor.execute(
         "SELECT * FROM task_commitments WHERE task_id = %s AND member_id = %s",
@@ -42,7 +42,7 @@ def test_commit_creates_active_commitment_log_and_status(cursor, chapter_id, mem
     assert log[0]["late"] is False
 
     cursor.execute("SELECT status FROM tasks WHERE id = %s", (task_id,))
-    assert cursor.fetchone()["status"] == "committed"
+    assert cursor.fetchone()["status"] == "in_progress"
 
 
 def test_double_commit_rejected_cleanly(cursor, chapter_id, member_id, task_factory):
@@ -66,7 +66,7 @@ def test_commit_idempotency_key_returns_cached_result(cursor, chapter_id, member
 
 
 def test_second_member_can_commit_same_task(cursor, chapter_id, member_factory, task_factory):
-    task_id = task_factory()
+    task_id = task_factory(people_needed=2)
     m1, m2 = member_factory(), member_factory()
 
     commit_task(cursor, chapter_id, task_id, m1)
@@ -108,10 +108,10 @@ def test_recommit_after_uncommit_is_allowed(cursor, chapter_id, member_id, task_
     assert result["commitment"]["status"] == "active"
 
 
-# ── uncommit & the 24h late rule ─────────────────────────────────────────────
+# ── uncommit & the hard T-36h lock (decision D2) ─────────────────────────────────────────────
 
 
-def test_uncommit_more_than_24h_before_event_not_late(
+def test_uncommit_more_than_36h_before_event_succeeds(
     cursor, chapter_id, member_id, task_factory, event_factory
 ):
     event_id = event_factory(hours_from_now=48)
@@ -120,84 +120,70 @@ def test_uncommit_more_than_24h_before_event_not_late(
 
     result = uncommit_task(cursor, chapter_id, task_id, member_id, reason="schedule conflict")
 
-    assert result["late"] is False
+    assert result["commitment"]["status"] == "uncommitted"
     assert 47 < float(result["hours_before_event"]) < 49
 
 
-def test_uncommit_within_24h_of_event_start_is_late(
+def test_uncommit_within_36h_of_event_start_is_locked(
     cursor, chapter_id, member_id, task_factory, event_factory
 ):
     event_id = event_factory(hours_from_now=10)
     task_id = task_factory(event_id=event_id)
     commit_task(cursor, chapter_id, task_id, member_id)
 
-    result = uncommit_task(cursor, chapter_id, task_id, member_id)
-
-    assert result["late"] is True
-    assert 9 < float(result["hours_before_event"]) < 11
-
-    cursor.execute(
-        "SELECT late, hours_before_event, event_id FROM task_commitment_log "
-        "WHERE task_id = %s AND action = 'uncommit'",
-        (task_id,),
-    )
-    row = cursor.fetchone()
-    assert row["late"] is True
-    assert str(row["event_id"]) == event_id
+    with pytest.raises(Exception, match="unclaim_locked"):
+        uncommit_task(cursor, chapter_id, task_id, member_id)
 
 
-def test_uncommit_after_event_passed_is_late(cursor, chapter_id, member_id, task_factory, event_factory):
+def test_uncommit_after_event_passed_is_locked(cursor, chapter_id, member_id, task_factory, event_factory):
     event_id = event_factory(hours_from_now=-5)
     task_id = task_factory(event_id=event_id)
     commit_task(cursor, chapter_id, task_id, member_id)
 
-    result = uncommit_task(cursor, chapter_id, task_id, member_id)
-
-    assert result["late"] is True
-    assert float(result["hours_before_event"]) < 0
+    with pytest.raises(Exception, match="unclaim_locked"):
+        uncommit_task(cursor, chapter_id, task_id, member_id)
 
 
-def test_uncommit_standalone_task_not_late(cursor, chapter_id, member_id, task_factory):
+def test_uncommit_standalone_task_is_never_locked(cursor, chapter_id, member_id, task_factory):
     task_id = task_factory()
     commit_task(cursor, chapter_id, task_id, member_id)
 
     result = uncommit_task(cursor, chapter_id, task_id, member_id)
 
-    assert result["late"] is False
+    assert result["commitment"]["status"] == "uncommitted"
     assert result["hours_before_event"] is None
 
 
-def test_uncommit_always_succeeds_and_is_visible_in_log(
+def test_uncommit_outside_lock_logs_reason_and_event(
     cursor, chapter_id, member_id, task_factory, event_factory
 ):
-    """No hard lock — even a late uncommit succeeds, but it is logged with reason."""
-    event_id = event_factory(hours_from_now=1)
+    """A permitted (outside T-36h) uncommit is logged with its reason + event."""
+    event_id = event_factory(hours_from_now=48)
     task_id = task_factory(event_id=event_id)
     commit_task(cursor, chapter_id, task_id, member_id)
 
     result = uncommit_task(cursor, chapter_id, task_id, member_id, reason="emergency")
-    assert result["late"] is True
     assert result["commitment"]["status"] == "uncommitted"
 
     cursor.execute(
-        "SELECT reason, late FROM task_commitment_log WHERE task_id = %s AND action = 'uncommit'",
+        "SELECT reason, event_id FROM task_commitment_log WHERE task_id = %s AND action = 'uncommit'",
         (task_id,),
     )
     row = cursor.fetchone()
     assert row["reason"] == "emergency"
-    assert row["late"] is True
+    assert str(row["event_id"]) == event_id
 
 
 def test_task_returns_to_open_when_last_member_uncommits(
     cursor, chapter_id, member_factory, task_factory
 ):
-    task_id = task_factory()
+    task_id = task_factory(people_needed=2)
     m1, m2 = member_factory(), member_factory()
     commit_task(cursor, chapter_id, task_id, m1)
     commit_task(cursor, chapter_id, task_id, m2)
 
     first = uncommit_task(cursor, chapter_id, task_id, m1)
-    assert first["task_status"] == "committed"  # m2 still holds it
+    assert first["task_status"] == "in_progress"  # m2 still holds it
 
     second = uncommit_task(cursor, chapter_id, task_id, m2)
     assert second["task_status"] == "open"
@@ -225,7 +211,7 @@ def test_uncommit_idempotency_key_returns_cached_result(cursor, chapter_id, memb
 
 
 def test_done_marks_active_commitments_completed(cursor, chapter_id, member_factory, task_factory):
-    task_id = task_factory()
+    task_id = task_factory(people_needed=2)
     m1, m2 = member_factory(), member_factory()
     commit_task(cursor, chapter_id, task_id, m1)
     commit_task(cursor, chapter_id, task_id, m2)
@@ -245,7 +231,7 @@ def test_done_marks_active_commitments_completed(cursor, chapter_id, member_fact
 
 
 def test_uncommitted_member_not_credited_on_completion(cursor, chapter_id, member_factory, task_factory):
-    task_id = task_factory()
+    task_id = task_factory(people_needed=2)
     m1, m2 = member_factory(), member_factory()
     commit_task(cursor, chapter_id, task_id, m1)
     commit_task(cursor, chapter_id, task_id, m2)

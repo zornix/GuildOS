@@ -17,6 +17,7 @@ def create_task(
     due_at: str | None,
     actor_id: str,
     event_id: str | None = None,
+    people_needed: int = 1,
     idempotency_key: str | None = None,
 ) -> dict:
     result = call_rpc(
@@ -35,7 +36,19 @@ def create_task(
         },
         sb=sb,
     )
-    return result.data
+    task = result.data
+    # Capacity isn't a param of tk_create_task (0110); set it in a follow-up
+    # single-row update (non-trust-boundary column, default 1).
+    if people_needed and people_needed != 1 and task:
+        (
+            sb.table("tasks")
+            .update({"people_needed": people_needed})
+            .eq("id", task["id"])
+            .eq("chapter_id", chapter_id)
+            .execute()
+        )
+        task["people_needed"] = people_needed
+    return task
 
 
 def update_task_status(
@@ -85,7 +98,11 @@ def list_tasks(sb, *, chapter_id: str, status: str | None = None) -> list[dict]:
 
     summary = active_commitments_by_task(sb, chapter_id=chapter_id)
     for row in rows:
-        row["committed_member_ids"] = summary.get(str(row["id"]), [])
+        claimants = summary.get(str(row["id"]), [])
+        row["committed_member_ids"] = claimants
+        row["claimants"] = claimants
+        row["claimed_count"] = len(claimants)
+        row["people_needed"] = row.get("people_needed", 1)
     return rows
 
 

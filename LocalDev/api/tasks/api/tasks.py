@@ -10,6 +10,7 @@ from api.tasks.api.schemas import TaskCreate, TaskStatusUpdate
 from api.tasks.auth import TASKS_COMPLETE, TASKS_CREATE, require_permission
 from api.tasks.db.session import get_tasks_db
 from api.tasks.services import tasks as svc
+from api.tasks.services.approvals import can_create_event_job
 
 router = APIRouter()
 
@@ -26,14 +27,24 @@ async def create_task(
     user=Depends(require_permission(TASKS_CREATE)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
+    sb = get_tasks_db()
+    # Attaching a job to an event requires running that event (supervisor/organizer)
+    # or holding tasks:assign (spec §5).
+    if body.event_id and not can_create_event_job(sb, user=user, event_id=body.event_id):
+        raise HTTPException(
+            403,
+            "Creating a job on this event requires being a supervisor/organizer "
+            "of it or holding tasks:assign",
+        )
     return svc.create_task(
-        get_tasks_db(),
+        sb,
         chapter_id=user["chapter_id"],
         title=body.title,
         description=body.description,
         assigned_member_id=body.assigned_member_id,
         group_id=body.group_id,
         event_id=body.event_id,
+        people_needed=body.people_needed,
         required=body.required,
         due_at=body.due_at.isoformat() if body.due_at else None,
         actor_id=user["id"],
