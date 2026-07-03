@@ -34,8 +34,17 @@ next-env.d.ts
 # Env & secrets
 .env
 .env.*
+.env.example
 .envrc
-!.env.example
+**/secrets/*
+!**/secrets/.gitkeep
+.pypirc
+.netrc
+credentials.json
+*-credentials.json
+service-account*.json
+*.p12
+*.pfx
 
 # OS & tooling
 .DS_Store
