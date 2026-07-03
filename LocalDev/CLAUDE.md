@@ -96,6 +96,13 @@ raw psycopg2. The switch is `settings.use_local_db`, which is simply
 Postgres with no Supabase. Demo/local auth uses `member.id` as the JWT subject;
 Supabase auth uses `auth_id` (see `api/dependencies.py`).
 
+**RPC params typed as true SQL arrays need registration.** The local shim
+JSON-encodes every list/dict RPC param, which is correct for JSONB-typed
+params but breaks a plpgsql param declared as a real array (first case:
+`in_create_initiative.p_chair_member_ids UUID[]`). Any new array-typed RPC
+param must be added to `_ARRAY_TYPED_RPC_PARAMS` in `api/postgres_client.py`,
+or local/test calls fail while Supabase works.
+
 ### Migrations
 
 `migrations/*.sql`, applied in **lexical order** by `scripts/migrate_db.py`,
