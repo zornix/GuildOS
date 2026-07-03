@@ -1,6 +1,6 @@
 # fratos (frontend)
 
-Next.js UI for FraternityOS. Run the full stack from the **repository root** — see [../README.md](../README.md) (`bash deploy/local-dev.sh`).
+Next.js UI for FraternityOS. Run the full stack from `LocalDev/` — see [../CLAUDE.md](../CLAUDE.md) (`npm run dev` or `npm run dev:docker`).
 
 For frontend-only dev (API must already be running on port 8001):
 
