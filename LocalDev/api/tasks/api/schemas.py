@@ -16,6 +16,7 @@ class TaskCreate(BaseModel):
     assigned_member_id: str | None = None
     group_id: str | None = None
     event_id: str | None = None
+    initiative_id: str | None = None
     people_needed: int = Field(default=1, ge=1)
     required: bool = False
     due_at: datetime | None = None

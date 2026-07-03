@@ -90,6 +90,33 @@ def test_groups_map_links_grouped_events(harness, user_factory, create_event):
     assert items[main["id"]]["group_id"] == group_id
 
 
+# ── initiatives (Events V1 Phase 3, docs/imp-ev-ph3.md §5.3 item 13) ─────────
+
+
+def test_initiative_in_window_appears_with_chair_member_ids(
+    harness, user_factory, initiative_factory
+):
+    chair = user_factory()
+    ini_id = initiative_factory(title="Canned Food Drive", date="2026-07-10", chairs=[chair["id"]])
+
+    body = harness.login(chair).get("/api/calendar", params=RANGE).json()
+    initiatives = _items(body, "initiative")
+    mine = [i for i in initiatives if i["initiative_id"] == ini_id]
+    assert len(mine) == 1
+    item = mine[0]
+    assert item["title"] == "Canned Food Drive"
+    assert item["date"] == "2026-07-10"
+    assert item["chair_member_ids"] == [chair["id"]]
+
+
+def test_initiative_outside_range_excluded(harness, user_factory, initiative_factory):
+    chair = user_factory()
+    ini_id = initiative_factory(date="2026-09-15", chairs=[chair["id"]])
+
+    body = harness.login(chair).get("/api/calendar", params=RANGE).json()
+    assert ini_id not in {i["initiative_id"] for i in _items(body, "initiative")}
+
+
 # ── invoice dues ─────────────────────────────────────────────────────────────
 
 

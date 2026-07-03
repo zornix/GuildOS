@@ -132,6 +132,43 @@ def task_factory(cursor, chapter_id):
 
 
 @pytest.fixture
+def initiative_factory(cursor, chapter_id):
+    """Insert an initiative directly (calendar only READS initiatives)."""
+
+    def _make(
+        *,
+        title: str | None = None,
+        date: str = "2026-07-01",
+        time: str = "19:00",
+        chairs: list[str] | None = None,
+    ) -> str:
+        cursor.execute(
+            "INSERT INTO members (chapter_id, name, email, role, status) "
+            "VALUES (%s, %s, %s, 'member', 'active') RETURNING id",
+            (chapter_id, f"Creator {uuid.uuid4().hex[:8]}", f"{uuid.uuid4()}@test.local"),
+        )
+        creator = str(cursor.fetchone()["id"])
+        cursor.execute(
+            """
+            INSERT INTO initiatives (chapter_id, title, date, time, created_by)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (chapter_id, title or f"Initiative {uuid.uuid4().hex[:8]}", date, time, creator),
+        )
+        initiative_id = str(cursor.fetchone()["id"])
+        for member_id in chairs or [creator]:
+            cursor.execute(
+                "INSERT INTO initiative_chairs (chapter_id, initiative_id, member_id, is_creator) "
+                "VALUES (%s, %s, %s, %s) ON CONFLICT (initiative_id, member_id) DO NOTHING",
+                (chapter_id, initiative_id, member_id, member_id == creator),
+            )
+        return initiative_id
+
+    return _make
+
+
+@pytest.fixture
 def grant_treasury_read(cursor, chapter_id):
     """Insert a treasury:read capability grant (treasury's own grants table)."""
 

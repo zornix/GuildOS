@@ -1,8 +1,8 @@
 # Events Service V1 — Development Status & Roadmap
 
-**Last updated:** 2026-07-02
+**Last updated:** 2026-07-03
 **Spec:** `docs/events-v1-spec.md` (Events Service V1, saved verbatim)
-**Current phase:** Phase 2 **done** (migration 0143) — Phase 3 next
+**Current phase:** Phase 3 **done** (migration 0144) — Phase 4 next
 
 This document is the entry point for anyone (human or agent session) continuing
 the Events V1 build. It records what exists, what's missing, the decisions that
@@ -116,6 +116,27 @@ baked into the phase plans. Revisit here if product overrules.
 - **D4 — "Exec" is a permission, not a new role.** Spec's "exec" maps to
   existing permission keys (`calendar:event:create`, `announcements:create`, …).
   Chairs remain the `*_chair` role keys. No new role tier is added.
+- **D8 — Initiatives are a separate table, not a flavor of events.** A new
+  `initiatives` table (own `id`, `title`, `date`, `time`, `created_by`) plus
+  `initiative_chairs` (many-to-many, `is_creator` flag). `tasks` gains a
+  nullable `initiative_id` alongside `event_id`, mutually exclusive via
+  `tasks_single_parent_check`.
+- **D9 — Chapter-level chair gating is a seeded permission key; per-initiative
+  authorization is `initiative_chairs` membership.** Creating an initiative
+  requires the new `calendar:initiative:create`/`:update` permission keys
+  (granted to `admin` + the six `*_chair` roles, same set as jobs in D5).
+  Updating an initiative, and adding/removing its chairs, is gated on
+  `initiative_chairs` membership (checked in the service layer), not a
+  permission key.
+- **D10 — New domain package `api/initiatives/`**, mounted at
+  `/api/initiatives`, following the same shape as `api/events/` (thin routes →
+  service layer → `db/rpc.py::call_rpc`). Small enough to omit `core/`.
+- **D11 — The job RPC surface is reused, not duplicated.** No `in_*` job
+  RPCs. `tk_create_task` gains an optional `p_initiative_id` (mutually
+  exclusive with `p_event_id`); `tk_uncommit_task`/`tk_report_done` resolve
+  the T-36h lock window and the `JOB_REPORTED` notify fan-out against
+  whichever parent (event or initiative) is set. `tk_commit_task`,
+  `tk_approve_task`, `tk_reject_task`, and all `ev_*` RPCs are unchanged.
 
 ---
 
@@ -125,7 +146,7 @@ baked into the phase plans. Revisit here if product overrules.
 |---|---|---|---|
 | 1 | Schema + jobs core: event end time & invite link, `event_supervisors`, job capacity + report/approve/reject + T-36h lock, outbox/audit catalog additions | `docs/imp-ev-ph1.md` | **Done** (migrations 0141/0142) |
 | 2 | Notify gate: completeness computation (≥1 supervisor, ≥1 organizer, ≥3 jobs), `POST /{id}/notify` → outbox → SMS, events `notifications.py`, `ORGANIZER_SOFT_MIN` → 1, "last notified" timestamp | `docs/imp-ev-ph2.md` | **Done** (migration 0143) |
-| 3 | Initiatives: new entity (chair-created, assigned chairs, required start time), reuses job machinery with chair approval; calendar aggregator includes them | `docs/imp-ev-ph3.md` | Not started |
+| 3 | Initiatives: new entity (chair-created, assigned chairs, required start time), reuses job machinery with chair approval; calendar aggregator includes them | `docs/imp-ev-ph3.md` | **Done** (migration 0144) |
 | 4 | Security + swaps: persisted security assignments as a special job type (replace the memberadmin stub), swap requests (one pending per assignment, accept/decline, atomic swap), notifications | `docs/imp-ev-ph4.md` | Not started |
 | 5 | Frontend: events/tasks contracts+adapters, member-picker primitive, JobCard, event-detail sections (People/Jobs/Security/Notify + checklist + T-36h countdown), calendar badges + week view + mixed chips, initiative/security/swap screens, announcement SMS counter + scheduled time + calendar posting | `docs/imp-ev-ph5.md` | Not started |
 
@@ -144,8 +165,10 @@ it can start (contracts, JobCard, detail sections) once Phase 1+2 are deployed.
   `api/events/auth.py` (chairs + exec offices), passed to `ev_add_supervisor`.
 - `people_needed` is not a `tk_create_task` param (0110 signature left alone); the
   tasks service sets it via a follow-up single-row `UPDATE` after create.
-- The T-36h resolver in `tk_uncommit_task` carries a `-- PHASE3 SEAM:` marker
-  where the linked-event start is resolved (initiatives add a second parent type).
+- The T-36h resolver in `tk_uncommit_task` carried a `-- PHASE3 SEAM:` marker
+  where the linked-event start is resolved (initiatives add a second parent
+  type) — **resolved in Phase 3** (migration 0144 replaces `tk_uncommit_task`/
+  `tk_report_done` with versions that branch on `event_id` vs `initiative_id`).
 - `events.supervisor_member_id` and `POST /{event_id}/supervisor` are deprecated
   in place (see `api/events/CONFORM_TODO.md`); reads moved to `event_supervisors`.
 - `message_outbox` JOB_* rows are written in the RPCs but not yet dispatched
@@ -188,6 +211,48 @@ it can start (contracts, JobCard, detail sections) once Phase 1+2 are deployed.
   the test seeds a synthetic stale send via a direct `INSERT ... created_at =
   now() - interval '2 hours'`, then calls the real service for the fresh send.
 
+**Phase 3 landed (migration 0144) — notes & minor drift from the plan:**
+- New `api/initiatives/` domain package (D10): `initiatives`/`initiative_chairs`
+  tables, `in_create_initiative`/`in_update_initiative`/`in_add_chair`/
+  `in_remove_chair` RPCs (idempotency-key + `chapter_id` guards + `audit_logs`,
+  same discipline as every other RPC), `INITIATIVE_CREATED`/`_UPDATED`/
+  `_CHAIR_ADDED`/`_CHAIR_REMOVED` audit actions added via the DO-block CHECK
+  rebuild. No new `message_outbox` event types — initiative jobs reuse
+  `JOB_REPORTED`, fanned out to `initiative_chairs` alongside
+  `event_supervisors`.
+- `tk_create_task` gained an optional `p_initiative_id UUID DEFAULT NULL`
+  (mutually exclusive with `p_event_id`, raising `task_two_parents` if both are
+  set); `tk_uncommit_task`/`tk_report_done` were replaced (`CREATE OR REPLACE`,
+  same RPC names) to resolve the T-36h window and job-report notification
+  fan-out against whichever parent is set — this closes the `PHASE3 SEAM`
+  markers left in Phase 1. `tk_commit_task`, `tk_approve_task`,
+  `tk_reject_task`, and every `ev_*` RPC are untouched, per the plan's non-goals.
+- `api/tasks/services/approvals.py` gained `_is_initiative_chair` /
+  `can_create_initiative_job`; `can_approve_job` now has an initiative branch
+  alongside its existing event-supervisor branch. No `user["role"] == ...`
+  string comparisons were introduced.
+- **Deviation (infrastructure fix, outside the plan's file list):**
+  `in_create_initiative`'s `p_chair_member_ids UUID[]` is the first RPC
+  parameter anywhere in the codebase that is a true SQL array type rather than
+  JSONB. The local Postgres shim (`api/postgres_client.py`'s `_RpcBuilder`)
+  previously JSON-encoded every list/dict RPC param unconditionally, which is
+  correct for existing JSONB-typed params (`ev_notify_event`'s
+  `p_recipient_member_ids`, `ev_add_supervisor`'s `p_required_role_keys`) but
+  produces a malformed array literal / an untyped-array-vs-`text[]` cast
+  failure for a real `UUID[]` param. Fixed with a small explicit allow-list
+  (`_RpcBuilder._ARRAY_TYPED_RPC_PARAMS = {("in_create_initiative",
+  "p_chair_member_ids")}`) so only that one (function, param) pair renders as
+  a raw Postgres array-literal string; every other RPC call keeps the original
+  JSON-encoding behavior unchanged. No production code path (Supabase) is
+  affected — this only touches the local-dev Postgres client shim.
+- Test layout follows the plan's §5 structure exactly: `tests/initiatives/`
+  (new: `conftest.py`, `test_initiatives_rpcs.py`, `test_initiatives_api.py`)
+  for the domain's own RPC + HTTP tests; `tests/tasks/test_jobs_initiative.py`
+  (new) for the extended job lifecycle against an initiative parent; two new
+  tests added to `tests/calendar_view/test_calendar_view.py` (with a matching
+  `initiative_factory` fixture in that suite's `conftest.py`) for calendar
+  aggregation.
+
 ---
 
 ## 4. How to continue implementation (instructions for the next session)
@@ -223,9 +288,7 @@ it can start (contracts, JobCard, detail sections) once Phase 1+2 are deployed.
    - Frontend (Phase 5): pages thin, modules own workflows, DTO→contract via
      adapters, `formatMoney(cents)`, capability gating via `usePermissions().can()`.
 6. **Phase-specific pointers for the next planner:**
-   - *Phase 3:* initiatives need a required start timestamp (spec open item 1);
-     the T-36h resolver added to `tk_uncommit_task` in Phase 1 must be extended
-     to resolve initiative parents as well (Phase 1 leaves a marked seam).
+   - *Phase 3:* **done** — see the "Phase 3 landed" notes above.
    - *Phase 4:* build on `GET /api/memberadmin/scores` for the picker (already
      delinquency-ordered); replace the non-persisting
      `POST /api/memberadmin/assign-security` stub, which also still uses legacy

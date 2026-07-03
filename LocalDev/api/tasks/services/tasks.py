@@ -17,6 +17,7 @@ def create_task(
     due_at: str | None,
     actor_id: str,
     event_id: str | None = None,
+    initiative_id: str | None = None,
     people_needed: int = 1,
     idempotency_key: str | None = None,
 ) -> dict:
@@ -29,6 +30,7 @@ def create_task(
             "p_assigned_member_id": assigned_member_id,
             "p_group_id": group_id,
             "p_event_id": event_id,
+            "p_initiative_id": initiative_id,
             "p_required": required,
             "p_due_at": due_at,
             "p_actor_id": actor_id,

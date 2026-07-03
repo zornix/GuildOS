@@ -53,7 +53,44 @@ def get_calendar(
             })
             if ev.get("group_id"):
                 groups.setdefault(ev["group_id"], []).append(ev["id"])
-                
+
+    # --- 1b. Initiatives ---
+    initiatives = (
+        sb.table("initiatives")
+        .select("*")
+        .eq("chapter_id", chapter_id)
+        .execute()
+    ).data or []
+
+    if initiatives:
+        initiative_ids = [i["id"] for i in initiatives]
+        chair_rows = (
+            sb.table("initiative_chairs")
+            .select("initiative_id, member_id")
+            .in_("initiative_id", initiative_ids)
+            .execute()
+        ).data or []
+        chairs_by_initiative: dict = {}
+        for r in chair_rows:
+            chairs_by_initiative.setdefault(r["initiative_id"], []).append(r["member_id"])
+
+        for ini in initiatives:
+            date_obj = ini.get("date")
+            if not date_obj:
+                continue
+            date_str = str(date_obj)
+            if start <= date_str <= end:
+                items.append({
+                    "kind": "initiative",
+                    "initiative_id": ini["id"],
+                    "title": ini.get("title"),
+                    "date": date_str,
+                    "time": str(ini["time"]) if ini.get("time") else None,
+                    "end_date": str(ini["end_date"]) if ini.get("end_date") else None,
+                    "end_time": str(ini["end_time"]) if ini.get("end_time") else None,
+                    "chair_member_ids": chairs_by_initiative.get(ini["id"], []),
+                })
+
     # --- 2. Invoices ---
     granted = get_member_permissions(user, sb=sb)
     treasury_grants = (

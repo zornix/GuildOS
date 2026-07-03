@@ -466,6 +466,38 @@ class _RpcBuilder:
         self._function_name = function_name
         self._params = params
 
+    # RPC (function_name, param_name) pairs whose Postgres parameter is a true
+    # SQL array type (e.g. `UUID[]`), not JSONB. Every other RPC's list/dict
+    # params keep the original QueryBuilder._adapt_value JSON-encoding, which
+    # is correct for JSONB-typed params such as ev_notify_event's
+    # `p_recipient_member_ids JSONB` and ev_add_supervisor's
+    # `p_required_role_keys JSONB` (see migrations/0143_event_notify.sql,
+    # migrations/0141_events_v1_times_supervisors.sql).
+    #
+    # Scalar lists for these pairs are rendered as a raw Postgres array-literal
+    # STRING (e.g. '{"a","b"}') rather than handed to psycopg2's native list
+    # adapter: psycopg2's adapter emits `ARRAY['a','b']`, which Postgres
+    # resolves to an explicit `text[]` type immediately, and a PL/pgSQL
+    # function call has no implicit cast from `text[]` to a differently typed
+    # array parameter (e.g. `uuid[]`) -- it fails with "function ... does not
+    # exist". A quoted array-literal string is untyped ("unknown") until the
+    # function call resolves it, so Postgres implicitly casts it to whatever
+    # the parameter declares.
+    _ARRAY_TYPED_RPC_PARAMS = {
+        ("in_create_initiative", "p_chair_member_ids"),
+    }
+
+    @classmethod
+    def _adapt_rpc_param(cls, function_name: str, param_name: str, v):
+        if (function_name, param_name) in cls._ARRAY_TYPED_RPC_PARAMS and isinstance(v, list):
+
+            def _quote(item):
+                s = str(item).replace("\\", "\\\\").replace('"', '\\"')
+                return f'"{s}"'
+
+            return "{" + ",".join(_quote(item) for item in v) + "}"
+        return QueryBuilder._adapt_value(v)
+
     def execute(self) -> QueryResult:
         if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", self._function_name):
             raise ValueError(f"Invalid RPC function name: {self._function_name!r}")
@@ -475,7 +507,10 @@ class _RpcBuilder:
 
         arg_sql = ", ".join(f"{key} => %s" for key in self._params)
         sql = f'SELECT "{self._function_name}"({arg_sql}) AS result'
-        vals = [QueryBuilder._adapt_value(v) for v in self._params.values()]
+        vals = [
+            self._adapt_rpc_param(self._function_name, key, v)
+            for key, v in self._params.items()
+        ]
 
         conn = self._pool.getconn()
         try:
