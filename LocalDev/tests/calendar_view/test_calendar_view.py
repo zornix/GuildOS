@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
+
 RANGE = {"start": "2026-06-01", "end": "2026-08-01"}
 
 
@@ -154,9 +156,12 @@ def test_overdue_invoice_outside_range_still_surfaces(
     me = user_factory()
     overdue = invoice_factory(member_id=me["id"], due_in_days=-30)  # last month
 
-    body = harness.login(me).get(
-        "/api/calendar", params={"start": "2026-06-01", "end": "2026-06-30"}
-    ).json()
+    # window computed relative to now so the -30d due date can never fall inside it
+    window = {
+        "start": (date.today() + timedelta(days=10)).isoformat(),
+        "end": (date.today() + timedelta(days=40)).isoformat(),
+    }
+    body = harness.login(me).get("/api/calendar", params=window).json()
 
     # not inline (its due date is outside the requested range)…
     assert overdue not in {d["invoice_id"] for d in _items(body, "invoice_due")}
