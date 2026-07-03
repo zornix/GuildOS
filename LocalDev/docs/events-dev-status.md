@@ -1,0 +1,207 @@
+# Events Service V1 — Development Status & Roadmap
+
+**Last updated:** 2026-07-01
+**Spec:** `docs/events-v1-spec.md` (Events Service V1, saved verbatim)
+**Current phase:** Phase 1 **done** (migrations 0141/0142) — Phase 2 next
+
+This document is the entry point for anyone (human or agent session) continuing
+the Events V1 build. It records what exists, what's missing, the decisions that
+were made to reconcile spec vs. code, and the phase-by-phase build order with
+instructions for planning each next phase.
+
+---
+
+## 1. Gap analysis (as of 2026-07-01)
+
+### 1.1 Backend — what already exists
+
+- **Events domain** (`api/events/`) is a fully conformed domain package
+  (status "conformed, V1 events build, June 2026" per its `CONFORM_TODO.md`).
+  CRUD, event types (`GET /types`), event groups (setup→event→cleanup),
+  visibility/audience enforcement, check-in link hooks. RPCs (migration 0101):
+  `ev_create_event`, `ev_set_audience`, `ev_set_supervisor`, `ev_add_organizer`,
+  `ev_remove_organizer`.
+- **Organizers**: `event_organizers(event_id, member_id, source volunteer|assigned)`
+  with self-volunteer + assign/remove endpoints. Derived "understaffed" flag
+  exists but with `ORGANIZER_SOFT_MIN = 2` (`api/events/core/rules.py`) — spec
+  wants the badge at 0 organizers and the notify gate at ≥1.
+- **Supervisor**: single `events.supervisor_member_id` column (0100), set via
+  `ev_set_supervisor` with chair-role eligibility enforcement. Spec wants
+  creator locked in + N co-supervisors → needs a join table.
+- **Claim machinery** (tasks domain, migration 0110): `task_commitments` with a
+  unique-active partial index, append-only `task_commitment_log`, RPCs
+  `tk_commit_task` / `tk_uncommit_task`, `tasks.event_id` linkage. Uncommit is
+  currently *always allowed*, flagged "late" under 24h — spec mandates a hard
+  T-36h lock instead.
+- **Announcements** (`api/announcements/`): draft→send, audience resolution,
+  two-phase confirmed **Twilio SMS blast** (`an_send_announcement_sms`, 0130–0132)
+  with append-only send log and `MESSAGE_DELIVERY_MODE` (dry_run/twilio).
+  Missing: scheduled time, calendar presence.
+- **Notification plumbing**: transactional `message_outbox` (0070) with unique
+  `dedup_key`, CHECK-constrained `event_type` catalog (extended per-migration via
+  the DO-block rebuild pattern, see 0100/0131); `idempotency_keys` + `audit_logs`
+  RPC discipline (treasury is the reference implementation).
+- **Member stats / delinquency**: `GET /api/memberadmin/scores` returns
+  delinquency-ranked engagement scores (attendance/excused/fines formula in
+  `api/memberadmin/services/scoring.py`). `POST /api/memberadmin/assign-security`
+  exists as a **non-persisting stub** (picks 3 lowest scorers, saves nothing).
+- **RBAC**: `require_permission(...)` / `has_permission(...)` machinery; roles
+  seeded in 0083 include six `*_chair` keys (modeled as `CHAIR_ROLES` in
+  `api/events/auth.py`), `officer`, offices (president etc.). Relevant permission
+  keys: `calendar:event:create/update/delete`, `tasks:create/assign/complete/review`,
+  `announcements:create/send/send:sms`.
+
+### 1.2 Backend — missing
+
+- No `end_time` / end timestamp on `events` (only `date DATE + time TIME` start);
+  no invite-link column.
+- No co-supervisors table; no min-1-supervisor / creator-locked semantics.
+- No job capacity ("people needed" / fill state), no done-reported→approved/rejected
+  lifecycle, no rejection reasons, no T-36h hard lock.
+- No initiatives — no table, route, or concept anywhere.
+- No security assignments or swap requests — zero hits in code or migrations.
+- No event "Notify members" action; no outbox event types for event-notify,
+  job rejection/approval, or swaps; events domain has no `notifications.py`.
+- No "exec" role tier (see decision D4).
+
+### 1.3 Frontend — what already exists
+
+(All under `LocalDev/fratos/`; note this is a client-side-routed SPA — screens
+live in `views/*.tsx` + `components/modules/`, switched by `PageId` in
+`components/layout/app-shell.tsx`, not App Router routes.)
+
+- Month calendar with list/calendar toggle (`components/modules/events/event-calendar.tsx`,
+  `views/events.tsx`) — month only, chips show dot+title, no badges.
+- Event detail (`event-detail.tsx`) — attendance/check-in/fines oriented; none
+  of the spec's People / Jobs / Security / Notify sections.
+- Create-event modal form (`components/forms/create-event-form.tsx`) — 5 basic
+  fields; sends `fine_amount` as a dollar float (legacy boundary; do not copy).
+- Announcement composer (`views/announcements.tsx`) — draft/send + audience;
+  no SMS counter.
+- Tasks view (`views/tasks.tsx`) — list rows with status flips only; no claim UI.
+- UI primitives: `Badge` (has red/green/yellow), `Card`, `Btn`, `DataTable`,
+  `Modal`, `SegmentedControl`, `EmptyState`, `Avatar`, `Toast`, etc.
+
+### 1.4 Frontend — missing / structural debt
+
+- No jobs UI of any kind (JobCard, claim/report/approve/reject flows).
+- No initiative, security-picker, or swap screens; no week calendar view; no
+  calendar badges; no SMS length counter.
+- No multi-select member picker primitive (needed by 3+ screens).
+- **Contracts/adapters exist only for treasury** — events/tasks/announcements
+  views consume raw snake_case DTOs from `lib/types.ts`, violating the project's
+  own adapter convention. Fix this before building the V1 screens on top.
+- Role gating is binary `officer|member` with inline `user.role === "officer"`
+  checks in several views (violates the RBAC rule in CLAUDE.md).
+
+---
+
+## 2. Decisions (spec ↔ code reconciliation)
+
+These were the four contradictions found; the adopted resolutions below are
+baked into the phase plans. Revisit here if product overrules.
+
+- **D1 — Jobs are the tasks domain, extended.** The spec's "jobs" =
+  `tasks` + `task_commitments` plus capacity, report/approve/reject states, and
+  the T-36h lock. Do **not** introduce a fourth checklist concept (there are
+  already `tasks`, legacy `event_tasks` from 0003, and task templates; 0085
+  already marks `event_tasks` as "fold into tasks later"). API/UI may say "job";
+  the storage and RPC layer stays `tasks` / `tk_*`.
+- **D2 — Hard T-36h unclaim lock** replaces the current "always allowed,
+  late-if-<24h" rule in `tk_uncommit_task`. Claiming stays open through the
+  event. The append-only commitment log is unchanged.
+- **D3 — Organizer thresholds follow the spec**: "Organizers Needed" badge when
+  count = 0; notify gate needs ≥1 organizer. `ORGANIZER_SOFT_MIN` drops 2 → 1
+  (done in Phase 2 together with the completeness gate).
+- **D4 — "Exec" is a permission, not a new role.** Spec's "exec" maps to
+  existing permission keys (`calendar:event:create`, `announcements:create`, …).
+  Chairs remain the `*_chair` role keys. No new role tier is added.
+
+---
+
+## 3. Build order
+
+| Phase | Scope | Plan doc | Status |
+|---|---|---|---|
+| 1 | Schema + jobs core: event end time & invite link, `event_supervisors`, job capacity + report/approve/reject + T-36h lock, outbox/audit catalog additions | `docs/imp-ev-ph1.md` | **Done** (migrations 0141/0142) |
+| 2 | Notify gate: completeness computation (≥1 supervisor, ≥1 organizer, ≥3 jobs), `POST /{id}/notify` → outbox → SMS, events `notifications.py`, `ORGANIZER_SOFT_MIN` → 1, "last notified" timestamp | `docs/imp-ev-ph2.md` | Not started |
+| 3 | Initiatives: new entity (chair-created, assigned chairs, required start time), reuses job machinery with chair approval; calendar aggregator includes them | `docs/imp-ev-ph3.md` | Not started |
+| 4 | Security + swaps: persisted security assignments as a special job type (replace the memberadmin stub), swap requests (one pending per assignment, accept/decline, atomic swap), notifications | `docs/imp-ev-ph4.md` | Not started |
+| 5 | Frontend: events/tasks contracts+adapters, member-picker primitive, JobCard, event-detail sections (People/Jobs/Security/Notify + checklist + T-36h countdown), calendar badges + week view + mixed chips, initiative/security/swap screens, announcement SMS counter + scheduled time + calendar posting | `docs/imp-ev-ph5.md` | Not started |
+
+Phases 1→2→3 are sequential (each builds on the previous schema). Phase 4
+depends on Phase 1 only. Phase 5 tracks whatever backend phases have landed —
+it can start (contracts, JobCard, detail sections) once Phase 1+2 are deployed.
+
+**Phase 1 landed (migrations 0141/0142) — notes & minor drift from the plan:**
+- Audit actions named `ADD_EVENT_SUPERVISOR` / `REMOVE_EVENT_SUPERVISOR` (verb-first,
+  matching the existing `ADD_/REMOVE_EVENT_ORGANIZER` style) rather than the plan's
+  `EVENT_SUPERVISOR_ADDED`. Job actions `JOB_REPORTED/JOB_APPROVED/JOB_REJECTED`
+  are shared by `audit_logs.action` **and** `message_outbox.event_type` (the
+  reject-cycle dedup counter in `tk_reject_task`/`tk_report_done` counts
+  `JOB_REJECTED` audit rows, so the names must match).
+- Co-supervisor eligibility uses a new `OFFICER_ROLES` tuple in
+  `api/events/auth.py` (chairs + exec offices), passed to `ev_add_supervisor`.
+- `people_needed` is not a `tk_create_task` param (0110 signature left alone); the
+  tasks service sets it via a follow-up single-row `UPDATE` after create.
+- The T-36h resolver in `tk_uncommit_task` carries a `-- PHASE3 SEAM:` marker
+  where the linked-event start is resolved (initiatives add a second parent type).
+- `events.supervisor_member_id` and `POST /{event_id}/supervisor` are deprecated
+  in place (see `api/events/CONFORM_TODO.md`); reads moved to `event_supervisors`.
+- `message_outbox` JOB_* rows are written in the RPCs but not yet dispatched
+  (delivery becomes user-visible in Phase 2/5); no events-domain `notifications.py`
+  was added (that is Phase 2, for `EVENT_NOTIFY`).
+
+---
+
+## 4. How to continue implementation (instructions for the next session)
+
+1. **Read, in order:** this file → `docs/events-v1-spec.md` → the plan doc for
+   the phase you're implementing (or the previous phase's plan if you're
+   writing the next one). Also skim `CLAUDE.md` hard rules and
+   `docs/ARCHITECTURE.md`.
+2. **Re-verify the migration frontier before writing DDL.** Phase 1 assumed the
+   highest migration was `0140_usage_events.sql` and numbered from **0141**.
+   Run `ls migrations/ | tail` — if newer migrations exist, renumber. Never
+   edit an applied migration; always add new files (lexical order applies).
+3. **Planning a new phase:** write `docs/imp-ev-phN.md` following the shape of
+   `imp-ev-ph1.md` (scope & assumptions → migrations with concrete DDL → RPC
+   signatures → endpoint list → backend code changes → tests → non-goals →
+   execution checklist). Ground every column/function name by reading the
+   actual migrations first — do not trust this doc's snapshot blindly; earlier
+   phases will have changed things.
+4. **Update this file when a phase lands:** flip its Status, note the migration
+   numbers it consumed, and record any decision changes under §2.
+5. **Conventions that apply to every phase** (enforced, see CLAUDE.md):
+   - Multi-row / trust-boundary mutations go through plpgsql RPCs
+     (`db/rpc.py` → `call_rpc`) with `chapter_id` guards, `idempotency_keys`,
+     and `audit_logs` writes. Treasury is the reference.
+   - New `message_outbox.event_type` and `audit_logs.action` values require the
+     additive DO-block CHECK-rebuild pattern (copy from 0100/0131).
+   - Every new tenant table: `chapter_id` FK + RLS (via `rbac_request_chapter_id()`).
+   - Permission checks via `api/rbac` only — no role-string comparisons.
+   - Money is integer cents; never copy the legacy `events.fine_amount` float.
+   - Backend tests: pytest from `LocalDev/` against a real Postgres
+     (`TEST_DATABASE_URL` / `.env`), `asyncio_mode=auto`. Add per-phase tests
+     under `tests/events/` and `tests/tasks/`.
+   - Frontend (Phase 5): pages thin, modules own workflows, DTO→contract via
+     adapters, `formatMoney(cents)`, capability gating via `usePermissions().can()`.
+6. **Phase-specific pointers for the next planner:**
+   - *Phase 2:* notify SMS should reuse the announcements SMS dispatch path
+     (`api/announcements/services/sms.py` + `MESSAGE_DELIVERY_MODE`), not a new
+     Twilio integration. Add outbox type `EVENT_NOTIFY`. Store "last notified"
+     as an append-only record (outbox rows already give you this), not a
+     mutable column. Spec open-item: consider a soft 1/hour cooldown.
+   - *Phase 3:* initiatives need a required start timestamp (spec open item 1);
+     the T-36h resolver added to `tk_uncommit_task` in Phase 1 must be extended
+     to resolve initiative parents as well (Phase 1 leaves a marked seam).
+   - *Phase 4:* build on `GET /api/memberadmin/scores` for the picker (already
+     delinquency-ordered); replace the non-persisting
+     `POST /api/memberadmin/assign-security` stub, which also still uses legacy
+     `require_officer` — migrate it to `require_permission`. Swap atomicity is
+     a single RPC. One-pending-swap = unique partial index on
+     `(assignment_id) WHERE status = 'pending'`.
+   - *Phase 5:* create `lib/contracts/events.ts` + `lib/adapters/events.ts`
+     (and tasks/jobs equivalents) *first*; build the member-picker primitive in
+     `components/ui/`; the existing `components/countdown.tsx` is mm:ss and
+     legacy-themed — build a day/hour variant on design tokens instead.
