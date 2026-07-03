@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import uuid
+
 import pytest
 
 from tests.treasury.conftest import *  # noqa: F401,F403
@@ -36,6 +38,34 @@ def user_factory(chapter_id, member_factory):
 
 
 @pytest.fixture
+def set_phone(cursor):
+    """Give a member an SMS-reachable phone number (notify recipient resolution)."""
+
+    def _set(member_id: str, phone: str | None = "+15555550100") -> None:
+        cursor.execute("UPDATE members SET phone = %s WHERE id = %s", (phone, member_id))
+
+    return _set
+
+
+@pytest.fixture
+def create_job(cursor, chapter_id):
+    """Insert a task/job row directly, optionally linked to an event (notify's D7 gate)."""
+
+    def _make(*, event_id: str | None = None, status: str = "open", chapter: str | None = None) -> str:
+        cursor.execute(
+            """
+            INSERT INTO tasks (chapter_id, title, status, event_id)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id
+            """,
+            (chapter or chapter_id, f"Job {uuid.uuid4().hex[:8]}", status, event_id),
+        )
+        return str(cursor.fetchone()["id"])
+
+    return _make
+
+
+@pytest.fixture
 def create_event(sb_client):
     """Create an event through the service layer with sane defaults."""
 
@@ -52,3 +82,49 @@ def create_event(sb_client):
         return svc.create_event(sb_client, actor=actor, **kwargs)
 
     return _create
+
+
+# ── HTTP harness (mirrors tests/announcements/conftest.py) ─────────────────
+
+
+@pytest.fixture
+def app_on_test_db(sb_client, monkeypatch):
+    """The real app, with events/rbac DB access pointed at the test DB."""
+    import api.events.api.events as events_api
+    import api.events.api.notifications as notify_api
+    import api.rbac.services.permissions as perm_mod
+
+    monkeypatch.setenv("MESSAGE_DELIVERY_MODE", "dry_run")
+    monkeypatch.setattr(perm_mod, "get_rbac_db", lambda: sb_client)
+    monkeypatch.setattr(events_api, "get_events_db", lambda: sb_client)
+    monkeypatch.setattr(notify_api, "get_events_db", lambda: sb_client)
+
+    from api.index import app
+
+    return app
+
+
+@pytest.fixture
+def as_member(app_on_test_db, cursor):
+    """Factory: a TestClient authenticated as the given member id."""
+    from fastapi.testclient import TestClient
+
+    from api.dependencies import get_current_user
+
+    app = app_on_test_db
+
+    def _factory(member_id: str):
+        cursor.execute("SELECT * FROM members WHERE id = %s", (member_id,))
+        member = {
+            k: (str(v) if isinstance(v, uuid.UUID) else v)
+            for k, v in dict(cursor.fetchone()).items()
+        }
+
+        async def _override():
+            return member
+
+        app.dependency_overrides[get_current_user] = _override
+        return TestClient(app)
+
+    yield _factory
+    app.dependency_overrides.pop(get_current_user, None)

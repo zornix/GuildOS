@@ -35,6 +35,32 @@ Phase 1 (V1, migrations 0141/0142 — July 2026)
 - Events gained `end_date` / `end_time` / `invite_link` (nullable; end>start
   validated in the service, not a DB CHECK).
 
+Phase 2 (V1, migration 0143 — July 2026)
+- Notify gate: `api/events/services/notifications.py` (new) gates a "Notify
+  members" SMS blast on completeness (≥1 supervisor, ≥1 organizer, ≥3
+  non-cancelled jobs, computed by `api/events/core/rules.py::completeness()`)
+  and a 1/hour per-event cooldown, both re-checked inside the `ev_notify_event`
+  RPC as defense in depth.
+- New HTTP surface `api/events/api/notifications.py`: `GET
+  /{event_id}/notify-preview` (checklist + recipient counts, no side effects)
+  and `POST /{event_id}/notify` (two-phase confirm, `Idempotency-Key` header).
+  Mounted alongside `events.py`'s router in `api/events/api/router.py`.
+- `api/announcements/services/sms.py`'s `dispatch_send` gained a keyword-only
+  `send_table` param (default `"announcement_sms_sends"`) so events' notify
+  send reuses the same dry_run/twilio dispatch path via
+  `send_table="event_notification_sends"` instead of a second Twilio
+  integration; the existing announcements call site is unaffected.
+- New append-only table `event_notification_sends` (0143), same
+  update/delete-guard shape as `announcement_sms_sends` (0131); RLS scoped to
+  `chapter_id`. New `message_outbox` event type `EVENT_NOTIFY` and
+  `audit_logs` action `EVENT_NOTIFY` (catalog CHECKs extended via the DO-block
+  rebuild pattern).
+- `EventResponse` (schemas.py) gained optional `job_count`, `open_job_count`,
+  `completeness`, `last_notified_at` fields per the plan, though `EventResponse`
+  itself is not currently wired as a FastAPI `response_model` anywhere in
+  `events.py` — it appears to be documentation-only/orphaned already, unrelated
+  to this phase.
+
 Remaining
 - Wire `linked_*` columns when creating sessions/task groups from an event
   (the attendance sessions service already backfills

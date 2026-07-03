@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, time
 from typing import Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from api.events.core.rules import AUDIENCE_TO_VISIBILITY, VISIBILITY_VALUES
 
@@ -87,6 +87,18 @@ class SupervisorOut(BaseModel):
     name: Optional[str] = None
 
 
+class CompletenessItem(BaseModel):
+    key: str
+    required: int
+    current: int
+    met: bool
+
+
+class Completeness(BaseModel):
+    is_complete: bool
+    items: list[CompletenessItem]
+
+
 class EventResponse(BaseModel):
     id: str
     title: str
@@ -106,6 +118,11 @@ class EventResponse(BaseModel):
     group_id: Optional[str] = None
     supervisor_member_id: Optional[str] = None  # deprecated (see CONFORM_TODO.md)
     supervisors: list[SupervisorOut] = []
+    # Phase 2 (notify gate) — additive, optional.
+    job_count: Optional[int] = None
+    open_job_count: Optional[int] = None
+    completeness: Optional[Completeness] = None
+    last_notified_at: Optional[str] = None
 
 
 class SupervisorSet(BaseModel):
@@ -124,3 +141,18 @@ class CheckInLinkResponse(BaseModel):
     short_code: str
     url: str
     expires_at: str
+
+
+class NotifyConfirm(BaseModel):
+    """Two-phase confirm: the recipient count the sender saw on the preview."""
+
+    confirmed_recipient_count: int = Field(ge=0)
+
+
+class NotifyPreviewOut(BaseModel):
+    event_id: str
+    completeness: Completeness
+    recipient_count: int
+    no_phone_count: int
+    body_preview: str
+    last_notified_at: Optional[str] = None

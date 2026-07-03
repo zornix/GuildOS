@@ -193,18 +193,23 @@ def send_announcement_sms(
 # ── Delivery dispatch ────────────────────────────────────────────────────────
 
 
-def dispatch_send(sb, send_row: dict) -> dict:
+def dispatch_send(sb, send_row: dict, *, send_table: str = "announcement_sms_sends") -> dict:
     """Deliver a send's pending outbox rows per MESSAGE_DELIVERY_MODE.
 
     dry_run marks rows 'sent' without any network call; twilio POSTs to the
     Twilio REST API. Unknown modes leave everything 'queued'/'pending' for an
     external worker. Idempotent: already-delivered rows are not re-sent.
+
+    send_table names the append-only send-log table the outbox rows target
+    (default: announcement_sms_sends). Other domains with their own send-log
+    table but the same outbox/dry_run/twilio shape (e.g. events notify's
+    event_notification_sends) reuse this dispatcher by passing their table.
     """
     mode = send_row.get("delivery_mode") or _delivery_mode()
     pending = (
         sb.table("message_outbox")
         .select("*")
-        .eq("target_table", "announcement_sms_sends")
+        .eq("target_table", send_table)
         .eq("target_id", send_row["id"])
         .eq("status", "pending")
         .execute()
@@ -222,11 +227,11 @@ def dispatch_send(sb, send_row: dict) -> dict:
     else:
         return send_row
 
-    sb.table("announcement_sms_sends").update({"status": final_status}).eq(
+    sb.table(send_table).update({"status": final_status}).eq(
         "id", send_row["id"]
     ).execute()
     refreshed = (
-        sb.table("announcement_sms_sends")
+        sb.table(send_table)
         .select("*")
         .eq("id", send_row["id"])
         .maybe_single()

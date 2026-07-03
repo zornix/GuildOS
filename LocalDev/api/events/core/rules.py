@@ -4,7 +4,14 @@ from __future__ import annotations
 
 # Soft minimum of organizers per event (spec §3). NEVER blocks creation; events
 # below the minimum are publicly flagged "needs N more organizers".
-ORGANIZER_SOFT_MIN = 2
+# D3 (docs/events-dev-status.md §2): the "Organizers Needed" badge fires at 0
+# organizers and the notify gate needs >=1 — dropped from 2.
+ORGANIZER_SOFT_MIN = 1
+
+# Notify-gate completeness thresholds (spec §2.7 / docs/imp-ev-ph2.md §3.1).
+SUPERVISORS_COMPLETE_MIN = 1
+ORGANIZERS_COMPLETE_MIN = 1
+JOBS_COMPLETE_MIN = 3
 
 # Seeded for every chapter (migration 0100 for existing chapters; the service
 # layer get-or-seeds for chapters created later).
@@ -30,6 +37,19 @@ VISIBILITY_VALUES: tuple[str, ...] = (
 
 def organizers_needed(organizer_count: int) -> int:
     return max(0, ORGANIZER_SOFT_MIN - organizer_count)
+
+
+def completeness(*, supervisor_count: int, organizer_count: int, job_count: int) -> dict:
+    """Notify-gate completeness (spec §2.7): >=1 supervisor, >=1 organizer,
+    >=3 jobs. Pure — the RPC (`ev_notify_event`) re-checks this server-side."""
+    items = [
+        {"key": "supervisors", "required": SUPERVISORS_COMPLETE_MIN, "current": supervisor_count},
+        {"key": "organizers", "required": ORGANIZERS_COMPLETE_MIN, "current": organizer_count},
+        {"key": "jobs", "required": JOBS_COMPLETE_MIN, "current": job_count},
+    ]
+    for item in items:
+        item["met"] = item["current"] >= item["required"]
+    return {"is_complete": all(i["met"] for i in items), "items": items}
 
 
 def resolve_visibility(*, audience: str | None, visibility: str | None) -> str:

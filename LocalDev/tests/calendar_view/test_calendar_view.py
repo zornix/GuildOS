@@ -26,7 +26,8 @@ def test_event_appears_with_understaffed_flag(harness, user_factory, create_even
     assert item["date"] == "2026-07-01"
     assert item["required"] is True and item["finable"] is True
     assert item["organizer_count"] == 0
-    assert item["organizers_needed"] == 2  # soft min, "needs N more organizers"
+    # D3 (docs/imp-ev-ph2.md): ORGANIZER_SOFT_MIN dropped 2 -> 1.
+    assert item["organizers_needed"] == 1  # soft min, "needs N more organizers"
     assert item["understaffed"] is True
     assert "supervisor_member_id" in item and "event_type" in item
 

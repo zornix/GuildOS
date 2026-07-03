@@ -1,8 +1,8 @@
 # Events Service V1 — Development Status & Roadmap
 
-**Last updated:** 2026-07-01
+**Last updated:** 2026-07-02
 **Spec:** `docs/events-v1-spec.md` (Events Service V1, saved verbatim)
-**Current phase:** Phase 1 **done** (migrations 0141/0142) — Phase 2 next
+**Current phase:** Phase 2 **done** (migration 0143) — Phase 3 next
 
 This document is the entry point for anyone (human or agent session) continuing
 the Events V1 build. It records what exists, what's missing, the decisions that
@@ -124,7 +124,7 @@ baked into the phase plans. Revisit here if product overrules.
 | Phase | Scope | Plan doc | Status |
 |---|---|---|---|
 | 1 | Schema + jobs core: event end time & invite link, `event_supervisors`, job capacity + report/approve/reject + T-36h lock, outbox/audit catalog additions | `docs/imp-ev-ph1.md` | **Done** (migrations 0141/0142) |
-| 2 | Notify gate: completeness computation (≥1 supervisor, ≥1 organizer, ≥3 jobs), `POST /{id}/notify` → outbox → SMS, events `notifications.py`, `ORGANIZER_SOFT_MIN` → 1, "last notified" timestamp | `docs/imp-ev-ph2.md` | Not started |
+| 2 | Notify gate: completeness computation (≥1 supervisor, ≥1 organizer, ≥3 jobs), `POST /{id}/notify` → outbox → SMS, events `notifications.py`, `ORGANIZER_SOFT_MIN` → 1, "last notified" timestamp | `docs/imp-ev-ph2.md` | **Done** (migration 0143) |
 | 3 | Initiatives: new entity (chair-created, assigned chairs, required start time), reuses job machinery with chair approval; calendar aggregator includes them | `docs/imp-ev-ph3.md` | Not started |
 | 4 | Security + swaps: persisted security assignments as a special job type (replace the memberadmin stub), swap requests (one pending per assignment, accept/decline, atomic swap), notifications | `docs/imp-ev-ph4.md` | Not started |
 | 5 | Frontend: events/tasks contracts+adapters, member-picker primitive, JobCard, event-detail sections (People/Jobs/Security/Notify + checklist + T-36h countdown), calendar badges + week view + mixed chips, initiative/security/swap screens, announcement SMS counter + scheduled time + calendar posting | `docs/imp-ev-ph5.md` | Not started |
@@ -151,6 +151,42 @@ it can start (contracts, JobCard, detail sections) once Phase 1+2 are deployed.
 - `message_outbox` JOB_* rows are written in the RPCs but not yet dispatched
   (delivery becomes user-visible in Phase 2/5); no events-domain `notifications.py`
   was added (that is Phase 2, for `EVENT_NOTIFY`).
+
+**Phase 2 landed (migration 0143) — notes & minor drift from the plan:**
+- The soft 1/hour cooldown flagged as "cut-first-if-time-boxed" in the plan
+  **was implemented** (not cut): `ev_notify_event` raises `notify_cooldown` if
+  an `event_notification_sends` row for the event is younger than 1 hour; the
+  HTTP layer maps this to `429`.
+- `event_notification_sends` follows the exact append-only shape/guard pattern
+  as `announcement_sms_sends` (0131): BEFORE UPDATE trigger allows only
+  `status` to advance, BEFORE DELETE trigger blocks hard deletes.
+- Notify SMS reuses the announcements dispatch path exactly as planned:
+  `api/announcements/services/sms.py`'s `dispatch_send` gained a keyword-only
+  `send_table` param (default `"announcement_sms_sends"`); events passes
+  `"event_notification_sends"`. No second Twilio integration was added.
+- `dedup_key` for `EVENT_NOTIFY` outbox rows includes the send id
+  (`EVENT_NOTIFY:{event_id}:{send_id}:{member_id}`), not just event+member, so
+  a re-notify after the cooldown elapses fans out fresh rows instead of being
+  silently dropped by the first send's dedup key (decision D6).
+- Notify permission (D5): supervisor of the event, OR organizer of the event,
+  OR holder of `calendar:event:update` — enforced in
+  `api/events/services/notifications.py::_require_notify`, reusing
+  `events.py`'s existing `_actor_is_supervisor` rather than duplicating it.
+- Completeness gate (D7): ≥1 supervisor, ≥1 organizer, ≥3 non-cancelled jobs —
+  computed by `api/events/core/rules.py::completeness()` (pure function, unit
+  tested independently of the RPC/HTTP layers) and re-checked defense-in-depth
+  inside `ev_notify_event` itself.
+- Test-file layout deviates slightly from the plan's single
+  `tests/events/test_notify.py`: service/RPC-level tests (gate, happy path,
+  D6 re-notify) live there; HTTP-layer tests (count mismatch, idempotency,
+  permissions, cooldown, no-phone preview, append-only) live in the sibling
+  `tests/events/test_notify_api.py`, split for readability. Both are run as
+  part of the same `tests/events/` suite.
+- The D6 re-notify test cannot back-date an existing send row's `created_at`
+  via `UPDATE` (the append-only trigger's column-guard includes `created_at`,
+  so any such `UPDATE` raises "append-only" regardless of DB role). Instead,
+  the test seeds a synthetic stale send via a direct `INSERT ... created_at =
+  now() - interval '2 hours'`, then calls the real service for the fresh send.
 
 ---
 
@@ -187,11 +223,6 @@ it can start (contracts, JobCard, detail sections) once Phase 1+2 are deployed.
    - Frontend (Phase 5): pages thin, modules own workflows, DTO→contract via
      adapters, `formatMoney(cents)`, capability gating via `usePermissions().can()`.
 6. **Phase-specific pointers for the next planner:**
-   - *Phase 2:* notify SMS should reuse the announcements SMS dispatch path
-     (`api/announcements/services/sms.py` + `MESSAGE_DELIVERY_MODE`), not a new
-     Twilio integration. Add outbox type `EVENT_NOTIFY`. Store "last notified"
-     as an append-only record (outbox rows already give you this), not a
-     mutable column. Spec open-item: consider a soft 1/hour cooldown.
    - *Phase 3:* initiatives need a required start timestamp (spec open item 1);
      the T-36h resolver added to `tk_uncommit_task` in Phase 1 must be extended
      to resolve initiative parents as well (Phase 1 leaves a marked seam).

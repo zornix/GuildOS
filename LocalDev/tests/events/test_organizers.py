@@ -11,13 +11,14 @@ def test_organizers_needed_progression(sb_client, user_factory, create_event):
     officer = user_factory(role="officer")
     ev = create_event(officer)
 
+    # D3 (docs/events-dev-status.md §2): ORGANIZER_SOFT_MIN dropped 2 -> 1.
     got = svc.get_event(sb_client, user=officer, event_id=ev["id"])
-    assert got["organizer_count"] == 0 and got["organizers_needed"] == 2
+    assert got["organizer_count"] == 0 and got["organizers_needed"] == 1
 
     a = user_factory()
     svc.add_organizer(sb_client, actor=a, event_id=ev["id"])
     got = svc.get_event(sb_client, user=officer, event_id=ev["id"])
-    assert got["organizer_count"] == 1 and got["organizers_needed"] == 1
+    assert got["organizer_count"] == 1 and got["organizers_needed"] == 0
 
     b = user_factory()
     svc.add_organizer(sb_client, actor=b, event_id=ev["id"])

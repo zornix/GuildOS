@@ -11,6 +11,7 @@ from __future__ import annotations
 from api.events.auth import CHAIR_ROLES, EVENT_UPDATE, OFFICER_ROLES, OFFICER_VIEW
 from api.events.core.rules import (
     DEFAULT_EVENT_TYPES,
+    completeness,
     organizers_needed,
     resolve_visibility,
 )
@@ -141,6 +142,43 @@ def _decorate_supervisors(sb, event: dict) -> dict:
     return event
 
 
+_OPEN_JOB_STATUSES = {"open", "in_progress"}
+
+
+def _job_counts_for_event(sb, event_id: str) -> tuple[int, int]:
+    """(job_count, open_job_count) for an event's non-cancelled jobs (tasks).
+
+    job_count feeds the notify-gate completeness check (spec §2.7); jobs are
+    the tasks domain, extended (decision D1) — never a separate checklist.
+    """
+    rows = (
+        sb.table("tasks")
+        .select("status")
+        .eq("event_id", event_id)
+        .execute()
+    ).data or []
+    non_cancelled = [r for r in rows if r.get("status") != "cancelled"]
+    open_count = sum(1 for r in non_cancelled if r.get("status") in _OPEN_JOB_STATUSES)
+    return len(non_cancelled), open_count
+
+
+def _last_notified_at(sb, event_id: str) -> str | None:
+    """Most recent notify blast timestamp, or None if never notified.
+
+    Derived from the append-only event_notification_sends log rather than a
+    mutable column (docs/imp-ev-ph2.md §3.2).
+    """
+    rows = (
+        sb.table("event_notification_sends")
+        .select("created_at")
+        .eq("event_id", event_id)
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    ).data or []
+    return rows[0]["created_at"] if rows else None
+
+
 def _validate_time_range(
     *, date: str, time: str, end_date: str | None, end_time: str | None
 ) -> None:
@@ -265,6 +303,8 @@ def list_events(sb, *, user: dict, upcoming: bool = True) -> list[dict]:
         ]
 
     counts: dict[str, int] = {}
+    sup_counts: dict[str, int] = {}
+    job_counts: dict[str, int] = {}
     event_ids = [e["id"] for e in visible]
     if event_ids:
         organizer_rows = (
@@ -276,7 +316,39 @@ def list_events(sb, *, user: dict, upcoming: bool = True) -> list[dict]:
         for r in organizer_rows:
             counts[r["event_id"]] = counts.get(r["event_id"], 0) + 1
 
-    return [_decorate_counts(e, counts.get(e["id"], 0)) for e in visible]
+        supervisor_rows = (
+            sb.table("event_supervisors")
+            .select("event_id")
+            .in_("event_id", event_ids)
+            .execute()
+        ).data or []
+        for r in supervisor_rows:
+            sup_counts[r["event_id"]] = sup_counts.get(r["event_id"], 0) + 1
+
+        task_rows = (
+            sb.table("tasks")
+            .select("event_id, status")
+            .in_("event_id", event_ids)
+            .execute()
+        ).data or []
+        for r in task_rows:
+            if r.get("status") == "cancelled":
+                continue
+            job_counts[r["event_id"]] = job_counts.get(r["event_id"], 0) + 1
+
+    decorated = []
+    for e in visible:
+        organizer_count = counts.get(e["id"], 0)
+        _decorate_counts(e, organizer_count)
+        job_count = job_counts.get(e["id"], 0)
+        e["job_count"] = job_count
+        e["completeness"] = completeness(
+            supervisor_count=sup_counts.get(e["id"], 0),
+            organizer_count=organizer_count,
+            job_count=job_count,
+        )
+        decorated.append(e)
+    return decorated
 
 
 def get_event(sb, *, user: dict, event_id: str) -> dict:
@@ -310,6 +382,16 @@ def get_event(sb, *, user: dict, event_id: str) -> dict:
     event["organizers"] = organizers
     _decorate_counts(event, len(organizers))
     _decorate_supervisors(sb, event)
+
+    job_count, open_job_count = _job_counts_for_event(sb, event_id)
+    event["job_count"] = job_count
+    event["open_job_count"] = open_job_count
+    event["completeness"] = completeness(
+        supervisor_count=len(event["supervisors"]),
+        organizer_count=len(organizers),
+        job_count=job_count,
+    )
+    event["last_notified_at"] = _last_notified_at(sb, event_id)
 
     event["group_events"] = []
     if event.get("event_group_id"):
