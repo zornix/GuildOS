@@ -13,6 +13,7 @@ import { AttendanceRoster } from "./attendance-roster";
 import { ManualAttendanceModal } from "./manual-attendance-modal";
 import type { Event, RosterEntry, CheckinLink } from "../../../lib/types";
 import { isPastEvent } from "../../../lib/event-time";
+import { formatMoney } from "../../../lib/formatters/money";
 
 type ModalType = "create" | "checkin" | "excuse" | null;
 type AttendanceStatus = "present" | "excused" | "absent";
@@ -77,7 +78,8 @@ export function EventDetail({
           </div>
           <div style={{ display: "flex", gap: tokens.space[2] }}>
             {detail.required && <Badge color="purple">Required</Badge>}
-            {detail.fine_amount > 0 && <Badge color="red">${detail.fine_amount} fine</Badge>}
+            {/* fine_amount is legacy float dollars; events adapter takes over this conversion in imp-fe-remediation Phase B */}
+          {detail.fine_amount > 0 && <Badge color="red">{formatMoney(Math.round(detail.fine_amount * 100))} fine</Badge>}
           </div>
         </div>
         {isOfficer && (

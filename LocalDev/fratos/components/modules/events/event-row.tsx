@@ -4,6 +4,7 @@ import { Card } from "../../ui/card";
 import { Badge } from "../../ui/badge";
 import { Icon } from "../../ui/icon";
 import type { Event } from "../../../lib/types";
+import { formatMoney } from "../../../lib/formatters/money";
 
 interface EventRowProps {
   event: Event;
@@ -19,7 +20,8 @@ export function EventRow({ event, onClick }: EventRowProps) {
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: tokens.space[2] }}>
         {event.required && <Badge color="purple">Required</Badge>}
-        {event.fine_amount > 0 && <Badge color="red">${event.fine_amount}</Badge>}
+        {/* fine_amount is legacy float dollars; events adapter takes over this conversion in imp-fe-remediation Phase B */}
+        {event.fine_amount > 0 && <Badge color="red">{formatMoney(Math.round(event.fine_amount * 100))}</Badge>}
         <span style={{ color: tokens.color.textMuted }}><Icon type="chev" size={14} /></span>
       </div>
     </Card>

@@ -6,6 +6,7 @@ import { T } from "../lib/theme";
 import { tokens } from "../config/theme/tokens";
 import type { Event, Fine, Excuse } from "../lib/types";
 import { isUpcomingEvent } from "../lib/event-time";
+import { formatMoney } from "../lib/formatters/money";
 import { ApiErrorBanner } from "../components/api-error-banner";
 import { DashboardStats } from "../components/modules/dashboard/dashboard-stats";
 import { UpcomingEventsWidget } from "../components/modules/dashboard/upcoming-events-widget";
@@ -36,7 +37,7 @@ export function DashboardPage() {
       : fines.error
         ? "—"
         : user.role === "officer"
-          ? `$${unpaidTotal}`
+          ? formatMoney(unpaidTotal)
           : String(unpaidFines.length);
 
   const stats =
