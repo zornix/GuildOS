@@ -73,9 +73,58 @@ def _already_fined_ids(sb, event_id: str) -> set[str]:
     return {str(r["member_id"]) for r in rows}
 
 
+def _present_fines(sb, rows: list[dict]) -> list[dict]:
+    """Map raw unpaid_invoices fine rows to the client fine shape.
+
+    Money stays integer cents (`amount_cents`); `description`/`created_at` are
+    renamed to `reason`/`issued_at`; member and event names are stitched in
+    Python — the local shim has no `unpaid_invoices` FK registered, so a
+    PostgREST-style embedded select would silently drop the join locally.
+    """
+    if not rows:
+        return []
+
+    member_ids = {str(r["member_id"]) for r in rows if r.get("member_id")}
+    event_ids = {str(r["source_event_id"]) for r in rows if r.get("source_event_id")}
+
+    names: dict[str, str] = {}
+    if member_ids:
+        members = (
+            sb.table("members").select("id, name").in_("id", list(member_ids)).execute()
+        ).data or []
+        names = {str(m["id"]): m["name"] for m in members}
+
+    events: dict[str, dict] = {}
+    if event_ids:
+        ev_rows = (
+            sb.table("events").select("id, title, date").in_("id", list(event_ids)).execute()
+        ).data or []
+        events = {str(e["id"]): e for e in ev_rows}
+
+    presented = []
+    for r in rows:
+        ev = events.get(str(r["source_event_id"])) if r.get("source_event_id") else None
+        presented.append(
+            {
+                "id": r["id"],
+                "amount_cents": int(r["amount_cents"]),
+                "status": r["status"],
+                "reason": r.get("description") or "",
+                "issued_at": r.get("created_at"),
+                "member_id": r.get("member_id"),
+                "member_name": names.get(str(r.get("member_id"))),
+                "event_id": r.get("source_event_id"),
+                "event_title": ev["title"] if ev else None,
+                "event_date": ev["date"] if ev else None,
+            }
+        )
+    return presented
+
+
 @router.get("/")
 async def list_fines(status: str = None, user=Depends(get_current_user)):
-    """List fine invoices. Officers see all chapter fines; members see their own."""
+    """List fine invoices, presented for the client. Officers see all chapter
+    fines; members see their own."""
     sb = get_supabase()
 
     query = sb.table("unpaid_invoices").select("*").eq("kind", "fine")
@@ -86,7 +135,8 @@ async def list_fines(status: str = None, user=Depends(get_current_user)):
     if status:
         query = query.eq("status", status)
 
-    return query.order("created_at", desc=True).execute().data
+    rows = query.order("created_at", desc=True).execute().data or []
+    return _present_fines(sb, rows)
 
 
 @router.get("/missed/{event_id}")

@@ -3,7 +3,8 @@ import { tokens } from "../../../config/theme/tokens";
 import { Card } from "../../ui/card";
 import { Icon } from "../../ui/icon";
 import { Badge } from "../../ui/badge";
-import type { Fine } from "../../../lib/types";
+import { formatMoney } from "../../../lib/formatters/money";
+import type { Fine } from "../../../lib/contracts/fines";
 
 interface MyFinesWidgetProps {
   fines: Fine[] | null;
@@ -29,7 +30,7 @@ export function MyFinesWidget({ fines, loading, error }: MyFinesWidgetProps) {
         unpaid.map((f) => (
           <div key={f.id} style={{ padding: tokens.space[2], borderRadius: tokens.radius.md, background: tokens.color.bg, marginBottom: tokens.space[2], display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
-              <div style={{ fontSize: tokens.font.sizeMd, fontWeight: 600, color: tokens.color.text }}>${f.amount}</div>
+              <div style={{ fontSize: tokens.font.sizeMd, fontWeight: 600, color: tokens.color.text }}>{formatMoney(f.amountCents)}</div>
               <div style={{ fontSize: tokens.font.sizeSm, color: tokens.color.textMuted }}>{f.reason}</div>
             </div>
             <Badge color="red">Unpaid</Badge>

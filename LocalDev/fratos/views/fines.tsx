@@ -12,13 +12,14 @@ import { SegmentedControl } from "../components/ui/segmented-control";
 import { LoadingState } from "../components/ui/loading-state";
 import { EmptyState } from "../components/ui/empty-state";
 import { formatMoney } from "../lib/formatters/money";
-import type { Fine } from "../lib/types";
+import { adaptFines } from "../lib/adapters/fines";
+import type { Fine } from "../lib/contracts/fines";
 
 export function FinesPage() {
   const { user } = useAuth();
   const [filter, setFilter] = useState("all");
   const [toast, setToast] = useState<string | null>(null);
-  const fines = useApi<Fine[]>(() => api.getFines());
+  const fines = useApi<Fine[]>(() => api.getFines().then(adaptFines));
 
   const show = (m: string) => {
     setToast(m);
@@ -47,17 +48,17 @@ export function FinesPage() {
           {filtered.map((f) => (
             <Card key={f.id} style={{ padding: tokens.space[4], display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
-                {user.role === "officer" && f.members && (
+                {user.role === "officer" && f.memberName && (
                   <div style={{ fontSize: tokens.font.sizeLg, fontWeight: tokens.font.weightBold, color: tokens.color.text }}>
-                    {f.members.name}
+                    {f.memberName}
                   </div>
                 )}
                 <div style={{ fontSize: tokens.font.sizeMd, color: tokens.color.text }}>{f.reason}</div>
-                <div style={{ fontSize: tokens.font.sizeSm, color: tokens.color.textMuted }}>{f.events?.title} · {f.events?.date}</div>
+                <div style={{ fontSize: tokens.font.sizeSm, color: tokens.color.textMuted }}>{[f.eventTitle, f.eventDate].filter(Boolean).join(" · ")}</div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: tokens.space[2] }}>
                 <div style={{ fontSize: tokens.font.size2xl, fontWeight: tokens.font.weightExtrabold, color: f.status === "unpaid" ? tokens.color.danger : tokens.color.textMuted }}>
-                  {formatMoney(f.amount)}
+                  {formatMoney(f.amountCents)}
                 </div>
                 <Badge color={f.status === "paid" ? "green" : f.status === "waived" ? "blue" : "red"}>{f.status}</Badge>
                 {f.status === "unpaid" && user.role === "officer" && (

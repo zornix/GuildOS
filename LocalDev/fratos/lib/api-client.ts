@@ -2,7 +2,6 @@ import type {
   Member,
   Event,
   Excuse,
-  Fine,
   CheckinLink,
   ActiveCheckinLinkRow,
   FineSummary,
@@ -28,6 +27,7 @@ import type {
   TreasuryReportDataset,
   TreasurySubmissionStatus,
 } from "./contracts/treasury";
+import type { FineApiRow } from "./contracts/fines";
 
 /** Thrown for failed HTTP responses so callers can inspect `status` (e.g. retries). */
 export class ApiRequestError extends Error {
@@ -275,10 +275,10 @@ export class ApiClient {
 
   // Fines
   getFines(status?: string | null) {
-    return this.requestRead<Fine[]>(`/api/fines${status ? `?status=${status}` : ""}`);
+    return this.requestRead<FineApiRow[]>(`/api/fines${status ? `?status=${status}` : ""}`);
   }
   waiveFine(id: string) {
-    return this.request<Fine>(`/api/fines/${id}/waive`, { method: "POST" });
+    return this.request<Record<string, unknown>>(`/api/fines/${id}/waive`, { method: "POST" });
   }
   getFineSummary() {
     return this.requestRead<FineSummary>("/api/fines/summary");

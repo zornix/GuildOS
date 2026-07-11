@@ -152,6 +152,65 @@ def test_issue_creates_flat_2500_fines_for_unexcused_only(
     assert cursor.fetchone()["n"] == 2
 
 
+def test_list_fines_presents_client_shape_with_member_and_event(
+    api, sb_client, cursor, chapter_id, member_factory
+):
+    """GET /api/fines returns the presented fine shape the frontend adapts:
+    money as integer `amount_cents`, `reason`/`issued_at` renamed, and member/
+    event names stitched in (the raw unpaid_invoices row carries none of these)."""
+    finance = member_factory()
+    assign_role(cursor, chapter_id, finance, "finance_board")
+    missed = member_factory()
+    event_id = _make_event(cursor, chapter_id, hours_ago=30)  # required, "Chapter Meeting"
+
+    issuer = api(make_user(finance, chapter_id))
+    issued = issuer.post(
+        "/api/fines/issue",
+        json={"event_id": event_id, "member_ids": [missed]},
+        headers={"Authorization": "Bearer x"},
+    )
+    assert issued.status_code == 200, issued.text
+
+    # Officer view: all chapter fines, presented.
+    officer = api(make_user(member_factory(role="officer"), chapter_id, role="officer"))
+    rows = officer.get("/api/fines", headers={"Authorization": "Bearer x"}).json()
+    assert len(rows) == 1
+    fine = rows[0]
+    assert fine["amount_cents"] == 2500          # integer cents, not `amount`
+    assert fine["status"] == "unpaid"
+    assert str(fine["member_id"]) == missed
+    assert fine["member_name"]                    # stitched member name
+    assert fine["event_title"] == "Chapter Meeting"
+    assert fine["event_date"]
+    assert "Chapter Meeting" in fine["reason"]    # description → reason
+    assert fine["issued_at"]                      # created_at → issued_at
+    # The stale field names are gone.
+    assert "amount" not in fine and "description" not in fine and "created_at" not in fine
+
+
+def test_list_fines_scopes_members_to_their_own(
+    api, sb_client, cursor, chapter_id, member_factory
+):
+    finance = member_factory()
+    assign_role(cursor, chapter_id, finance, "finance_board")
+    mine = member_factory()
+    other = member_factory()
+    event_id = _make_event(cursor, chapter_id, hours_ago=30)
+
+    issuer = api(make_user(finance, chapter_id))
+    issuer.post(
+        "/api/fines/issue",
+        json={"event_id": event_id, "member_ids": [mine, other]},
+        headers={"Authorization": "Bearer x"},
+    )
+
+    rows = api(make_user(mine, chapter_id)).get(
+        "/api/fines", headers={"Authorization": "Bearer x"}
+    ).json()
+    assert {str(r["member_id"]) for r in rows} == {mine}
+    assert all(r["amount_cents"] == 2500 for r in rows)
+
+
 def test_issue_refused_for_non_required_event(api, sb_client, cursor, chapter_id, member_factory):
     treasurer = member_factory()
     assign_role(cursor, chapter_id, treasurer, "treasurer")

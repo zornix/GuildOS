@@ -4,7 +4,9 @@ import { useApi } from "../hooks/use-api";
 import { api } from "../lib/api-client";
 import { T } from "../lib/theme";
 import { tokens } from "../config/theme/tokens";
-import type { Event, Fine, Excuse } from "../lib/types";
+import type { Event, Excuse } from "../lib/types";
+import type { Fine } from "../lib/contracts/fines";
+import { adaptFines } from "../lib/adapters/fines";
 import { isUpcomingEvent } from "../lib/event-time";
 import { formatMoney } from "../lib/formatters/money";
 import { ApiErrorBanner } from "../components/api-error-banner";
@@ -16,7 +18,7 @@ import { MyFinesWidget } from "../components/modules/dashboard/my-fines-widget";
 export function DashboardPage() {
   const { user } = useAuth();
   const events = useApi<Event[]>(() => api.getEvents());
-  const fines = useApi<Fine[]>(() => api.getFines());
+  const fines = useApi<Fine[]>(() => api.getFines().then(adaptFines));
   const excuses = useApi<Excuse[]>(() => api.getExcuses(user.role === "officer" ? "pending" : null));
 
   const now = new Date();
@@ -30,7 +32,7 @@ export function DashboardPage() {
   const officerExcuseStat =
     excuses.loading && !(excuses.data || []).length ? "…" : excuses.error ? "—" : String(pendingExcuses.length);
 
-  const unpaidTotal = unpaidFines.reduce((s, f) => s + f.amount, 0);
+  const unpaidTotal = unpaidFines.reduce((s, f) => s + f.amountCents, 0);
   const finesStatValue =
     fines.loading && !(fines.data || []).length
       ? "…"

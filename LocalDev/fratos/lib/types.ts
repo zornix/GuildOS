@@ -50,21 +50,6 @@ export interface Excuse {
   events?: Pick<Event, "title" | "date">;
 }
 
-export interface Fine {
-  id: string;
-  event_id: string;
-  member_id: string;
-  chapter_id: string;
-  amount: number;
-  reason: string;
-  status: "unpaid" | "paid" | "waived";
-  issued_at: string;
-  paid_at: string | null;
-  waived_by: string | null;
-  members?: Pick<Member, "name" | "email">;
-  events?: Pick<Event, "title" | "date">;
-}
-
 export interface CheckinLink {
   event_id: string;
   short_code: string;
