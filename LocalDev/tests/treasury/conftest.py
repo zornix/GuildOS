@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,6 +22,11 @@ import psycopg2.extras
 import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
+
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from scripts.db_guard import ProdGuardError, require_demo
 
 
 def _load_dotenv_value(*keys: str) -> str | None:
@@ -54,6 +60,12 @@ def db_url() -> str:
     url = _test_database_url()
     if not url:
         pytest.skip("TEST_DATABASE_URL / SUPABASE_DB_URL not set — DB-backed tests skipped")
+    try:
+        require_demo(url, context="pytest")
+    except ProdGuardError as exc:
+        # Stop the whole session before ANY test opens a connection — a test
+        # run against prod would write permanent rows into append-only tables.
+        pytest.exit(str(exc), returncode=1)
     return url
 
 
