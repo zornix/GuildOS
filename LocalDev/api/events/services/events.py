@@ -153,11 +153,16 @@ def _job_counts_for_event(sb, event_id: str) -> tuple[int, int]:
     """
     rows = (
         sb.table("tasks")
-        .select("status")
+        .select("status, kind")
         .eq("event_id", event_id)
         .execute()
     ).data or []
-    non_cancelled = [r for r in rows if r.get("status") != "cancelled"]
+    # Security jobs (kind='security', D12) are pre-assigned and not claimable —
+    # they must not count toward the notify gate or the job decorations.
+    non_cancelled = [
+        r for r in rows
+        if r.get("status") != "cancelled" and r.get("kind") != "security"
+    ]
     open_count = sum(1 for r in non_cancelled if r.get("status") in _OPEN_JOB_STATUSES)
     return len(non_cancelled), open_count
 
@@ -327,12 +332,12 @@ def list_events(sb, *, user: dict, upcoming: bool = True) -> list[dict]:
 
         task_rows = (
             sb.table("tasks")
-            .select("event_id, status")
+            .select("event_id, status, kind")
             .in_("event_id", event_ids)
             .execute()
         ).data or []
         for r in task_rows:
-            if r.get("status") == "cancelled":
+            if r.get("status") == "cancelled" or r.get("kind") == "security":
                 continue
             job_counts[r["event_id"]] = job_counts.get(r["event_id"], 0) + 1
 

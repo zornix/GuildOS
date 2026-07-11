@@ -33,6 +33,8 @@ def _rpc_http_error(exc: Exception) -> HTTPException:
         "already_reported" in msg
         or "job_full" in msg
         or "unclaim_locked" in msg
+        or "security_preassigned" in msg
+        or "security_no_unclaim" in msg
         or "cannot be reported" in msg
         or "cannot be approved" in msg
         or "cannot be rejected" in msg

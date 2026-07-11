@@ -10,7 +10,9 @@ from fastapi import APIRouter
 
 from .events import router as _events_router
 from .notifications import router as _notifications_router
+from .security import router as _security_router
 
 router = APIRouter()
 router.include_router(_events_router)
 router.include_router(_notifications_router)
+router.include_router(_security_router)

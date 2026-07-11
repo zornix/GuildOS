@@ -105,6 +105,9 @@ def list_tasks(sb, *, chapter_id: str, status: str | None = None) -> list[dict]:
         row["claimants"] = claimants
         row["claimed_count"] = len(claimants)
         row["people_needed"] = row.get("people_needed", 1)
+        # Surface the job kind (D12) so the frontend can render the security
+        # shield variant and filter security jobs out of the Jobs section.
+        row["kind"] = row.get("kind", "standard")
     return rows
 
 

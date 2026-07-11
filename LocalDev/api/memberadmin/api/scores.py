@@ -20,20 +20,6 @@ async def get_member_detail(member_id: str, officer=Depends(require_officer)):
     return await load_member_event_breakdown(officer["chapter_id"], member_id)
 
 
-@router.post("/assign-security")
-async def assign_security(officer=Depends(require_officer)):
-    """Auto-select the most delinquent members for party security."""
-    scores = await compute_engagement_scores(officer["chapter_id"])
-    count = min(3, len(scores))
-    picks = scores[:count]
-    return {
-        "assigned": [
-            {"member_id": pick["member_id"], "name": pick["name"], "score": pick["score"]}
-            for pick in picks
-        ],
-    }
-
-
 @router.post("/remind/{member_id}")
 async def send_reminder(member_id: str, officer=Depends(require_officer)):
     """

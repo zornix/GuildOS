@@ -156,3 +156,34 @@ class NotifyPreviewOut(BaseModel):
     no_phone_count: int
     body_preview: str
     last_notified_at: Optional[str] = None
+
+
+# ── Security assignments + swaps (Phase 4, D12–D14) ─────────────────────────
+
+class SecurityAssignIn(BaseModel):
+    member_id: str
+
+
+class SwapRequestIn(BaseModel):
+    target_member_id: str
+    note: Optional[str] = None
+
+
+class SwapOut(BaseModel):
+    id: str
+    task_id: str
+    event_id: str
+    requester_member_id: str
+    target_member_id: str
+    note: Optional[str] = None
+    status: str
+    created_at: Optional[str] = None
+
+
+class SecurityAssignmentOut(BaseModel):
+    task_id: str
+    event_id: str
+    member_id: Optional[str] = None   # active-commitment holder (NULL if removed)
+    status: str
+    rejection_reason: Optional[str] = None
+    pending_swap: Optional[SwapOut] = None
