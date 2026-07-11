@@ -24,6 +24,11 @@ import psycopg2
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MIGRATIONS_DIR = REPO_ROOT / "migrations"
 
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts.db_guard import ProdGuardError, require_demo
+
 
 def _database_url() -> str:
     url = os.environ.get("DATABASE_URL", "").strip()
@@ -58,6 +63,12 @@ def _applied_names(cur) -> set[str]:
 
 def main() -> None:
     url = _database_url()
+
+    try:
+        require_demo(url, context="migrate")
+    except ProdGuardError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        sys.exit(1)
 
     if not MIGRATIONS_DIR.is_dir():
         print(f"error: migrations directory missing: {MIGRATIONS_DIR}", file=sys.stderr)
