@@ -40,7 +40,7 @@ function pluralize(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
-function adaptSubmission(row: TreasuryPaymentSubmissionApiRow): PaymentSubmission {
+export function adaptSubmission(row: TreasuryPaymentSubmissionApiRow): PaymentSubmission {
   const proof = row.proof_ref ? `Proof ${row.proof_ref}` : `Invoice ${shortId(row.invoice_id)}`;
 
   return {

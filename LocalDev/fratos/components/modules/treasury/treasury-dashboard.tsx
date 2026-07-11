@@ -2,6 +2,7 @@
 import { useState, useEffect, type ReactNode } from "react";
 import { tokens } from "../../../config/theme/tokens";
 import { formatMoney } from "../../../lib/formatters/money";
+import { adaptSubmission } from "../../../lib/adapters/treasury";
 import type {
   PaymentSubmission,
   TreasuryDashboardData,
@@ -349,14 +350,7 @@ function LedgerCommand({
     setLoadingSubmissions(true);
     fetchSubmissions(submissionsTab, null).then((page) => {
       if (valid) {
-        setSubmissions(page.data.map(r => ({
-          id: r.id,
-          memberName: r.member_id,
-          memo: r.method,
-          amountCents: r.claimed_amount_cents,
-          status: r.status,
-          submittedAt: r.created_at || "",
-        })));
+        setSubmissions(page.data.map(adaptSubmission));
         setLoadingSubmissions(false);
       }
     }).catch(() => {
