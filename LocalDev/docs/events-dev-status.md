@@ -1,8 +1,8 @@
 # Events Service V1 — Development Status & Roadmap
 
-**Last updated:** 2026-07-03
+**Last updated:** 2026-07-10
 **Spec:** `docs/events-v1-spec.md` (Events Service V1, saved verbatim)
-**Current phase:** Phase 3 **done** (migration 0144) — Phase 4 next
+**Current phase:** Phase 4 **done** (migration 0145) — Phase 5 next
 
 This document is the entry point for anyone (human or agent session) continuing
 the Events V1 build. It records what exists, what's missing, the decisions that
@@ -137,6 +137,37 @@ baked into the phase plans. Revisit here if product overrules.
   the T-36h lock window and the `JOB_REPORTED` notify fan-out against
   whichever parent (event or initiative) is set. `tk_commit_task`,
   `tk_approve_task`, `tk_reject_task`, and all `ev_*` RPCs are unchanged.
+- **D12 — A security assignment IS a `tasks` row (`kind='security'`,
+  `people_needed=1`, `status='in_progress'`) plus a pre-created active
+  commitment.** No fourth checklist concept (D1). The task id is the
+  assignment id; one job card per assigned member falls out of the model. The
+  **active commitment is the source of truth for the holder** —
+  `tasks.assigned_member_id` stays NULL (no two-column sync through swaps).
+  Report/approve/reject reuse `tk_report_done`/`tk_approve_task`/
+  `tk_reject_task` unchanged. Claiming/unclaiming are blocked on security
+  tasks (`security_preassigned` in `tk_commit_task`, `security_no_unclaim` in
+  `tk_uncommit_task`, `security_no_status_change` in `tk_update_task_status`);
+  the swap flow is the only way the holder changes. Security tasks are
+  **excluded from the notify-gate job count and the `job_count`/
+  `open_job_count` decorations** (both the Python count helpers and
+  `ev_notify_event`) so a security-only event cannot pass the ≥3-jobs gate.
+- **D13 — Swaps are a `security_swap_requests` table + one atomic accept
+  RPC.** One pending request per assignment via a unique partial index on
+  `(task_id) WHERE status = 'pending'`. `ev_accept_security_swap` flips the
+  commitment with **direct row operations inside the RPC** (uncommit requester
+  + commit target + append log rows) — no nested `tk_*` calls (the D12 guards
+  would reject them). Swaps have **no T-36h lock** (a swap requires another
+  member to accept, which is the accountability). Row lifecycle
+  `pending → accepted | declined | cancelled`, protected by an update-guard
+  trigger (only status resolution may change; deletes blocked) in the
+  `event_notification_sends` (0143) style.
+- **D14 — Security lives in the events domain; no new permission key.** Routes
+  under `/api/events`, RPCs `ev_*`, service/route files in `api/events/`. The
+  manage gate (assign/remove) reuses `_require_supervisor_manage` (supervisor
+  of the event OR `calendar:event:update`). Swap request/accept/decline are
+  gated by **identity** (assignment holder / swap target), checked in the RPCs
+  — not permission keys (the membership-not-permission pattern of D5/D9). No
+  RBAC seed migration.
 
 ---
 
@@ -147,7 +178,7 @@ baked into the phase plans. Revisit here if product overrules.
 | 1 | Schema + jobs core: event end time & invite link, `event_supervisors`, job capacity + report/approve/reject + T-36h lock, outbox/audit catalog additions | `docs/imp-ev-ph1.md` | **Done** (migrations 0141/0142) |
 | 2 | Notify gate: completeness computation (≥1 supervisor, ≥1 organizer, ≥3 jobs), `POST /{id}/notify` → outbox → SMS, events `notifications.py`, `ORGANIZER_SOFT_MIN` → 1, "last notified" timestamp | `docs/imp-ev-ph2.md` | **Done** (migration 0143) |
 | 3 | Initiatives: new entity (chair-created, assigned chairs, required start time), reuses job machinery with chair approval; calendar aggregator includes them | `docs/imp-ev-ph3.md` | **Done** (migration 0144) |
-| 4 | Security + swaps: persisted security assignments as a special job type (replace the memberadmin stub), swap requests (one pending per assignment, accept/decline, atomic swap), notifications | `docs/imp-ev-ph4.md` | Not started |
+| 4 | Security + swaps: persisted security assignments as a special job type (replace the memberadmin stub), swap requests (one pending per assignment, accept/decline, atomic swap), notifications | `docs/imp-ev-ph4.md` | **Done** (migration 0145) |
 | 5 | Frontend: events/tasks contracts+adapters, member-picker primitive, JobCard, event-detail sections (People/Jobs/Security/Notify + checklist + T-36h countdown), calendar badges + week view + mixed chips, initiative/security/swap screens, announcement SMS counter + scheduled time + calendar posting | `docs/imp-ev-ph5.md` | Not started |
 
 Phases 1→2→3 are sequential (each builds on the previous schema). Phase 4
@@ -253,6 +284,63 @@ it can start (contracts, JobCard, detail sections) once Phase 1+2 are deployed.
   `initiative_factory` fixture in that suite's `conftest.py`) for calendar
   aggregation.
 
+**Phase 4 landed (migration 0145) — notes & minor drift from the plan:**
+- New `api/events/services/security.py` + `api/events/api/security.py` (included
+  in the events domain router after `_events_router`/`_notifications_router`,
+  append-only). Six RPCs: `ev_assign_security`, `ev_remove_security`,
+  `ev_request_security_swap`, `ev_accept_security_swap`,
+  `ev_decline_security_swap` (idempotency-key + `chapter_id` guards +
+  `audit_logs`, no `big_ledger` — nothing financial). `tk_commit_task`,
+  `tk_uncommit_task`, `tk_update_task_status`, `ev_notify_event` were redefined
+  (`CREATE OR REPLACE`, same names) each with one added guard/filter, copying
+  the **latest** body of each (`tk_uncommit_task` from 0144, the rest from
+  0142/0143). Catalog: `message_outbox.event_type` += the four `SECURITY_*`
+  notify events; `audit_logs.action` += those four plus `SECURITY_REMOVED` and
+  `SECURITY_SWAP_CANCELLED`, all via the DO-block CHECK rebuild.
+- **`ev_cancel_security_swap` was NOT built** (the plan's optional,
+  "cut-first-if-time-boxed" RPC). Its audit action `SECURITY_SWAP_CANCELLED`
+  was still seeded now (per plan §2.5) to avoid a second catalog migration
+  later; `ev_remove_security` (which cancels any pending swap) is the
+  supervisor-side escape hatch for a stuck pending request.
+- **Count filters are Python-side, not `.neq(...)`.** The plan wrote
+  `.neq("kind", "security")`, but the local Postgres shim
+  (`api/postgres_client.py`) exposes only `eq`/`in_`/`lte`/`gte`, no `neq`.
+  The security exclusion is done in Python in
+  `api/events/services/events.py::_job_counts_for_event` and `list_events`
+  (mirroring how `_job_counts_for_event` already filters `cancelled`).
+  `services/notifications.py` needed **no separate edit** — its completeness
+  gate reuses `_job_counts_for_event`, so the one shared helper covers both the
+  event-detail decoration and the notify pre-check.
+- `list_security` opens with `_get_event_row` so `GET /{event_id}/security`
+  returns **404 for a cross-tenant/missing event** (plan's route table:
+  "404 on cross-tenant/missing id"); without it the empty-roster query would
+  200. `remove_security` likewise verifies the task is a security task **of
+  that event** (404 otherwise) so a supervisor of event A can't remove event
+  B's security row through a mismatched URL.
+- `GET /api/events/security-swaps/mine` returns
+  `{"incoming": [...], "outgoing": [...]}` (pending rows where the caller is
+  target vs requester). It is registered before the `/{event_id}/...` dynamic
+  routes; verified it is not shadowed (no events GET route matches a
+  two-segment path whose 2nd segment is `mine`).
+- `tasks.kind` is surfaced to the frontend for free: `list_tasks`/`get_task`
+  already `select("*")`, so `kind` flows through; a defensive
+  `row["kind"] = row.get("kind", "standard")` was added to `list_tasks`
+  (mirrors the `people_needed` normalization). No `TaskOut` response model
+  exists to extend — the tasks routes return raw dicts. `api/tasks/api/jobs.py`
+  `_rpc_http_error` gained `security_preassigned`/`security_no_unclaim` in its
+  409 branch.
+- The non-persisting `POST /api/memberadmin/assign-security` stub was deleted
+  (`api/memberadmin/api/scores.py`); `/scores` and `/member/{id}` (still on
+  legacy `require_officer`) are untouched — that auth migration remains
+  separate debt.
+- Test layout follows plan §5: `tests/events/test_security.py` (11 RPC-level
+  behaviors) + `tests/events/test_security_api.py` (items 12-17, HTTP). The
+  plan named fixtures `event_factory`/`hours_from_now` that don't exist in
+  `tests/events/conftest.py`; the actual fixtures are `create_event`,
+  `user_factory`, `assign_role`, and the T-36h test computes a 12h-out start
+  inline with a small `_future(hours)` helper. `app_on_test_db` in the events
+  conftest gained a `security_api.get_events_db` monkeypatch.
+
 ---
 
 ## 4. How to continue implementation (instructions for the next session)
@@ -289,12 +377,12 @@ it can start (contracts, JobCard, detail sections) once Phase 1+2 are deployed.
      adapters, `formatMoney(cents)`, capability gating via `usePermissions().can()`.
 6. **Phase-specific pointers for the next planner:**
    - *Phase 3:* **done** — see the "Phase 3 landed" notes above.
-   - *Phase 4:* build on `GET /api/memberadmin/scores` for the picker (already
-     delinquency-ordered); replace the non-persisting
-     `POST /api/memberadmin/assign-security` stub, which also still uses legacy
-     `require_officer` — migrate it to `require_permission`. Swap atomicity is
-     a single RPC. One-pending-swap = unique partial index on
-     `(assignment_id) WHERE status = 'pending'`.
+   - *Phase 4:* **done** — see the "Phase 4 landed" notes above. The Screen 6
+     picker composes `GET /api/memberadmin/scores` (delinquency-ordered) with
+     `GET /api/events/{id}/security`; the persisted assignment surface is the
+     `ev_assign_security`/`ev_remove_security` + swap RPCs. The
+     `POST /api/memberadmin/assign-security` stub was deleted (`/scores` +
+     `/member/{id}` keep their legacy `require_officer` — separate debt).
    - *Phase 5:* create `lib/contracts/events.ts` + `lib/adapters/events.ts`
      (and tasks/jobs equivalents) *first*; build the member-picker primitive in
      `components/ui/`; the existing `components/countdown.tsx` is mm:ss and
