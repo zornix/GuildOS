@@ -65,7 +65,7 @@ the same shape; small domains omit files but **never invent a different layout**
 
 ```
 api/<domain>/
-  api/router.py      # aggregates the domain's APIRouters; index.py mounts ONLY this
+  api/router.py      # aggregates the domain's APIRouters; index.py mounts this (+ standalone re-exports)
   api/<resource>.py  # thin route handlers: parse → service → respond
   api/schemas.py     # Pydantic v2 models, domain-local (never shared across domains)
   services/          # business logic; pure where possible, no FastAPI imports
@@ -76,10 +76,15 @@ api/<domain>/
   notifications.py   # transactional outbox enqueue helpers
 ```
 
-Domains: `auth`, `events`, `attendance`, `treasury`, `tasks`, `announcements`,
-`memberadmin` (standing), `recruitment`, `bylaws`, `nl_controller`, `rbac`,
-`calendar`, `standing`. `api/index.py` is the FastAPI app: it mounts each
-domain's top router and applies CORS. A domain router is itself append-only —
+Domains live one per directory under `api/<domain>/` — run `ls api/` for the
+authoritative list (currently ~17: `auth`, `events`, `attendance`, `treasury`,
+`tasks`, `announcements`, `memberadmin` (standing), `members`, `recruitment`,
+`bylaws`, `nl_controller`, `rbac`, `calendar`, `standing`, `initiatives`,
+`cron`, `instrumentation`). `api/index.py` is the FastAPI app: it mounts each
+domain's top `router.py` and applies CORS. A few domains (`attendance`,
+`treasury`) also re-export standalone routers that keep their own mount prefixes
+(e.g. `excuses_router`, `checkin_links_router`, `fines_router`), mounted
+alongside the aggregated router. A domain router is itself append-only —
 sub-routers `include_router` into it and existing includes are never removed.
 
 **Legacy flat modules** (`api/routes/`, `api/services/`, `api/models/schemas.py`)
