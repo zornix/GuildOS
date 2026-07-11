@@ -14,6 +14,8 @@ import jwt
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from scripts.db_guard import ProdGuardError, require_demo
+
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://fraternityos:localdev@localhost:5434/fraternityos")
 JWT_SECRET = os.getenv("JWT_SECRET", "local-dev-secret-key-change-in-prod")
 
@@ -178,6 +180,11 @@ def _clear_demo_seed(cur) -> None:
 
 
 def seed():
+    try:
+        require_demo(DATABASE_URL, context="seed")
+    except ProdGuardError as exc:
+        sys.exit(f"error: {exc}")
+
     conn = psycopg2.connect(DATABASE_URL)
     conn.autocommit = True
     cur = conn.cursor()
