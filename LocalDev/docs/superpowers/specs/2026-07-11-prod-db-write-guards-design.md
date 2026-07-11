@@ -1,7 +1,7 @@
 # Design: guards that keep test data and stray migrations out of prod
 
 **Date:** 2026-07-11
-**Status:** approved design, not yet implemented
+**Status:** implemented (see docs/superpowers/plans/2026-07-11-prod-db-write-guards.md)
 **Related:** [ADR-0002](../../../../docs/adr/0002-supabase-is-hosted-postgres-only.md),
 `docs/DATABASE.md`
 

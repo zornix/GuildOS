@@ -70,11 +70,12 @@ Treat prod as read-mostly at the console: `big_ledger` and `audit_logs` are
 append-only (DELETE-blocked by trigger), so mistakes are permanent. Mutations
 belong to the app's RPCs, not ad-hoc SQL.
 
-**Never point `LocalDev/.env`'s `DATABASE_URL` at prod.** pytest and
-`npm run dev` (which auto-migrates and can seed) read it. The conftest guard
-that refuses prod URLs is part of the ADR-0002 cleanup; until it exists,
-nothing but your attention prevents a test run from writing permanent rows
-into the prod ledger.
+**Never point `LocalDev/.env`'s `DATABASE_URL` at prod.** If it happens
+anyway, the guards in `scripts/db_guard.py` fail closed: pytest,
+`npm run seed`, `npm run migrate`, and the `npm run dev` auto-migrate all
+refuse any URL that is not the checked-in demo project ref or a local
+database — the run aborts before a connection is opened. Fix `.env` and
+re-run.
 
 ## Migrations
 
@@ -95,24 +96,23 @@ npm run migrate    # migrations only
 
 ### On prod
 
-Today — one-off command with the prod URL (paste it, don't store it in `.env`
-as `DATABASE_URL`):
-
-```bash
-DATABASE_URL="postgresql://postgres.<prod-ref>:...@...pooler.supabase.com:6543/postgres" \
-  python3 scripts/migrate_db.py
-```
-
-Target (ADR-0002 cleanup) — a dedicated entry in `.env` that **only** the
-migrate script reads:
-
-```
-PROD_DATABASE_URL=postgresql://postgres.<prod-ref>:...@...pooler.supabase.com:6543/postgres
-```
+Prod migration is a separate, deliberate command. It reads
+**`PROD_DATABASE_URL`** (from the environment or `LocalDev/.env`) and never
+`DATABASE_URL`:
 
 ```bash
 npm run migrate:prod
 ```
+
+The script verifies the URL matches a known prod project ref
+(`PROD_PROJECT_REFS` in `scripts/db_guard.py`), prints the pending
+migrations, and requires you to type the prod project ref before applying
+anything. For CI, `python3 scripts/migrate_db.py --prod --yes` skips the
+prompt.
+
+The old one-off `DATABASE_URL="<prod URL>" python3 scripts/migrate_db.py`
+no longer works: the default path allowlists the demo and refuses
+everything else.
 
 Deploy ritual: `git push` (Vercel deploys), then migrate prod. Only migrate
 prod when the deployed code expects the new schema.
@@ -133,8 +133,7 @@ and applying months of pending migrations under it is not a routine operation.
 |---|---|
 | Start local stack (migrates demo) | `npm run dev` |
 | Migrate demo only | `npm run migrate` |
-| Migrate prod (today) | `DATABASE_URL="<prod pooler URL>" python3 scripts/migrate_db.py` |
-| Migrate prod (target) | `npm run migrate:prod` |
+| Migrate prod | `npm run migrate:prod` (reads `PROD_DATABASE_URL`; typed confirmation) |
 | psql into demo | `psql "<demo pooler URL>"` |
 | psql into prod | `psql "<prod pooler URL>"` |
 | Seed demo with fake data | `npm run seed` |
