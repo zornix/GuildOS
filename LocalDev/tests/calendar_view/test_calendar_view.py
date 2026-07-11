@@ -11,6 +11,27 @@ def _items(body, kind):
     return [i for i in body["items"] if i["kind"] == kind]
 
 
+def _window_spanning(*day_offsets: float) -> dict:
+    """An inclusive date-string window that always contains now()+offset for
+    every given offset, whatever the wall clock says.
+
+    The calendar filters on the date part of each item (`start <= item_date <=
+    end`) and the invoice factory seeds `due_at` relative to now(); deriving the
+    window from that same reference keeps these tests from rotting against a
+    hardcoded calendar date. Padded a few days each side so boundary rounding
+    never drops an item.
+    """
+    import math
+
+    today = date.today()
+    lo = math.floor(min(day_offsets))
+    hi = math.ceil(max(day_offsets))
+    return {
+        "start": (today + timedelta(days=lo - 3)).isoformat(),
+        "end": (today + timedelta(days=hi + 3)).isoformat(),
+    }
+
+
 # ── events ───────────────────────────────────────────────────────────────────
 
 
@@ -125,7 +146,7 @@ def test_member_sees_only_own_invoice_dues(harness, user_factory, invoice_factor
     mine = invoice_factory(member_id=me["id"], due_in_days=20, amount_cents=5000)
     theirs = invoice_factory(member_id=other["id"], due_in_days=20)
 
-    body = harness.login(me).get("/api/calendar", params=RANGE).json()
+    body = harness.login(me).get("/api/calendar", params=_window_spanning(20)).json()
     dues = _items(body, "invoice_due")
     ids = {d["invoice_id"] for d in dues}
     assert mine in ids and theirs not in ids
@@ -145,7 +166,7 @@ def test_verifier_sees_other_members_invoice_dues(
     treasurer = user_factory()
     assign_role(treasurer["id"], "treasurer")  # holds treasury:payment:verify
 
-    body = harness.login(treasurer).get("/api/calendar", params=RANGE).json()
+    body = harness.login(treasurer).get("/api/calendar", params=_window_spanning(15)).json()
     dues = {d["invoice_id"]: d for d in _items(body, "invoice_due")}
     assert inv in dues
     assert dues[inv]["member_id"] == member["id"]
@@ -161,7 +182,7 @@ def test_treasury_read_grant_sees_other_members_invoice_dues(
     reader = user_factory()
     grant_treasury_read(reader["id"])
 
-    body = harness.login(reader).get("/api/calendar", params=RANGE).json()
+    body = harness.login(reader).get("/api/calendar", params=_window_spanning(15)).json()
     assert inv in {d["invoice_id"] for d in _items(body, "invoice_due")}
 
 
@@ -205,7 +226,7 @@ def test_overdue_invoice_in_range_appears_inline_and_flagged(
     me = user_factory()
     overdue = invoice_factory(member_id=me["id"], due_in_days=-3)
 
-    body = harness.login(me).get("/api/calendar", params=RANGE).json()
+    body = harness.login(me).get("/api/calendar", params=_window_spanning(-3)).json()
     inline = {d["invoice_id"]: d for d in _items(body, "invoice_due")}
     assert overdue in inline and inline[overdue]["overdue"] is True
     assert overdue in {d["invoice_id"] for d in body["overdue_invoices"]}
@@ -252,15 +273,26 @@ def test_task_without_due_date_not_on_calendar(harness, user_factory, task_facto
 def test_items_sorted_by_date(
     harness, user_factory, create_event, invoice_factory, task_factory
 ):
+    # Seed every kind relative to now() and derive the window from the same
+    # reference so this can never rot against a hardcoded calendar date.
     officer = user_factory(role="officer")
-    create_event(officer, date="2026-07-20")
-    create_event(officer, date="2026-06-15")
-    invoice_factory(member_id=officer["id"], due_in_days=25)
-    task_factory(due_on="2026-07-02")
+    today = date.today()
+    create_event(officer, date=(today + timedelta(days=30)).isoformat())
+    create_event(officer, date=(today + timedelta(days=5)).isoformat())
+    invoice_factory(member_id=officer["id"], due_in_days=20)
+    task_factory(due_on=(today + timedelta(days=12)).isoformat())
 
-    body = harness.login(officer).get("/api/calendar", params=RANGE).json()
-    dates = [i["date"] for i in body["items"]]
-    assert len(dates) >= 4
+    body = harness.login(officer).get(
+        "/api/calendar", params=_window_spanning(5, 12, 20, 30)
+    ).json()
+    items = body["items"]
+    dates = [i["date"] for i in items]
+    kinds = {i["kind"] for i in items}
+
+    # Multiple item kinds aggregate into one feed…
+    assert {"event", "invoice_due", "task_due"} <= kinds
+    assert len(dates) >= 4  # 2 events + 1 invoice + 1 task, all inside the window
+    # …and come back sorted by date.
     assert dates == sorted(dates)
 
 
