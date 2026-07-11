@@ -6,7 +6,7 @@ Operational software for fraternity chapters: events, attendance, treasury
 ## Language
 
 **Permission**:
-A backend-owned key (`domain:resource:action`, e.g. `attendance:excuse:review`)
+A backend-owned key (`domain:resource:action` — or 2-segment `resource:action` for many keys — e.g. `attendance:excuse:review` or `tasks:create`)
 naming one thing an actor is allowed to do; the only primitive any code — backend
 or frontend — may gate authority on.
 _Avoid_: capability, role check
