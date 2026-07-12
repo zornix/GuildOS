@@ -37,8 +37,8 @@ The git root is `/home/mshi/GuildOS`, one level **above** this directory.
   frontends that **drift** (consolidation is a known open task — don't assume
   they match).
 - `GreekV1/`, `greekos-landing/` — older copy / marketing site.
-- `local-dev/` — tooling; `LocalDev/package.json` scripts shell out to
-  `local-dev/scripts/local-dev.sh`.
+- `local-dev-scripts/` — tooling; `LocalDev/package.json` scripts shell out to
+  `local-dev-scripts/scripts/local-dev.sh`.
 
 ### LocalDev layout
 

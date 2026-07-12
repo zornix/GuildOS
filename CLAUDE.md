@@ -2,8 +2,8 @@
 
 Active development happens in `LocalDev/` — see `LocalDev/CLAUDE.md` for the
 project guide, commands, and conventions. Other top-level directories
-(`Prod/`, `GreekV1/`, `greekos-landing/`, `local-dev/`) are sibling copies and
-tooling for the same product.
+(`Prod/`, `GreekV1/`, `greekos-landing/`) are sibling copies for the same
+product; `local-dev-scripts/` holds the shared dev-runner tooling.
 
 ## Agent skills
 

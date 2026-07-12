@@ -19,7 +19,7 @@ frontend + **PostgreSQL** (raw SQL migrations). Deployed on Vercel
 ## Commands
 
 Run from this directory (`LocalDev/`). `npm run *` shells out to
-`../local-dev/scripts/local-dev.sh`.
+`../local-dev-scripts/scripts/local-dev.sh`.
 
 ```bash
 npm run dev          # Supabase demo DB + migrate + FastAPI + Next.js
