@@ -26,24 +26,26 @@ INCOMPLETE_REQUIRED_TASKS = "INCOMPLETE_REQUIRED_TASKS"
 def derive_standing(
     *,
     unpaid_count: int,
-    unpaid_total: float,
+    unpaid_total_cents: int,
     unexcused: int,
     incomplete_required_tasks: int = 0,
 ) -> tuple[str, list[str]]:
     """Return (status, reason_codes). Status thresholds match the legacy rules:
     delinquent: 2+ unpaid fines OR $50+ unpaid OR 3+ unexcused absences;
-    warning: 1+ unpaid fine OR 1+ unexcused absence."""
+    warning: 1+ unpaid fine OR 1+ unexcused absence.
+
+    `unpaid_total_cents` is integer cents; the $50 cutoff is 5000 cents."""
     reasons: list[str] = []
     if unpaid_count >= 1:
         reasons.append(UNPAID_FINES)
-    if unpaid_total >= 50:
+    if unpaid_total_cents >= 5000:
         reasons.append(HIGH_UNPAID_BALANCE)
     if unexcused >= 1:
         reasons.append(UNEXCUSED_ABSENCES)
     if incomplete_required_tasks >= 1:
         reasons.append(INCOMPLETE_REQUIRED_TASKS)
 
-    if unpaid_count >= 2 or unpaid_total >= 50 or unexcused >= 3:
+    if unpaid_count >= 2 or unpaid_total_cents >= 5000 or unexcused >= 3:
         return "delinquent", reasons
     if unpaid_count >= 1 or unexcused >= 1:
         return "warning", reasons

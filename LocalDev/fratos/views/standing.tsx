@@ -12,6 +12,7 @@ import { ListRow } from "../components/ui/list-row";
 import { LoadingState } from "../components/ui/loading-state";
 import { EmptyState } from "../components/ui/empty-state";
 import type { MemberStanding } from "../lib/types";
+import { formatMoney } from "../lib/formatters/money";
 
 function standingBadge(standing: string) {
   if (standing === "good_standing") return <Badge color="green">Good Standing</Badge>;
@@ -68,7 +69,7 @@ export function StandingPage() {
                 right={
                   <div style={{ display: "flex", alignItems: "center", gap: tokens.space[2] }}>
                     {m.unpaid_fines > 0 && (
-                      <span style={{ fontSize: tokens.font.sizeXs, color: tokens.color.danger }}>${m.unpaid_amount} owed</span>
+                      <span style={{ fontSize: tokens.font.sizeXs, color: tokens.color.danger }}>{formatMoney(m.unpaid_amount_cents)} owed</span>
                     )}
                     {standingBadge(m.standing)}
                   </div>

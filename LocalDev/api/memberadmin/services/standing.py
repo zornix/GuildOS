@@ -31,7 +31,7 @@ async def compute_member_standings(chapter_id: str) -> list[dict]:
     for row in engagements:
         status, reason_codes = derive_standing(
             unpaid_count=row.unpaid_fines,
-            unpaid_total=row.unpaid_amount,
+            unpaid_total_cents=row.unpaid_amount_cents,
             unexcused=row.missed,
             incomplete_required_tasks=task_counts.get(row.member_id, 0),
         )
@@ -45,7 +45,7 @@ async def compute_member_standings(chapter_id: str) -> list[dict]:
             "total_required": row.total_required,
             "unexcused_absences": row.missed,
             "unpaid_fines": row.unpaid_fines,
-            "unpaid_amount": row.unpaid_amount,
+            "unpaid_amount_cents": row.unpaid_amount_cents,
         })
 
     order = {"delinquent": 0, "warning": 1, "good_standing": 2}

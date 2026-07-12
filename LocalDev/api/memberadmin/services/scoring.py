@@ -18,7 +18,7 @@ async def compute_engagement_scores(chapter_id: str, *, use_admin: bool = False)
         total_required = row.total_required
         attendance_pct = row.attended / total_required if total_required else 1
         excuse_pct = row.excused / total_required if total_required else 0
-        fine_penalty = min(row.unpaid_amount / 200, 0.10)
+        fine_penalty = min(row.unpaid_amount_cents / 20000, 0.10)
         score = round((attendance_pct * 70) + (excuse_pct * 20) + ((1 - fine_penalty) * 10), 1)
         score = max(0, min(100, score))
 
@@ -32,7 +32,7 @@ async def compute_engagement_scores(chapter_id: str, *, use_admin: bool = False)
             "missed": row.missed,
             "total_required": total_required,
             "unpaid_fines": row.unpaid_fines,
-            "unpaid_amount": row.unpaid_amount,
+            "unpaid_amount_cents": row.unpaid_amount_cents,
         })
 
     results.sort(key=lambda item: item["score"])

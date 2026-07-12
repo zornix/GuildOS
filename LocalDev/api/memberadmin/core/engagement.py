@@ -18,7 +18,7 @@ class MemberEngagement:
     missed: int
     total_required: int
     unpaid_fines: int
-    unpaid_amount: float
+    unpaid_amount_cents: int
 
 
 async def load_member_engagement(
@@ -61,7 +61,7 @@ async def load_member_engagement(
                 missed=0,
                 total_required=0,
                 unpaid_fines=0,
-                unpaid_amount=0.0,
+                unpaid_amount_cents=0,
             )
             for m in members
         ]
@@ -86,9 +86,10 @@ async def load_member_engagement(
     ).data
 
     fines = (
-        sb.table("fines")
-        .select("member_id, amount")
+        sb.table("unpaid_invoices")
+        .select("member_id, amount_cents")
         .eq("chapter_id", chapter_id)
+        .eq("kind", "fine")
         .eq("status", "unpaid")
         .execute()
     ).data
@@ -124,7 +125,7 @@ async def load_member_engagement(
                 missed=missed,
                 total_required=total_required,
                 unpaid_fines=len(member_fines),
-                unpaid_amount=sum(f["amount"] for f in member_fines),
+                unpaid_amount_cents=sum(f["amount_cents"] for f in member_fines),
             )
         )
 

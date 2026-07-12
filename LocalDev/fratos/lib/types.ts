@@ -82,7 +82,7 @@ export interface MemberStanding {
   total_required: number;
   unexcused_absences: number;
   unpaid_fines: number;
-  unpaid_amount: number;
+  unpaid_amount_cents: number;
   reason_codes?: string[];
 }
 
