@@ -26,14 +26,4 @@ test.describe("Fines", () => {
   test("member can view their own fines on dashboard", async ({ memberPage: page }) => {
     await expect(page.locator("text=My Unpaid Fines")).toBeVisible();
   });
-
-  test("member can pay a fine", async ({ memberPage: page }) => {
-    await page.locator("button", { hasText: "Fines" }).click();
-    const payBtn = page.locator("button", { hasText: "Pay" }).first();
-
-    if (await payBtn.isVisible()) {
-      await payBtn.click();
-      await expect(page.locator("text=Paid")).toBeVisible();
-    }
-  });
 });

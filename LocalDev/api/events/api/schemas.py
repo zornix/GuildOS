@@ -99,32 +99,6 @@ class Completeness(BaseModel):
     items: list[CompletenessItem]
 
 
-class EventResponse(BaseModel):
-    id: str
-    title: str
-    date: str
-    time: str
-    end_date: Optional[str] = None
-    end_time: Optional[str] = None
-    invite_link: Optional[str] = None
-    location: str
-    required: bool
-    finable: bool = False
-    fine_amount: float
-    checkin_active: bool = False
-    attendance_count: Optional[int] = None
-    organizer_count: int = 0
-    organizers_needed: int = 0
-    group_id: Optional[str] = None
-    supervisor_member_id: Optional[str] = None  # deprecated (see CONFORM_TODO.md)
-    supervisors: list[SupervisorOut] = []
-    # Phase 2 (notify gate) — additive, optional.
-    job_count: Optional[int] = None
-    open_job_count: Optional[int] = None
-    completeness: Optional[Completeness] = None
-    last_notified_at: Optional[str] = None
-
-
 class SupervisorSet(BaseModel):
     member_id: str
 

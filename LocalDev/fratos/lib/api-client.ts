@@ -4,7 +4,6 @@ import type {
   Excuse,
   CheckinLink,
   ActiveCheckinLinkRow,
-  FineSummary,
   InviteResult,
   RosterEntry,
   MemberStanding,
@@ -279,9 +278,6 @@ export class ApiClient {
   }
   waiveFine(id: string) {
     return this.request<Record<string, unknown>>(`/api/fines/${id}/waive`, { method: "POST" });
-  }
-  getFineSummary() {
-    return this.requestRead<FineSummary>("/api/fines/summary");
   }
   processEventFines(eventId: string) {
     return this.request<{ event_id: string; fines_issued: number }>(

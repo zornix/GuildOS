@@ -68,13 +68,6 @@ export interface ActiveCheckinLinkRow {
   expires_at: string;
 }
 
-export interface FineSummary {
-  total_unpaid: number;
-  total_paid: number;
-  total_waived: number;
-  count_unpaid: number;
-}
-
 export interface InviteResult {
   invited: string[];
   failed: { email: string; error: string }[];

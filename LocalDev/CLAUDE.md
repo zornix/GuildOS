@@ -87,10 +87,9 @@ domain's top `router.py` and applies CORS. A few domains (`attendance`,
 alongside the aggregated router. A domain router is itself append-only —
 sub-routers `include_router` into it and existing includes are never removed.
 
-**Legacy flat modules** (`api/routes/`, `api/services/`, `api/models/schemas.py`)
-still hold pre-refactor code. Some domains are "conform shells" that delegate to
-them and carry a `CONFORM_TODO.md`. Put new code in the domain package, not the
-flat modules.
+**Conform shells.** `api/attendance/` still carries a `CONFORM_TODO.md` for
+legacy handlers not yet relocated into its domain package; put new code in the
+domain package.
 
 ### Database access abstraction
 
