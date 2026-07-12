@@ -10,7 +10,7 @@ test.describe("Events", () => {
   test("officer can toggle between upcoming and past events", async ({ officerPage: page }) => {
     await page.locator("button", { hasText: "Events" }).click();
     await page.locator("button", { hasText: "past" }).click();
-    await expect(page.locator("text=Brotherhood Dinner")).toBeVisible();
+    await expect(page.locator("text=Philanthropy Event")).toBeVisible();
     await page.locator("button", { hasText: "upcoming" }).click();
     await expect(page.locator("text=Chapter Meeting")).toBeVisible();
   });
@@ -28,7 +28,8 @@ test.describe("Events", () => {
     await expect(page.locator("h3", { hasText: "Create Event" })).toBeVisible();
 
     await page.locator("input").nth(0).fill("Test Event");
-    await page.locator("input[type='date']").fill("2026-05-01");
+    // Must be in the future so it lands in the default "upcoming" tab.
+    await page.locator("input[type='date']").fill("2099-05-01");
     await page.locator("input[type='time']").fill("19:00");
     await page.locator("input").nth(3).fill("Test Location");
     await page.locator("button", { hasText: "Create" }).click();
@@ -39,9 +40,9 @@ test.describe("Events", () => {
   test("officer sees attendance roster on event detail", async ({ officerPage: page }) => {
     await page.locator("button", { hasText: "Events" }).click();
     await page.locator("button", { hasText: "past" }).click();
-    await page.locator("text=Brotherhood Dinner").click();
+    await page.locator("text=Philanthropy Event").click();
     await expect(page.locator("text=Attendance")).toBeVisible();
-    await expect(page.locator("text=Present")).toBeVisible();
+    await expect(page.locator("text=Present").first()).toBeVisible();
   });
 
   test("member can view events", async ({ memberPage: page }) => {

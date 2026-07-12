@@ -1,9 +1,14 @@
-import { test, expect } from "./fixtures/auth";
+import { test, expect, loginAsMemberEmail } from "./fixtures/auth";
 
+// Members log excuses against a future event; the only future events the seed
+// creates are "Chapter Meeting - April" and "Formal". Excuse submission is
+// unique per (member, event), so each mutating test below uses a DISTINCT
+// seeded member against the same event to stay collision-free under parallel
+// execution.
 test.describe("Excuse Submission", () => {
   test("member can submit an excuse for a future event", async ({ memberPage: page }) => {
     await page.locator("button", { hasText: "Events" }).click();
-    await page.locator("text=Chapter Meeting").click();
+    await page.locator("text=Chapter Meeting - April").click();
     await page.locator("button", { hasText: "Submit Excuse" }).click();
 
     await expect(page.locator("h3", { hasText: "Submit Excuse" })).toBeVisible();
@@ -13,9 +18,10 @@ test.describe("Excuse Submission", () => {
     await expect(page.locator("text=Excuse submitted")).toBeVisible();
   });
 
-  test("submit button disabled while loading", async ({ memberPage: page }) => {
+  test("submit button disabled while loading", async ({ page }) => {
+    await loginAsMemberEmail(page, "tyler@tke.org");
     await page.locator("button", { hasText: "Events" }).click();
-    await page.locator("text=Chapter Meeting").click();
+    await page.locator("text=Chapter Meeting - April").click();
     await page.locator("button", { hasText: "Submit Excuse" }).click();
 
     await page.locator("textarea").fill("Test reason");
@@ -28,7 +34,7 @@ test.describe("Excuse Submission", () => {
 
   test("empty reason does not submit", async ({ memberPage: page }) => {
     await page.locator("button", { hasText: "Events" }).click();
-    await page.locator("text=Chapter Meeting").click();
+    await page.locator("text=Chapter Meeting - April").click();
     await page.locator("button", { hasText: "Submit Excuse" }).click();
 
     const submitBtn = page.locator("button", { hasText: "Submit" }).last();
@@ -37,9 +43,10 @@ test.describe("Excuse Submission", () => {
     await expect(page.locator("h3", { hasText: "Submit Excuse" })).toBeVisible();
   });
 
-  test("duplicate excuse shows error", async ({ memberPage: page }) => {
+  test("duplicate excuse shows error", async ({ page }) => {
+    await loginAsMemberEmail(page, "marcus@tke.org");
     await page.locator("button", { hasText: "Events" }).click();
-    await page.locator("text=Chapter Meeting").click();
+    await page.locator("text=Chapter Meeting - April").click();
 
     // First submission
     await page.locator("button", { hasText: "Submit Excuse" }).click();
@@ -56,8 +63,8 @@ test.describe("Excuse Submission", () => {
   });
 
   test("officer can review excuses from dashboard", async ({ officerPage: page }) => {
-    await expect(page.locator("text=Pending Excuses")).toBeVisible();
-    const excuseCard = page.locator("text=Had a midterm exam conflict").locator("..");
+    await expect(page.locator("text=Pending Excuses").first()).toBeVisible();
+    const excuseCard = page.locator("text=Car broke down").locator("..");
     await expect(excuseCard).toBeVisible();
 
     await page.locator("button", { hasText: "Approve" }).first().click();

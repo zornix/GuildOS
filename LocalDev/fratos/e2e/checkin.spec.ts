@@ -2,8 +2,9 @@ import { test, expect } from "./fixtures/auth";
 
 test.describe("Check-In", () => {
   test("officer can generate a check-in link", async ({ officerPage: page }) => {
+    // "Formal" is upcoming with no seeded active link, so "Open Check-In" shows.
     await page.locator("button", { hasText: "Events" }).click();
-    await page.locator("text=Chapter Meeting").click();
+    await page.locator("text=Formal").click();
     await page.locator("button", { hasText: "Open Check-In" }).click();
 
     await expect(page.locator("text=Check-In Link Active")).toBeVisible();
@@ -11,9 +12,10 @@ test.describe("Check-In", () => {
   });
 
   test("officer can close a check-in link", async ({ officerPage: page }) => {
+    // "Chapter Meeting - April" already has a seeded active link, so it opens
+    // directly on "Close Check-In".
     await page.locator("button", { hasText: "Events" }).click();
-    await page.locator("text=Chapter Meeting").click();
-    await page.locator("button", { hasText: "Open Check-In" }).click();
+    await page.locator("text=Chapter Meeting - April").click();
     await expect(page.locator("text=Check-In Link Active")).toBeVisible();
 
     await page.locator("button", { hasText: "Close Check-In" }).click();
@@ -22,13 +24,13 @@ test.describe("Check-In", () => {
 
   test("member sees check-in button on upcoming event", async ({ memberPage: page }) => {
     await page.locator("button", { hasText: "Events" }).click();
-    await page.locator("text=Chapter Meeting").click();
+    await page.locator("text=Chapter Meeting - April").click();
     await expect(page.locator("button", { hasText: "Check In" })).toBeVisible();
   });
 
   test("member can open check-in form and enter code", async ({ memberPage: page }) => {
     await page.locator("button", { hasText: "Events" }).click();
-    await page.locator("text=Chapter Meeting").click();
+    await page.locator("text=Chapter Meeting - April").click();
     await page.locator("button", { hasText: "Check In" }).click();
 
     await expect(page.locator("h3", { hasText: "Check In" })).toBeVisible();
@@ -36,6 +38,6 @@ test.describe("Check-In", () => {
 
     await page.locator("input[placeholder='e.g. A7X9KP']").fill("INVALID");
     await page.locator("button", { hasText: "Check In" }).last().click();
-    await expect(page.locator("text=Link expired or invalid")).toBeVisible();
+    await expect(page.locator("text=expired or invalid")).toBeVisible();
   });
 });

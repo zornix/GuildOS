@@ -9,6 +9,7 @@ import os
 import uuid
 from datetime import datetime, timezone, timedelta, date, time
 
+import bcrypt
 import psycopg2
 import jwt
 
@@ -26,6 +27,11 @@ MEMBER_IDS = [f"00000000-0000-0000-0000-0000000001{i:02d}" for i in range(1, 8)]
 MEMBER_AUTH_IDS = [f"aaaaaaaa-0000-0000-0000-0000000001{i:02d}" for i in range(1, 8)]
 
 EVENT_IDS = [f"00000000-0000-0000-0000-000000000e{i:02d}" for i in range(1, 6)]
+
+# Known demo password for seeded officers. Mirrored in the e2e login fixture at
+# fratos/e2e/fixtures/auth.ts — keep the two in sync. Satisfies the min-8
+# validator in api/auth/api/schemas.py.
+OFFICER_DEMO_PASSWORD = "demo-officer-pw"
 
 TREASURY_OFFICER_CAPABILITIES = [
     "treasury:read",
@@ -200,10 +206,15 @@ def seed():
     all_auth_ids = [OFFICER_AUTH_ID] + MEMBER_AUTH_IDS
 
     for i, m in enumerate(MEMBERS_DATA):
+        password_hash = None
+        if m["role"] == "officer":
+            password_hash = bcrypt.hashpw(
+                OFFICER_DEMO_PASSWORD.encode("utf-8"), bcrypt.gensalt()
+            ).decode("utf-8")
         cur.execute(
-            'INSERT INTO members (id, auth_id, chapter_id, name, email, phone, role, status) '
-            'VALUES (%s, %s, %s, %s, %s, %s, %s, %s)',
-            (all_member_ids[i], all_auth_ids[i], CHAPTER_ID, m["name"], m["email"], m["phone"], m["role"], "active"),
+            'INSERT INTO members (id, auth_id, chapter_id, name, email, phone, role, status, password_hash) '
+            'VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)',
+            (all_member_ids[i], all_auth_ids[i], CHAPTER_ID, m["name"], m["email"], m["phone"], m["role"], "active", password_hash),
         )
 
     for capability in TREASURY_OFFICER_CAPABILITIES:
