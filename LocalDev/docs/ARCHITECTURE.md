@@ -23,7 +23,7 @@ RBAC, calendar.
 |-------|------------|------------|-------|
 | Frontend | Next.js 16 App Router, React 19, TS | 3000 | `fratos/` — currently a single-route SPA (see §6) |
 | Backend | FastAPI (Python 3) | 8001 | `api/` — Swagger at `/api/docs` |
-| Database | PostgreSQL, raw SQL migrations | 5434 (docker) / Supabase pooler | plpgsql RPCs for all multi-row mutations |
+| Database | PostgreSQL, raw SQL migrations | Supabase pooler (demo & prod) | plpgsql RPCs for all multi-row mutations |
 
 Deployment: Vercel — `api/index.py` as a Python serverless function, `fratos/`
 as the Next app (see `vercel.json`).
@@ -51,7 +51,7 @@ LocalDev/
   scripts/              # migrate_db.py, seed scripts
   docs/                 # this file, specs, imp-*.md plan docs (see §8)
   pytest.ini            # asyncio_mode=auto
-  package.json          # npm run dev / dev:docker / dev:seed / migrate / seed
+  package.json          # npm run dev / migrate / seed
   .env                  # DATABASE_URL etc. (not committed)
 ```
 
@@ -206,8 +206,8 @@ Run from `LocalDev/`: `python3 -m pytest` (invocation variants in CLAUDE.md).
 `pytest.ini` sets `asyncio_mode=auto` — no per-test `@pytest.mark.asyncio`.
 
 Tests hit a **real Postgres** via `TEST_DATABASE_URL` / `SUPABASE_DB_URL` (read
-from env or `LocalDev/.env`) — a running DB is required (`npm run dev:docker`
-provides one on 5434).
+from env or `LocalDev/.env`) — a running DB is required (a Supabase demo/test
+pooler; CI provisions an ephemeral Postgres service container on 5434).
 
 Test dirs: `tests/{treasury, events, tasks, calendar_view, announcements,
 memberadmin, rbac, services_scaffold}`. There is **no root conftest** —

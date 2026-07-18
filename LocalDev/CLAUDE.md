@@ -23,15 +23,14 @@ Run from this directory (`LocalDev/`). `npm run *` shells out to
 
 ```bash
 npm run dev          # Supabase demo DB + migrate + FastAPI + Next.js
-npm run dev:docker   # offline: Docker postgres + migrate + FastAPI + Next.js
-npm run dev:seed     # dev:docker with fake seed data (SEED_LOCAL_DB=1)
 npm run migrate      # apply pending migrations/*.sql against demo db
 npm run seed         # seed demo db only (usually unnecessary — demo has data)
 ```
 
 Local ports: **frontend 3000**, **backend 8001** (`/api/docs` for Swagger).
-Database: **Supabase demo pooler** by default (`DATABASE_URL` in `.env`).
-Offline fallback: **`npm run dev:docker`** (postgres **5434**, `fraternityos`/`localdev`).
+Database: **Supabase demo pooler** (`DATABASE_URL` in `.env`). Both demo and
+prod are Supabase projects reached over the pooler — there is no local Docker
+DB (see `docs/adr/0002-supabase-is-hosted-postgres-only.md`).
 
 ### Backend tests (pytest, run from `LocalDev/`)
 

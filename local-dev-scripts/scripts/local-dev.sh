@@ -10,8 +10,6 @@ YELLOW='\033[0;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-LOCAL_DB_URL="postgresql://fraternityos:localdev@localhost:5434/fraternityos"
-
 echo "═══════════════════════════════════════"
 echo " FraternityOS — Local Development"
 echo "═══════════════════════════════════════"
@@ -193,62 +191,24 @@ ensure_env_key .env "MESSAGE_DELIVERY_MODE" "dry_run"
 ensure_env_key .env "ESCALATION_DELAY_MINUTES" "120"
 ensure_env_key .env "MESSAGE_WEBHOOK_SECRET" "local-webhook-secret-change-in-prod"
 
-# ── 2. Select DB mode (Supabase demo default; Docker is opt-in) ──
+# ── 2. Resolve Supabase demo DB ─────────────────────
 DATABASE_URL_VAL="$(read_env_key DATABASE_URL)"
 TEST_DATABASE_URL_VAL="$(read_env_key TEST_DATABASE_URL)"
 SUPABASE_DB_URL_VAL="$(read_env_key SUPABASE_DB_URL)"
 
-if [ "${USE_DOCKER_DB:-0}" = "1" ]; then
-  DB_MODE="docker"
-else
-  DB_MODE="supabase"
+MIGRATE_DB_URL="${TEST_DATABASE_URL_VAL:-${SUPABASE_DB_URL_VAL:-$DATABASE_URL_VAL}}"
+if [ -z "$MIGRATE_DB_URL" ] || [[ "$MIGRATE_DB_URL" == *"<"* ]]; then
+  echo -e "${RED}Supabase demo DATABASE_URL is missing or still a placeholder in .env.${NC}"
+  echo "  Copy .env.example → .env and set the pooler URL (Session mode)."
+  exit 1
 fi
-
-if [ "$DB_MODE" = "supabase" ]; then
-  MIGRATE_DB_URL="${TEST_DATABASE_URL_VAL:-${SUPABASE_DB_URL_VAL:-$DATABASE_URL_VAL}}"
-  if [ -z "$MIGRATE_DB_URL" ] || [[ "$MIGRATE_DB_URL" == *"<"* ]]; then
-    echo -e "${RED}Supabase demo DATABASE_URL is missing or still a placeholder in .env.${NC}"
-    echo "  Copy .env.example → .env and set the pooler URL (Session mode)."
-    echo "  Or run offline: USE_DOCKER_DB=1 npm run dev:docker"
-    exit 1
-  fi
-  echo "▸ Using Supabase demo database (direct Postgres via pooler)"
-  DB_SUMMARY="Supabase demo pooler"
-else
-  echo "▸ Using local Docker PostgreSQL (offline fallback)"
-  ensure_env_key .env "DATABASE_URL" "$LOCAL_DB_URL"
-  DATABASE_URL_VAL="$LOCAL_DB_URL"
-  if ! command -v docker &>/dev/null; then
-    echo -e "${RED}Docker not found. Install Docker, or configure Supabase demo DATABASE_URL in .env.${NC}"
-    exit 1
-  fi
-  docker compose up -d
-  echo "  Waiting for PostgreSQL to be ready ..."
-  for i in $(seq 1 30); do
-    if docker compose exec -T postgres pg_isready -U fraternityos &>/dev/null; then
-      echo -e "  ${GREEN}PostgreSQL ready${NC}"
-      break
-    fi
-    if [ "$i" -eq 30 ]; then
-      echo -e "  ${RED}PostgreSQL did not start in time${NC}"
-      exit 1
-    fi
-    sleep 1
-  done
-  MIGRATE_DB_URL="$LOCAL_DB_URL"
-  DB_SUMMARY="localhost:5434 (fraternityos/localdev)"
-fi
+echo "▸ Using Supabase demo database (direct Postgres via pooler)"
+DB_SUMMARY="Supabase demo pooler"
 
 # ── 3. Migrations ───────────────────────────────────
 echo "▸ Running database migrations ..."
 DATABASE_URL="$MIGRATE_DB_URL" python3 scripts/migrate_db.py
 echo -e "  ${GREEN}Migrations OK${NC}"
-
-if [ "${SEED_LOCAL_DB:-0}" = "1" ]; then
-  echo "▸ Seeding test data ..."
-  DATABASE_URL="$MIGRATE_DB_URL" python3 -m scripts.seed
-  echo -e "  ${GREEN}Seed data OK${NC}"
-fi
 
 # ── 4. Python dependencies ──────────────────────────
 echo "▸ Checking Python dependencies ..."
@@ -304,8 +264,7 @@ echo "  Frontend:  http://localhost:3000"
 echo "  Backend:   http://localhost:8001"
 echo "  API docs:  http://localhost:8001/api/docs"
 echo "  Database:  $DB_SUMMARY"
-  echo "  Seed data: npm run dev:seed  (Docker DB only)"
-  echo "  Offline:   npm run dev:docker"
+echo "  Seed data: npm run seed"
 echo ""
 echo "  Press Ctrl+C to stop all services"
 echo "═══════════════════════════════════════"

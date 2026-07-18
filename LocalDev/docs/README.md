@@ -43,11 +43,11 @@ You can spin up the entire stack locally using the scripts in `package.json`:
 # Verify the sandbox (CI-equivalent check)
 npm run verify
 
-# Interactive dev mode (Starts Postgres, FastAPI, and Next.js)
+# Interactive dev mode (Supabase demo DB, FastAPI, and Next.js)
 npm run dev
 
-# Interactive dev mode with Seed Data
-npm run dev:seed
+# Seed the Supabase demo DB (usually unnecessary — demo already has data)
+npm run seed
 ```
 
 ## 🤖 Guide for Future Agents
