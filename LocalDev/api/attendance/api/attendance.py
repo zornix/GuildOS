@@ -2,12 +2,24 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from api.dependencies import get_current_user, require_officer
+from api.dependencies import get_current_user
+from api.attendance.auth import ATTENDANCE_OVERRIDE, require_permission
+from api.attendance.db.rpc import call_rpc
 from .schemas import PhoneCheckIn, ManualAttendance
 from api.attendance.services.checkin_links import validate_checkin_link
 from api.db import get_supabase
 
 router = APIRouter()
+
+
+def _rpc_http_error(exc: Exception) -> HTTPException:
+    """Map at_* RPC exceptions onto HTTP statuses (mirrors the ev_* handlers)."""
+    msg = str(exc)
+    if "not found" in msg:
+        return HTTPException(404, msg)
+    if "not an active member" in msg or "not authorized" in msg:
+        return HTTPException(403, msg)
+    return HTTPException(400, msg)
 
 
 @router.post("/checkin/{short_code}")
@@ -163,67 +175,26 @@ async def get_attendance(event_id: str, user=Depends(get_current_user)):
 
 
 @router.post("/event/{event_id}/manual/{member_id}")
-async def manual_checkin(event_id: str, member_id: str, body: ManualAttendance, officer=Depends(require_officer)):
+async def manual_checkin(
+    event_id: str,
+    member_id: str,
+    body: ManualAttendance,
+    officer=Depends(require_permission(ATTENDANCE_OVERRIDE)),
+):
     """Officer manually marks a member as present, excused, or absent."""
-    sb = get_supabase()
-    now = datetime.now(timezone.utc).isoformat()
+    try:
+        result = call_rpc("at_set_attendance", {
+            "p_chapter_id": officer["chapter_id"],
+            "p_event_id": event_id,
+            "p_member_id": member_id,
+            "p_status": body.status,
+            "p_reason": body.reason,
+            "p_actor_id": officer["id"],
+            "p_idempotency_key": None,
+        })
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise _rpc_http_error(exc) from exc
 
-    if body.status == "excused":
-        if not body.reason or not body.reason.strip():
-            raise HTTPException(400, "Excuse reason is required when marking as excused")
-
-        # Mark as not checked in
-        sb.table("attendance").upsert({
-            "event_id": event_id,
-            "member_id": member_id,
-            "checked_in": False,
-            "checked_in_at": None,
-            "method": "manual",
-        }, on_conflict="event_id,member_id").execute()
-
-        # Remove any existing excuse for this event+member, then insert new one
-        sb.table("excuses") \
-            .delete() \
-            .eq("event_id", event_id) \
-            .eq("member_id", member_id) \
-            .execute()
-        sb.table("excuses").insert({
-            "event_id": event_id,
-            "member_id": member_id,
-            "reason": body.reason.strip(),
-            "status": "approved",
-            "reviewed_by": officer["id"],
-            "reviewed_at": now,
-            "submitted_at": now,
-        }).execute()
-
-        return {"status": "excused", "method": "manual"}
-
-    elif body.status == "absent":
-        # Mark as not checked in, remove any excuse
-        sb.table("attendance").upsert({
-            "event_id": event_id,
-            "member_id": member_id,
-            "checked_in": False,
-            "checked_in_at": None,
-            "method": "manual",
-        }, on_conflict="event_id,member_id").execute()
-
-        sb.table("excuses") \
-            .delete() \
-            .eq("event_id", event_id) \
-            .eq("member_id", member_id) \
-            .execute()
-
-        return {"status": "absent", "method": "manual"}
-
-    else:
-        # present
-        sb.table("attendance").upsert({
-            "event_id": event_id,
-            "member_id": member_id,
-            "checked_in": True,
-            "checked_in_at": now,
-            "method": "manual",
-        }, on_conflict="event_id,member_id").execute()
-        return {"status": "checked_in", "method": "manual"}
+    return result.data

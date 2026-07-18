@@ -2,11 +2,23 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from api.dependencies import get_current_user, require_officer
+from api.dependencies import get_current_user
+from api.attendance.auth import EXCUSE_REVIEW, require_permission
+from api.attendance.db.rpc import call_rpc
 from .schemas import ExcuseCreate, ExcuseReview
 from api.db import get_supabase
 
 router = APIRouter()
+
+
+def _rpc_http_error(exc: Exception) -> HTTPException:
+    """Map at_* RPC exceptions onto HTTP statuses (mirrors the ev_* handlers)."""
+    msg = str(exc)
+    if "not found" in msg:
+        return HTTPException(404, msg)
+    if "not an active member" in msg or "not authorized" in msg:
+        return HTTPException(403, msg)
+    return HTTPException(400, msg)
 
 
 @router.post("/event/{event_id}")
@@ -90,36 +102,23 @@ async def list_excuses(status: str = None, user=Depends(get_current_user)):
 
 
 @router.put("/{excuse_id}/review")
-async def review_excuse(excuse_id: str, body: ExcuseReview, officer=Depends(require_officer)):
-    """Approve or deny an excuse. If approved, remove any associated fine."""
-    if body.status not in ("approved", "denied"):
-        raise HTTPException(400, "Status must be 'approved' or 'denied'")
-
-    sb = get_supabase()
-
-    excuse = (
-        sb.table("excuses")
-        .update({
-            "status": body.status,
-            "reviewed_by": officer["id"],
-            "reviewed_at": datetime.now(timezone.utc).isoformat(),
+async def review_excuse(
+    excuse_id: str,
+    body: ExcuseReview,
+    officer=Depends(require_permission(EXCUSE_REVIEW)),
+):
+    """Approve or deny an excuse. Approving voids any matching unpaid fine invoice."""
+    try:
+        result = call_rpc("at_review_excuse", {
+            "p_chapter_id": officer["chapter_id"],
+            "p_excuse_id": excuse_id,
+            "p_status": body.status,
+            "p_actor_id": officer["id"],
+            "p_idempotency_key": None,
         })
-        .eq("id", excuse_id)
-        .select("*")
-        .execute()
-    )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise _rpc_http_error(exc) from exc
 
-    if not excuse.data:
-        raise HTTPException(404, "Excuse not found")
-
-    exc = excuse.data[0]
-
-    if body.status == "approved":
-        sb.table("fines") \
-            .delete() \
-            .eq("event_id", exc["event_id"]) \
-            .eq("member_id", exc["member_id"]) \
-            .eq("status", "unpaid") \
-            .execute()
-
-    return exc
+    return result.data
