@@ -12,9 +12,33 @@ import asyncio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.config import settings
+from api.config import settings, Settings
 from api.db import get_supabase
 from api.health_checks import build_health_payload
+
+
+def production_config_violations(s: Settings) -> list[str]:
+    """List every prod-misconfiguration in `s`. Empty in dev/preview or when clean."""
+    if not s.is_production:
+        return []
+    violations: list[str] = []
+    if s.JWT_SECRET == "local-dev-secret":
+        violations.append("JWT_SECRET is still the insecure local default")
+    if not s.DATABASE_URL:
+        violations.append("DATABASE_URL is unset (prod runs on the direct-Postgres path, ADR-0002)")
+    if s.DEV_AUTH_BYPASS:
+        violations.append("DEV_AUTH_BYPASS is enabled")
+    return violations
+
+
+# Fail the Vercel deploy loudly rather than boot a misconfigured production
+# function (imp-tenant-guards.md D5). Preview deployments are deliberately not
+# guarded. Import-time so a bad config never serves a request.
+_violations = production_config_violations(settings)
+if _violations:
+    raise RuntimeError(
+        "Refusing to boot in production — fix: " + "; ".join(_violations)
+    )
 
 from api.auth.api.router import router as auth_router
 from api.members.api.router import router as members_router

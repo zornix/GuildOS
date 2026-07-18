@@ -15,10 +15,17 @@ class Settings(BaseSettings):
     # Shared secret for the Vercel Cron caller (api/routes/cron.py). Empty disables
     # the cron endpoint (returns 401) so an unconfigured deploy can't be triggered.
     CRON_SECRET: str = ""
+    # Set by Vercel at build/runtime ("production" | "preview" | "development").
+    # Empty locally. Drives the production boot guard in api/index.py.
+    VERCEL_ENV: str = ""
 
     @property
     def use_local_db(self) -> bool:
         return bool(self.DATABASE_URL)
+
+    @property
+    def is_production(self) -> bool:
+        return self.VERCEL_ENV == "production"
 
     class Config:
         env_file = ".env"
