@@ -8,7 +8,10 @@ Six deepening candidates (ranked Strong / Worth exploring), a dead-weight list o
 
 ## 1. One gate for authority — finish the permission-key seam
 
-**Strong · in-process**
+**Strong · in-process · plan: `imp-one-gate.md` (2026-07-11)** — the open
+treasury question below is resolved: fold into permission keys via stackable
+roles (ADR-0003); also decided: everyone uses a password (officer-only
+password rule deleted).
 
 **Sites:**
 - `api/dependencies.py:48` (`require_officer` → 14 call sites) · `api/auth/api/auth.py:47,62,96` · `api/attendance/api/excuses.py:72` · `api/treasury/api/fines_legacy.py:82` · `api/announcements/services/sms.py:116`
@@ -90,7 +93,9 @@ flowchart LR
 
 ## 3. Delete the plumbing shells — one platform module for db access
 
-**Strong · in-process**
+**Strong · in-process · plan: `imp-platform-module.md` (2026-07-11)** — now
+also executes ADR-0002's deletions (supabase-py branch, `use_local_db`,
+honest renames), which that ADR explicitly deferred to this consolidation.
 
 **Sites:** `api/*/db/session.py` ×8 + 4 inlined `get_*_db()` · `api/*/db/rpc.py` ×6 (byte-identical `call_rpc`) · `api/*/auth.py` re-export shells ×9 · `api/standing/` (8-line facade → memberadmin) · `_row` idiom ×5 · `_delivery_mode()` ×3 · 12 include-only `router.py` wrappers
 
@@ -113,7 +118,13 @@ flowchart LR
 
 ## 4. Make the local-Postgres adapter honest
 
-**Worth exploring · ports & adapters**
+**Worth exploring · ports & adapters · plan: `imp-db-introspection.md`
+(2026-07-11)** — premise updated by ADR-0002 (decided a day after this
+review): there is no PostgREST adapter anymore; this psycopg client serves
+production. The two-adapter divergence framing below is obsolete, but the
+hand registries and the silent join drop are now *production* footguns, so
+the solution (introspect `pg_catalog`, fail loudly) stands, decided
+2026-07-11.
 
 **Sites:** `api/postgres_client.py:25-32` (`FK_MAP` — 6 tables) · `:36-52` (`JOIN_STAR_COLUMNS` — 3 tables) · `:191-201` (silent join drop / runtime ValueError) · `:469-488` (`_ARRAY_TYPED_RPC_PARAMS` — 1 entry, 40-line apology comment)
 
@@ -155,7 +166,7 @@ sequenceDiagram
 
 ## 5. Give mutations a seam
 
-**Worth exploring · local-substitutable**
+**Worth exploring · local-substitutable · plan: `imp-mutation-seam.md` (2026-07-11)**
 
 **Sites:** `hooks/use-api.ts` (reads only, deep) · try/catch + `setActionError` copies ×6: `views/{tasks,announcements,recruitment,bylaws,command,admin-roles}.tsx` · direct singleton calls: `excuse-form.tsx:26` · `check-in-form` · `create-event-form` · `pending-excuses-widget.tsx:41` · `lib/api-client.ts:431` (singleton export)
 
@@ -175,7 +186,7 @@ sequenceDiagram
 
 ## 6. Collapse the events relay
 
-**Worth exploring · in-process**
+**Worth exploring · in-process · plan: `imp-events-module.md` (2026-07-11)**
 
 **Sites:** `views/events.tsx` (237 L: 4 useEffects, 5 mutation handlers, 9 state cells) · `components/modules/events/event-detail.tsx` (27-prop interface, pure forwarding) · `attendance-roster.tsx` · `attendance-row.tsx` · `manual-attendance-modal.tsx`
 
@@ -204,6 +215,11 @@ views/events.tsx — all state, all handlers, polling
 ---
 
 ## Dead weight (cheap deletions — no design needed)
+
+*Plan: `imp-hygiene.md` (2026-07-11); the standing follow-up from candidate 2
+has its own plan, `imp-standing-fines.md`. Execution order decided
+2026-07-11: hygiene → standing fix → platform module (3) → one gate (1) →
+introspecting client (4) → mutation seam (5) → events module (6).*
 
 Not deepening candidates; each failed the deletion test in the trivial direction. They cost navigation time — an explorer hunted for several of these before finding they don't exist or aren't used.
 
