@@ -128,7 +128,11 @@ tracked in a `schema_migrations` table (idempotent — only pending files run).
   Model reversals by appending a row with `reverses_entry_id`, never by mutating
   history. The `EntryType` / `AuditAction` enums are frozen — reuse existing
   values rather than widening them.
-- **Every tenant table carries `chapter_id` and has RLS enabled.**
+- **Every tenant table carries `chapter_id` and has RLS enabled.** On the
+  direct-Postgres path (ADR-0002) the runtime tenant guard is the RPC layer —
+  the RPC body validates every referenced row against the caller's
+  `chapter_id`; RLS is defense-in-depth for any non-privileged access, not the
+  runtime enforcement layer.
 - **Permission checks** go through `api/rbac` only
   (`require_permission(...)` / `permissions.has_permission(...)`). No inline
   `user["role"] == "officer"` string comparisons in new code.

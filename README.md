@@ -10,10 +10,19 @@ lives in [`CONTEXT.md`](CONTEXT.md); architectural decisions in
 
 ## 📊 Product dashboard
 
-_Updated 2026-07-16. Plan docs live in [`LocalDev/docs/`](LocalDev/docs/) (`imp-*.md`)._
+_Updated 2026-07-18. Plan docs live in [`LocalDev/docs/`](LocalDev/docs/) (`imp-*.md`)._
 
 ### ✅ Latest additions (shipped)
 
+- **Chapter data is now sealed off (security fix).** An officer of one chapter
+  could edit another chapter's attendance and excuse records by supplying
+  foreign IDs. Every such edit now runs through a database procedure that
+  verifies the chapter in one atomic step, and the attendance tables carry the
+  chapter on every row. Bonus fix found along the way: approving an excuse now
+  actually cancels the fine it caused — that had been silently broken since
+  fines moved to the invoice system. Production also refuses to start with
+  unsafe settings (dev secret, missing database, or auth bypass left on), and
+  backend dependency versions are pinned. (Plan: `imp-tenant-guards.md`.)
 - **Events V1 — full feature set, server-side.** The complete events workflow is
   built and tested on the backend:
   - Scheduling with start/end times, co-supervisors, and an invite link.
@@ -36,6 +45,25 @@ _Updated 2026-07-16. Plan docs live in [`LocalDev/docs/`](LocalDev/docs/) (`imp-
   has **no user interface yet**: the jobs board, calendar badges/week view, the
   security & swap screens, and the SMS composer. This is the near-term critical
   path — the plan doc still needs to be written before build starts.
+- **Fix reseeding — bumped up after an incident (see below).** Plan already
+  written: `imp-reseed-idempotency.md`.
+- **Resume the architecture cleanup at step 3** (one platform module for DB
+  access). Note for that step: its sweep must also pick up the new
+  `LocalDev/api/attendance/db/rpc.py` created by the tenant-guards fix.
+- **When shipping to prod resumes** (prod DB currently paused): paste the prod
+  project ref into `LocalDev/scripts/db_guard.py` so `migrate:prod` can run,
+  and apply migration 0146.
+
+### ⚠️ Incident (2026-07-17): demo database partially wiped by reseed
+
+Running `npm run seed` on the already-used demo database failed partway and
+committed its deletes as it went: the seed script's cleanup can't delete
+members because the append-only audit log references them, but everything it
+had already deleted (events, invoices, ledger, excuses, attendance, expenses)
+stayed deleted. The demo chapter was restored by hand the same day, including
+the officer's demo password. This is exactly the failure
+`imp-reseed-idempotency.md` predicted, so that fix moves to the front of the
+tooling queue. Until it lands, **avoid `npm run seed` on a used demo DB**.
 
 ### 📋 Backlog
 
@@ -44,7 +72,7 @@ _Updated 2026-07-16. Plan docs live in [`LocalDev/docs/`](LocalDev/docs/) (`imp-
 | Architecture cleanup (7 steps) | Consolidate DB access, unify permissions, self-describing DB client, tidy the frontend data/mutation layers | **2 of 7 done** (cleanup + standing fix); steps 3–7 pending |
 | Frontend remediation (B–E) | Consistent money formatting, per-domain data adapters, theme/token cleanup | Phase A shipped; B–E pending |
 | Check-in link race fix | A latent UI glitch where a freshly made check-in link can be wiped by a slow background refresh | Not started |
-| Reseed reliability | Let the demo database reseed cleanly on top of existing data | Not started |
+| Reseed reliability | Let the demo database reseed cleanly on top of existing data | **Next up** — root cause confirmed by the 2026-07-17 incident |
 
 ### 🧭 Trajectory
 
