@@ -21,3 +21,8 @@ class InviteRequest(BaseModel):
     emails: list[EmailStr]
 
 
+class RedeemSetupCodeRequest(BaseModel):
+    email: EmailStr
+    code: str
+
+

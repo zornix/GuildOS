@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException, Header
+from fastapi import HTTPException, Header
 
 from api.db import get_supabase
 from api.config import settings
@@ -40,11 +40,14 @@ async def get_current_user(authorization: str = Header(...)):
     if not result.data:
         raise HTTPException(403, "No active membership found")
 
+    # Session epoch check (0148). Setting a password or issuing a reset code
+    # bumps members.token_version, so any token minted before that bump is dead
+    # even though its signature and expiry are still valid. Only the local path
+    # is checked: the Supabase path carries Supabase-issued tokens that have no
+    # "ver" claim of ours to compare.
+    if settings.use_local_db:
+        claims = getattr(auth_user, "claims", None) or {}
+        if int(claims.get("ver", 0)) != int(result.data.get("token_version") or 0):
+            raise HTTPException(403, "Session no longer valid, please log in again")
+
     return result.data
-
-
-async def require_officer(user=Depends(get_current_user)):
-    """Dependency that restricts endpoint to officers only."""
-    if user["role"] != "officer":
-        raise HTTPException(403, "Officer access required")
-    return user

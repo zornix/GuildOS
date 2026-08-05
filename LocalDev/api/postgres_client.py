@@ -533,19 +533,33 @@ class _LocalAuth:
     def get_user(self, token: str):
         import jwt
         try:
-            payload = jwt.decode(token, self._secret, algorithms=["HS256"])
+            # aud/iss are verified, and sub/exp are required, so a token minted
+            # for another audience or missing its subject is rejected here rather
+            # than blowing up on a KeyError below. Tokens issued before auth
+            # hardening (0148) carry no aud/iss and fail this decode by design —
+            # their holders are forced to log in again.
+            payload = jwt.decode(
+                token,
+                self._secret,
+                algorithms=["HS256"],
+                audience="guildos",
+                issuer="guildos",
+                options={"require": ["exp", "sub", "aud", "iss"]},
+            )
         except jwt.InvalidTokenError as exc:
             raise Exception(f"Invalid token: {exc}")
 
         @dataclass
         class _User:
             id: str
+            # Raw claims, so callers can check the token_version epoch ("ver").
+            claims: dict = field(default_factory=dict)
 
         @dataclass
         class _AuthResponse:
             user: _User
 
-        return _AuthResponse(user=_User(id=payload["sub"]))
+        return _AuthResponse(user=_User(id=payload["sub"], claims=payload))
 
 
 class _LocalAuthAdmin:

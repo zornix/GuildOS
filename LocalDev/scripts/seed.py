@@ -33,25 +33,23 @@ EVENT_IDS = [f"00000000-0000-0000-0000-000000000e{i:02d}" for i in range(1, 6)]
 # validator in api/auth/api/schemas.py.
 OFFICER_DEMO_PASSWORD = "demo-officer-pw"
 
-TREASURY_OFFICER_CAPABILITIES = [
-    "treasury:read",
-    "invoice:create",
-    "payment:review",
-    "expense:create",
-    "adjustment:create",
-    "refund:create",
-    "rebuild:run",
-]
+# Treasury authority is catalog permissions on roles since 0147 (treasury_grants
+# is gone); the demo officer holds them through the 'officer' + 'treasurer' roles
+# seeded into member_roles below.
+DEMO_OFFICER_ROLE_KEYS = ("admin", "president", "treasurer")
 
+# Phones are E.164 (migration 0149 + api/phone.py). The old bare 9-digit values
+# matched nothing: the check-in page collects 10 digits and normalizes to +1...,
+# so a seeded member could never be found by phone.
 MEMBERS_DATA = [
-    {"name": "Jake Martinez", "email": "jake@tke.org", "phone": "555111001", "role": "officer"},
-    {"name": "Ryan Chen", "email": "ryan@tke.org", "phone": "555111002", "role": "member"},
-    {"name": "Tyler Brooks", "email": "tyler@tke.org", "phone": "555111003", "role": "member"},
-    {"name": "Marcus Johnson", "email": "marcus@tke.org", "phone": "555111004", "role": "member"},
-    {"name": "Alex Rivera", "email": "alex@tke.org", "phone": "555111005", "role": "member"},
-    {"name": "Chris Park", "email": "chris@tke.org", "phone": "555111006", "role": "member"},
-    {"name": "Ethan Davis", "email": "ethan@tke.org", "phone": "555111007", "role": "member"},
-    {"name": "Noah Williams", "email": "noah@tke.org", "phone": "555111008", "role": "member"},
+    {"name": "Jake Martinez", "email": "jake@tke.org", "phone": "+15551110001", "role": "officer"},
+    {"name": "Ryan Chen", "email": "ryan@tke.org", "phone": "+15551110002", "role": "member"},
+    {"name": "Tyler Brooks", "email": "tyler@tke.org", "phone": "+15551110003", "role": "member"},
+    {"name": "Marcus Johnson", "email": "marcus@tke.org", "phone": "+15551110004", "role": "member"},
+    {"name": "Alex Rivera", "email": "alex@tke.org", "phone": "+15551110005", "role": "member"},
+    {"name": "Chris Park", "email": "chris@tke.org", "phone": "+15551110006", "role": "member"},
+    {"name": "Ethan Davis", "email": "ethan@tke.org", "phone": "+15551110007", "role": "member"},
+    {"name": "Noah Williams", "email": "noah@tke.org", "phone": "+15551110008", "role": "member"},
 ]
 
 EVENTS_DATA = [
@@ -104,7 +102,18 @@ EVENTS_DATA = [
 
 
 def generate_token(member_id: str) -> str:
-    return jwt.encode({"sub": member_id, "exp": datetime.now(timezone.utc) + timedelta(days=30)}, JWT_SECRET, algorithm="HS256")
+    # Claim set must match api/auth/api/auth.py::_issue_member_token or the
+    # hardened _LocalAuth verifier rejects the token (aud/iss/exp/sub required).
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": member_id,
+        "exp": now + timedelta(days=7),
+        "iat": now,
+        "iss": "guildos",
+        "aud": "guildos",
+        "ver": 0,
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
 def _seed_expense(cur, vendor, amount_dollars, date_iso):
     amount_cents = int(amount_dollars * 100)
@@ -217,14 +226,6 @@ def seed():
             (all_member_ids[i], all_auth_ids[i], CHAPTER_ID, m["name"], m["email"], m["phone"], m["role"], "active", password_hash),
         )
 
-    for capability in TREASURY_OFFICER_CAPABILITIES:
-        cur.execute(
-            'INSERT INTO treasury_grants (chapter_id, member_id, capability) '
-            'VALUES (%s, %s, %s) '
-            'ON CONFLICT (chapter_id, member_id, capability) DO NOTHING',
-            (CHAPTER_ID, OFFICER_ID, capability),
-        )
-
     # RBAC: the role/permission catalogs are seeded by migration 0083. Here we
     # mirror each demo member's legacy role into member_roles and make the demo
     # officer the chapter admin (so role assignment is exercisable locally).
@@ -235,7 +236,7 @@ def seed():
             'ON CONFLICT (member_id, role_key, chapter_id) DO NOTHING',
             (CHAPTER_ID, all_member_ids[i], m["role"]),
         )
-    for role_key in ("admin", "president"):
+    for role_key in DEMO_OFFICER_ROLE_KEYS:
         cur.execute(
             'INSERT INTO member_roles (chapter_id, member_id, role_key) '
             'VALUES (%s, %s, %s) '
