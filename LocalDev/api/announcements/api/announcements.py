@@ -15,6 +15,7 @@ from api.announcements.db.session import get_announcements_db
 from api.announcements.services import announcements as svc
 from api.announcements.services import sms as sms_svc
 from api.dependencies import get_current_user
+from api.rbac.services.permissions import has_permission
 
 router = APIRouter()
 
@@ -23,11 +24,18 @@ router = APIRouter()
 async def list_announcements(status: str | None = None, user=Depends(get_current_user)):
     """List chapter announcements. Any authenticated member can view.
 
-    TODO(announcements): members should only see sent announcements whose
-    audience includes them; drafts only for announcements:create holders.
+    Not a 403 surface: members simply get the filtered feed — sent
+    announcements whose audience includes them. Drafts (and the `status`
+    filter) belong to announcements:create holders.
     """
+    sb = get_announcements_db()
+    can_manage = has_permission(user, ANNOUNCEMENTS_CREATE)
     return svc.list_announcements(
-        get_announcements_db(), chapter_id=user["chapter_id"], status=status
+        sb,
+        chapter_id=user["chapter_id"],
+        status=status,
+        viewer=user,
+        include_drafts=can_manage,
     )
 
 
