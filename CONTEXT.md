@@ -33,6 +33,38 @@ utilities) never affects standing — money owed for those is a treasury
 concern, visible only there.
 _Avoid_: total debt, balance owed
 
+**Initiative**:
+A member-led effort on the chapter calendar, run by its chairs, with jobs but
+no attendance, fines, or supervisors. Chair roles create initiatives directly;
+anyone else submits a proposal.
+_Avoid_: project, committee event
+
+**Proposal**:
+An initiative awaiting officer approval. Approval makes it live and makes the
+proposer its creator-chair; denial carries a reason back to the proposer.
+_Avoid_: request, draft initiative
+
+**Contribution**:
+A member's auto-derived positive record: events attended, initiatives chaired,
+and jobs done on events and initiatives. Only structurally-known facts count —
+nothing manually awarded or officer-verified — and contribution never feeds
+standing. Counts only go up; absences and attendance percentages are not
+contribution and are visible only to the member themself and officers.
+_Avoid_: points, merits, engagement score
+
+**Shoutout**:
+A positive-only, auto-derived callout — a monthly top-N or a personal
+milestone. There is never a ranked roster of all members; nobody is visible
+at the bottom of anything.
+_Avoid_: leaderboard, ranking
+
+**Job**:
+A claimable unit of work a member commits to, reports done, and a supervisor
+or chair approves. A job may be attached to an event, attached to an
+initiative, or standalone; only event- and initiative-attached jobs count
+toward contribution. Jobs never affect standing.
+_Avoid_: task (storage-layer name only), chore, assignment
+
 **Chair**:
 A member granted a slice of officer work in one domain (risk, social,
 recruitment, brotherhood, philanthropy, standards). A chair holds only that
