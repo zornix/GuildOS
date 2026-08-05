@@ -15,29 +15,86 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.config import settings, Settings
 from api.db import get_supabase
 from api.health_checks import build_health_payload
+from api.observability import init_observability
+
+
+MIN_JWT_SECRET_LENGTH = 32
+MIN_CRON_SECRET_LENGTH = 16
+VALID_DELIVERY_MODES = ("dry_run", "twilio")
 
 
 def production_config_violations(s: Settings) -> list[str]:
-    """List every prod-misconfiguration in `s`. Empty in dev/preview or when clean."""
-    if not s.is_production:
+    """List every deploy-misconfiguration in `s`. Empty locally or when clean.
+
+    Guards **production and preview** (`is_deployed`). Preview deploys are public
+    URLs that inherit the project's env vars, so an unguarded preview with
+    `DEV_AUTH_BYPASS=1` was a full authentication bypass on a reachable host.
+
+    Each entry names the variable and the fix — this text is the only thing an
+    operator sees in a failed Vercel build log.
+    """
+    if not s.is_deployed:
         return []
     violations: list[str] = []
-    if s.JWT_SECRET == "local-dev-secret":
-        violations.append("JWT_SECRET is still the insecure local default")
+
+    # Both the known dev defaults and any low-entropy value. `startswith` (not
+    # `==`) because .env.example long shipped "local-dev-secret-key-change-in-prod",
+    # which passed an exact-match check.
+    if s.JWT_SECRET.startswith("local-dev-secret") or len(s.JWT_SECRET) < MIN_JWT_SECRET_LENGTH:
+        violations.append(
+            f"JWT_SECRET is a known dev default or shorter than {MIN_JWT_SECRET_LENGTH} chars "
+            "— set it to a random 32+ character secret"
+        )
+
     if not s.DATABASE_URL:
         violations.append("DATABASE_URL is unset (prod runs on the direct-Postgres path, ADR-0002)")
+
     if s.DEV_AUTH_BYPASS:
-        violations.append("DEV_AUTH_BYPASS is enabled")
+        violations.append("DEV_AUTH_BYPASS is enabled — unset it, it disables authentication")
+
+    # Cron endpoints authenticate solely on this shared secret; empty means every
+    # cron route is either open or dead, and neither is acceptable in a deploy.
+    if not s.CRON_SECRET or len(s.CRON_SECRET) < MIN_CRON_SECRET_LENGTH:
+        violations.append(
+            f"CRON_SECRET is unset or shorter than {MIN_CRON_SECRET_LENGTH} chars "
+            "— set a random secret matching the Vercel cron caller"
+        )
+
+    # FRONTEND_URL is the CORS allowlist below, so a localhost value in a deploy
+    # both breaks the real origin and trusts a developer machine.
+    if "localhost" in s.FRONTEND_URL or "127.0.0.1" in s.FRONTEND_URL:
+        violations.append(
+            f"FRONTEND_URL points at localhost ({s.FRONTEND_URL}) "
+            "— set the deployed origin; it is the CORS allowlist"
+        )
+
+    if s.MESSAGE_DELIVERY_MODE not in VALID_DELIVERY_MODES:
+        # A typo here silently downgrades every send to a no-op.
+        violations.append(
+            f"MESSAGE_DELIVERY_MODE={s.MESSAGE_DELIVERY_MODE!r} is not one of "
+            f"{' | '.join(VALID_DELIVERY_MODES)} — a typo silently disables all SMS"
+        )
+    elif s.MESSAGE_DELIVERY_MODE == "twilio":
+        missing = [
+            name
+            for name in ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER")
+            if not getattr(s, name)
+        ]
+        if missing:
+            violations.append(
+                "MESSAGE_DELIVERY_MODE=twilio but " + ", ".join(missing) + " is unset "
+                "— set it or fall back to MESSAGE_DELIVERY_MODE=dry_run"
+            )
+
     return violations
 
 
-# Fail the Vercel deploy loudly rather than boot a misconfigured production
-# function (imp-tenant-guards.md D5). Preview deployments are deliberately not
-# guarded. Import-time so a bad config never serves a request.
+# Fail the Vercel deploy loudly rather than boot a misconfigured function
+# (imp-tenant-guards.md D5). Import-time so a bad config never serves a request.
 _violations = production_config_violations(settings)
 if _violations:
     raise RuntimeError(
-        "Refusing to boot in production — fix: " + "; ".join(_violations)
+        f"Refusing to boot in {settings.VERCEL_ENV} — fix: " + "; ".join(_violations)
     )
 
 from api.auth.api.router import router as auth_router
@@ -65,16 +122,26 @@ from api.calendar.api.router import router as calendar_router
 from api.instrumentation.api.router import router as usage_router
 from api.initiatives.api.router import router as initiatives_router
 
+# Swagger and the OpenAPI schema stay on locally (CLAUDE.md documents /api/docs
+# for dev) but are withdrawn from every deploy — the schema enumerates the whole
+# authenticated surface and there is no reason to publish it.
 app = FastAPI(
     title="FraternityOS API",
     version="0.1.0",
-    docs_url="/api/docs",
-    openapi_url="/api/openapi.json",
+    docs_url=None if settings.is_deployed else "/api/docs",
+    openapi_url=None if settings.is_deployed else "/api/openapi.json",
 )
+
+init_observability(app)
+
+# localhost is a dev convenience only; a deploy trusts FRONTEND_URL alone.
+_allowed_origins = [settings.FRONTEND_URL]
+if not settings.is_deployed and "http://localhost:3000" not in _allowed_origins:
+    _allowed_origins.append("http://localhost:3000")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL, "http://localhost:3000"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
