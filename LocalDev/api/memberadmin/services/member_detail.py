@@ -1,4 +1,9 @@
-"""Per-member event breakdown for MemberAdmin."""
+"""Per-member event breakdown for MemberAdmin.
+
+Money in the breakdown is integer cents (`fine_amount_cents`), sourced from the
+treasury receivable (`unpaid_invoices`, kind='fine') the events→invoices import
+writes — never from the frozen legacy `fines` table.
+"""
 
 from __future__ import annotations
 
@@ -23,7 +28,7 @@ async def load_member_event_breakdown(chapter_id: str, member_id: str) -> dict:
 
     events = (
         sb.table("events")
-        .select("id, title, date, required, fine_amount")
+        .select("id, title, date, required")
         .eq("chapter_id", chapter_id)
         .eq("required", True)
         .order("date", desc=True)
@@ -50,14 +55,23 @@ async def load_member_event_breakdown(chapter_id: str, member_id: str) -> dict:
     ).data
     exc_map = {row["event_id"]: row for row in excuses}
 
+    # V1 fines are treasury invoices (`unpaid_invoices`, kind='fine', integer
+    # cents), not the legacy `fines` table — frozen since 0012 and always empty,
+    # so reading it reported every fine as null. Same source as
+    # memberadmin.core.engagement, chapter-scoped like the reads above.
     fines = (
-        sb.table("fines")
-        .select("event_id, amount, status")
+        sb.table("unpaid_invoices")
+        .select("source_event_id, amount_cents, status")
+        .eq("chapter_id", chapter_id)
         .eq("member_id", member_id)
-        .in_("event_id", event_ids)
+        .eq("kind", "fine")
+        .in_("source_event_id", event_ids)
         .execute()
-    ).data
-    fine_map = {row["event_id"]: row for row in fines}
+    ).data or []
+    # A voided invoice is not a fine the member owes or ever paid.
+    fine_map = {
+        row["source_event_id"]: row for row in fines if row["status"] != "cancelled"
+    }
 
     breakdown = []
     for event in events:
@@ -80,7 +94,9 @@ async def load_member_event_breakdown(chapter_id: str, member_id: str) -> dict:
             "event_title": event["title"],
             "event_date": event["date"],
             "status": status,
-            "fine_amount": fine["amount"] if fine else None,
+            # Integer cents (hard rule); renamed from the dollars-shaped
+            # `fine_amount` because the old key only ever emitted null.
+            "fine_amount_cents": fine["amount_cents"] if fine else None,
             "fine_status": fine["status"] if fine else None,
         })
 

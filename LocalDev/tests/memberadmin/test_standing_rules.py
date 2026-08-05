@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import inspect
+
 from api.memberadmin.core.standing_rules import (
     HIGH_UNPAID_BALANCE,
-    INCOMPLETE_REQUIRED_TASKS,
     UNEXCUSED_ABSENCES,
     UNPAID_FINES,
     derive_standing,
@@ -38,9 +39,46 @@ def test_unexcused_absence_reason_code():
     assert reasons == [UNEXCUSED_ABSENCES]
 
 
-def test_incomplete_required_tasks_adds_reason_but_not_status():
-    status, reasons = derive_standing(
-        unpaid_count=0, unpaid_total_cents=0, unexcused=0, incomplete_required_tasks=2
-    )
-    assert status == "good_standing"  # tasks signal is reason-only for now
-    assert reasons == [INCOMPLETE_REQUIRED_TASKS]
+# ── ADR-0004: the standing / contribution firewall ───────────────────────────
+# Standing derives from unpaid fines + unexcused absences and NOTHING else.
+# These tests pin the firewall structurally so a future "engagement-weighted
+# standing" change fails here first rather than in production.
+
+
+def test_standing_inputs_are_only_fines_and_unexcused_absences():
+    params = inspect.signature(derive_standing).parameters
+    assert set(params) == {"unpaid_count", "unpaid_total_cents", "unexcused"}
+    assert all(p.kind is inspect.Parameter.KEYWORD_ONLY for p in params.values())
+
+
+def test_no_contribution_signal_is_a_standing_input():
+    """No task/event/initiative/contribution input may exist — ADR-0004."""
+    forbidden = ("task", "event", "job", "initiative", "contribution", "organiz", "supervis")
+    params = inspect.signature(derive_standing).parameters
+    for name in params:
+        assert not any(word in name for word in forbidden), (
+            f"ADR-0004 violation: contribution signal '{name}' is a standing input"
+        )
+
+
+def test_no_contribution_reason_code_is_exported():
+    import api.memberadmin.core.standing_rules as rules
+
+    forbidden = ("TASK", "JOB", "INITIATIVE", "CONTRIBUTION", "ORGANIZ", "SUPERVIS")
+    reason_codes = [
+        name for name in vars(rules)
+        if name.isupper() and isinstance(getattr(rules, name), str)
+    ]
+    for code in reason_codes:
+        assert not any(word in code for word in forbidden), (
+            f"ADR-0004 violation: contribution reason code '{code}' exists"
+        )
+
+
+def test_standing_module_does_not_import_the_contribution_domain():
+    """The firewall is also an import boundary (ADR-0004 consequences)."""
+    import api.memberadmin.services.standing as standing_svc
+
+    source = inspect.getsource(standing_svc)
+    assert "api.tasks" not in source
+    assert "api.initiatives" not in source

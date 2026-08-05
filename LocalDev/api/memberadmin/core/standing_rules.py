@@ -3,13 +3,15 @@
 Thresholds are EXACTLY the legacy _classify_standing rules — behavior-preserving.
 Reason codes are additive metadata explaining *why* a member landed in a bucket.
 
-Cross-service signals consumed (§7 seams):
+Standing has exactly two inputs (ADR-0004, the standing/contribution firewall):
   - treasury: unpaid fine count / amount (via memberadmin.core.engagement)
   - attendance: unexcused absence count (via memberadmin.core.engagement)
-  - tasks: incomplete required-task count (api.tasks.services.tasks.
-    incomplete_required_tasks). TODO(standing): incomplete required tasks only
-    add a reason code today; deciding whether they shift the status bucket is a
-    chapter-policy question, deliberately not implemented.
+
+Contribution signals (tasks committed/completed, events organized or
+supervised, initiatives chaired) are deliberately NOT inputs here — not as a
+status driver and not as a reason code. Adding one turns positive-participation
+stats into a quota that can hurt a member's standing, which is the exact
+hazing-liability failure mode ADR-0004 forbids.
 """
 
 from __future__ import annotations
@@ -20,7 +22,6 @@ STANDING_STATUSES = ("good_standing", "warning", "delinquent")
 UNPAID_FINES = "UNPAID_FINES"
 HIGH_UNPAID_BALANCE = "HIGH_UNPAID_BALANCE"
 UNEXCUSED_ABSENCES = "UNEXCUSED_ABSENCES"
-INCOMPLETE_REQUIRED_TASKS = "INCOMPLETE_REQUIRED_TASKS"
 
 
 def derive_standing(
@@ -28,7 +29,6 @@ def derive_standing(
     unpaid_count: int,
     unpaid_total_cents: int,
     unexcused: int,
-    incomplete_required_tasks: int = 0,
 ) -> tuple[str, list[str]]:
     """Return (status, reason_codes). Status thresholds match the legacy rules:
     delinquent: 2+ unpaid fines OR $50+ unpaid OR 3+ unexcused absences;
@@ -42,8 +42,6 @@ def derive_standing(
         reasons.append(HIGH_UNPAID_BALANCE)
     if unexcused >= 1:
         reasons.append(UNEXCUSED_ABSENCES)
-    if incomplete_required_tasks >= 1:
-        reasons.append(INCOMPLETE_REQUIRED_TASKS)
 
     if unpaid_count >= 2 or unpaid_total_cents >= 5000 or unexcused >= 3:
         return "delinquent", reasons

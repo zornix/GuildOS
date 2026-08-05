@@ -1,12 +1,20 @@
+"""Usage instrumentation — append-only event track + a bounded read model."""
+
 from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from postgrest.exceptions import APIError
-
 logger = logging.getLogger(__name__)
+
+# The client abstraction (api/postgres_client.py, mimicking supabase-py) has no
+# GROUP BY: only filters, ordering, limit, and an exact COUNT(*). So the total
+# is aggregated in SQL via count='exact' (the count query ignores LIMIT), while
+# the per-event-name breakdown is computed over a capped page of rows.
+_SUMMARY_ROW_CAP = 10_000
+
 
 def track(
     db: Any,
@@ -42,29 +50,34 @@ def track(
         logger.warning(f"Failed to track usage event {event_name}: {exc}")
 
 def summary(db: Any, chapter_id: str, days: int = 30) -> dict[str, Any]:
-    # Use RPC or just query and aggregate. The simplest is a query if we can do date math.
-    # Since we don't have a specific RPC mentioned, maybe we can just query usage_events where created_at >= now - days
-    # Wait, PostgREST doesn't support aggregate count grouping easily without RPC, but we can just fetch and group in python if it's small, or use an RPC if available.
-    # "Count usage_events for chapter in last N days"
-    # To keep it simple, we can fetch the event_names from usage_events created in the last N days.
-    from datetime import datetime, timedelta, timezone
-    
+    """Per-event-name usage counts for the chapter's last `days` days.
+
+    `total` is the exact chapter total for the window. `counts` is derived from
+    at most _SUMMARY_ROW_CAP rows; when the window is larger than that,
+    `truncated` is True and `counts` describes the newest capped page only.
+    """
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-    
+
     resp = (
         db.table("usage_events")
-        .select("event_name")
+        .select("event_name", count="exact")
         .eq("chapter_id", chapter_id)
         .gte("created_at", cutoff.isoformat())
+        .order("created_at", desc=True)
+        .limit(_SUMMARY_ROW_CAP)
         .execute()
     )
-    
-    counts = {}
-    for row in resp.data:
+
+    rows = resp.data or []
+    counts: dict[str, int] = {}
+    for row in rows:
         counts[row["event_name"]] = counts.get(row["event_name"], 0) + 1
-        
+
+    total = resp.count if resp.count is not None else len(rows)
     return {
         "days": days,
         "counts": counts,
-        "total": len(resp.data)
+        "total": total,
+        "truncated": total > len(rows),
+        "counted_rows": len(rows),
     }

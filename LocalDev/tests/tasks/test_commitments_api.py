@@ -225,6 +225,78 @@ def test_attribution_me_alias(harness, cursor, chapter_id, member_id, task_facto
     assert me.json()["tasks_committed"] == 3
 
 
+# ── attribution: events organized / supervised ───────────────────────────────
+
+
+def _add_organizer(cursor, chapter_id, event_id, member_id):
+    cursor.execute(
+        "INSERT INTO event_organizers (chapter_id, event_id, member_id, source) "
+        "VALUES (%s, %s, %s, 'volunteer')",
+        (chapter_id, event_id, member_id),
+    )
+
+
+def _add_supervisor(cursor, chapter_id, event_id, member_id):
+    cursor.execute(
+        "INSERT INTO event_supervisors (chapter_id, event_id, member_id) VALUES (%s, %s, %s)",
+        (chapter_id, event_id, member_id),
+    )
+
+
+def _attribution(harness, chapter_id, member_id) -> dict:
+    resp = harness.login(member_id, chapter_id).get(f"/api/tasks/attribution/{member_id}")
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+def test_attribution_counts_zero_event_roles_by_default(
+    harness, chapter_id, member_id
+):
+    body = _attribution(harness, chapter_id, member_id)
+    assert body["events_organized"] == 0
+    assert body["events_supervised"] == 0
+
+
+def test_attribution_counts_past_events_organized_and_supervised(
+    harness, cursor, chapter_id, member_id, event_factory
+):
+    organized = event_factory(hours_from_now=-72)
+    supervised = event_factory(hours_from_now=-48)
+    both = event_factory(hours_from_now=-24)
+    _add_organizer(cursor, chapter_id, organized, member_id)
+    _add_supervisor(cursor, chapter_id, supervised, member_id)
+    _add_organizer(cursor, chapter_id, both, member_id)
+    _add_supervisor(cursor, chapter_id, both, member_id)
+
+    body = _attribution(harness, chapter_id, member_id)
+    assert body["events_organized"] == 2
+    assert body["events_supervised"] == 2
+
+
+def test_attribution_excludes_upcoming_events(
+    harness, cursor, chapter_id, member_id, event_factory
+):
+    """Signing up for next month's event is a plan, not an attribution."""
+    upcoming = event_factory(hours_from_now=72)
+    _add_organizer(cursor, chapter_id, upcoming, member_id)
+    _add_supervisor(cursor, chapter_id, upcoming, member_id)
+
+    body = _attribution(harness, chapter_id, member_id)
+    assert body["events_organized"] == 0
+    assert body["events_supervised"] == 0
+
+
+def test_attribution_event_roles_are_per_member(
+    harness, cursor, chapter_id, member_id, member_factory, event_factory
+):
+    other = member_factory()
+    past = event_factory(hours_from_now=-24)
+    _add_organizer(cursor, chapter_id, past, other)
+
+    assert _attribution(harness, chapter_id, member_id)["events_organized"] == 0
+    assert _attribution(harness, chapter_id, other)["events_organized"] == 1
+
+
 # ── task create/list additivity ──────────────────────────────────────────────
 
 
