@@ -1,7 +1,7 @@
 """Finance-adjustment HTTP surface.
 
-Creating an adjustment requires the `adjustment:create` capability; activating a
-large (over-threshold) adjustment requires a SECOND `adjustment:create` holder.
+Creating an adjustment requires the `treasury:adjustment:create` permission; activating a
+large (over-threshold) adjustment requires a SECOND `treasury:adjustment:create` holder.
 """
 
 from __future__ import annotations
@@ -9,9 +9,12 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Header
 from pydantic import BaseModel, Field
 
-from api.treasury.auth import ADJUSTMENT_CREATE, require_capability
+from api.rbac.auth import require_permission
 from api.treasury.db.session import get_treasury_db
 from api.treasury.services import adjustments as svc
+
+# Catalog permission keys gating this surface (ADR-0001; 0147).
+ADJUSTMENT_CREATE = "treasury:adjustment:create"
 
 router = APIRouter()
 
@@ -26,7 +29,7 @@ class AdjustmentCreate(BaseModel):
 @router.post("/adjustments")
 async def create_adjustment(
     body: AdjustmentCreate,
-    user=Depends(require_capability(ADJUSTMENT_CREATE)),
+    user=Depends(require_permission(ADJUSTMENT_CREATE)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
     sb = get_treasury_db()
@@ -45,7 +48,7 @@ async def create_adjustment(
 @router.post("/adjustments/{adjustment_id}/approve")
 async def approve_adjustment(
     adjustment_id: str,
-    user=Depends(require_capability(ADJUSTMENT_CREATE)),
+    user=Depends(require_permission(ADJUSTMENT_CREATE)),
 ):
     sb = get_treasury_db()
     return svc.approve_adjustment(

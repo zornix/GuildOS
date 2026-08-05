@@ -173,7 +173,7 @@ def test_verifier_sees_other_members_invoice_dues(
     assert dues[inv]["member_name"]
 
 
-def test_treasury_read_grant_sees_other_members_invoice_dues(
+def test_treasury_viewer_role_sees_other_members_invoice_dues(
     harness, user_factory, invoice_factory, grant_treasury_read
 ):
     member = user_factory()

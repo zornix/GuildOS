@@ -16,8 +16,9 @@ from pydantic import BaseModel, Field
 
 from api.attendance.services.signals import list_unexcused_absences
 from api.db import get_supabase
-from api.dependencies import get_current_user, require_officer
+from api.dependencies import get_current_user
 from api.rbac.auth import require_permission
+from api.rbac.services.permissions import has_permission
 from api.treasury.core.fines import FINE_ISSUE_DELAY_HOURS, FLAT_FINE_CENTS
 from api.treasury.db.session import get_treasury_db
 from api.treasury.services import invoices as invoice_svc
@@ -123,12 +124,15 @@ def _present_fines(sb, rows: list[dict]) -> list[dict]:
 
 @router.get("/")
 async def list_fines(status: str = None, user=Depends(get_current_user)):
-    """List fine invoices, presented for the client. Officers see all chapter
-    fines; members see their own."""
+    """List fine invoices, presented for the client.
+
+    `treasury:audit:view` holders see every fine in their chapter — the same key
+    that gates the fine summary; everyone else sees only their own.
+    """
     sb = get_supabase()
 
     query = sb.table("unpaid_invoices").select("*").eq("kind", "fine")
-    if user["role"] == "officer":
+    if has_permission(user, "treasury:audit:view"):
         query = query.eq("chapter_id", user["chapter_id"])
     else:
         query = query.eq("member_id", user["id"])
@@ -246,8 +250,11 @@ async def waive_fine(
 
 
 @router.post("/process-event/{event_id}")
-async def process_fines_for_event(event_id: str, officer=Depends(require_officer)):
-    """Officer manually triggers fine processing for a specific event."""
+async def process_fines_for_event(
+    event_id: str,
+    officer=Depends(require_permission("treasury:fines:issue")),
+):
+    """A fines:issue holder manually triggers fine processing for one event."""
     sb = get_supabase()
     event = (
         sb.table("events")
@@ -267,7 +274,7 @@ async def process_fines_for_event(event_id: str, officer=Depends(require_officer
 
 
 @router.get("/summary")
-async def fine_summary(officer=Depends(require_officer)):
+async def fine_summary(officer=Depends(require_permission("treasury:audit:view"))):
     """Aggregate fine stats for the chapter, in cents."""
     sb = get_supabase()
     invoices = (

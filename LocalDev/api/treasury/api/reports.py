@@ -1,7 +1,7 @@
 """Review Queue HTTP surface — Chunk F-partial.
 
 GET /payments/submissions  — officer review queue, paginated.
-Guarded by payment:review capability. Chapter-scoped from the authed user.
+Guarded by treasury:payment:verify. Chapter-scoped from the authed user.
 All amounts are integer cents.
 """
 
@@ -11,9 +11,18 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 
 from api.dependencies import get_current_user
-from api.treasury.auth import PAYMENT_REVIEW, TREASURY_READ, require_capability
+from api.rbac.auth import require_permission
+from api.rbac.services.permissions import has_permission
 from api.treasury.db.session import get_treasury_db
 from api.treasury.services import reports as svc
+
+# Catalog permission keys gating this surface (ADR-0001; 0147). Chapter-level
+# aggregates read on treasury:budget:view; anything row-level (another member's
+# statement) or ledger-grained (the period CSV, whose `ledger` dataset dumps
+# big_ledger) reads on treasury:audit:view.
+PAYMENT_REVIEW = "treasury:payment:verify"
+DASHBOARD_VIEW = "treasury:budget:view"
+RECORD_VIEW = "treasury:audit:view"
 
 router = APIRouter()
 
@@ -28,7 +37,7 @@ async def list_payment_submissions(
     max_amount_cents: int | None = Query(default=None, gt=0),
     limit: int = Query(default=50, ge=1, le=200),
     cursor: str | None = Query(default=None),
-    user=Depends(require_capability(PAYMENT_REVIEW)),
+    user=Depends(require_permission(PAYMENT_REVIEW)),
 ):
     """Return the paginated review queue for the authed officer's chapter.
 
@@ -65,7 +74,7 @@ async def list_payment_submissions(
 # ════════════════════════════════════════════════════════════════════════════
 @router.get("/dashboard")
 async def treasury_dashboard(
-    user=Depends(require_capability(TREASURY_READ)),
+    user=Depends(require_permission(DASHBOARD_VIEW)),
 ):
     """Single treasurer aggregate for the authed user's chapter (integer cents)."""
     sb = get_treasury_db()
@@ -79,24 +88,14 @@ async def member_statement(
 ):
     """A member's chronological financial statement.
 
-    Access: the member themself, OR any `treasury:read` holder IN THE SAME CHAPTER.
-    A non-existent member, or one outside the requester's chapter, returns 404 so
-    cross-chapter existence is never leaked.
+    Access: the member themself, OR any `treasury:audit:view` holder IN THE SAME
+    CHAPTER. A non-existent member, or one outside the requester's chapter,
+    returns 404 so cross-chapter existence is never leaked.
     """
     sb = get_treasury_db()
 
-    if str(user["id"]) != str(member_id):
-        grant = (
-            sb.table("treasury_grants")
-            .select("id")
-            .eq("chapter_id", user["chapter_id"])
-            .eq("member_id", user["id"])
-            .eq("capability", TREASURY_READ)
-            .maybe_single()
-            .execute()
-        ).data
-        if not grant:
-            raise HTTPException(403, f"Missing Treasury capability: {TREASURY_READ}")
+    if str(user["id"]) != str(member_id) and not has_permission(user, RECORD_VIEW):
+        raise HTTPException(403, f"Missing permission: {RECORD_VIEW}")
 
     member = (
         sb.table("members")
@@ -115,7 +114,7 @@ async def member_statement(
 async def period_report(
     period: str = Query(..., description="Reporting period as YYYY-MM"),
     dataset: str = Query(..., description="payments|invoices|expenses|member_balances|ledger"),
-    user=Depends(require_capability(TREASURY_READ)),
+    user=Depends(require_permission(RECORD_VIEW)),
 ):
     """Return one chapter-scoped `dataset` for `period` as a CSV download."""
     sb = get_treasury_db()

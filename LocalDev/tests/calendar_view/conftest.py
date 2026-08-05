@@ -170,13 +170,18 @@ def initiative_factory(cursor, chapter_id):
 
 @pytest.fixture
 def grant_treasury_read(cursor, chapter_id):
-    """Insert a treasury:read capability grant (treasury's own grants table)."""
+    """Give a member chapter-wide treasury read access.
+
+    0147 folded treasury_grants into the central catalog: read access is the
+    `treasury_viewer` role (treasury:budget:view + treasury:audit:view), not a
+    per-member capability row.
+    """
 
     def _grant(member_id: str) -> None:
         cursor.execute(
             """
-            INSERT INTO treasury_grants (chapter_id, member_id, capability)
-            VALUES (%s, %s, 'treasury:read')
+            INSERT INTO member_roles (chapter_id, member_id, role_key)
+            VALUES (%s, %s, 'treasury_viewer')
             ON CONFLICT DO NOTHING
             """,
             (chapter_id, member_id),

@@ -365,22 +365,26 @@ def test_invariant_member_balance_is_independent_of_the_ledger(sb_client, cursor
     assert after == before == 5000
 
 
-# ── endpoint capability gating: POST /rebuild requires rebuild:run ───────────
-async def test_rebuild_requires_rebuild_run_capability(sb_client, cursor, chapter_id, member_id, monkeypatch):
+# ── endpoint gating: POST /rebuild requires treasury:rebuild:run ────────────
+# 0147: the gate is a catalog permission carried by a role, not a grant row.
+async def test_rebuild_requires_rebuild_run_permission(sb_client, cursor, chapter_id, member_id, monkeypatch):
     from fastapi import HTTPException
 
-    from api.treasury import auth
+    import api.rbac.services.permissions as rbac_permissions
+    from api.rbac.auth import require_permission
+    from api.treasury.api import rebuild
 
-    monkeypatch.setattr(auth, "get_supabase_admin", lambda: sb_client)
-    dep = auth.require_capability(auth.REBUILD_RUN)
-    user = {"id": member_id, "chapter_id": chapter_id}
+    monkeypatch.setattr(rbac_permissions, "get_rbac_db", lambda: sb_client)
+    dep = require_permission(rebuild.REBUILD_RUN)
+    user = {"id": member_id, "chapter_id": chapter_id, "role": "member"}
 
     with pytest.raises(HTTPException) as exc:
         await dep(user=user)
     assert exc.value.status_code == 403
 
     cursor.execute(
-        "INSERT INTO treasury_grants (chapter_id, member_id, capability) VALUES (%s,%s,'rebuild:run')",
+        "INSERT INTO member_roles (chapter_id, member_id, role_key) VALUES (%s,%s,'treasurer') "
+        "ON CONFLICT DO NOTHING",
         (chapter_id, member_id),
     )
     assert await dep(user=user) == user

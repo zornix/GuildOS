@@ -1,8 +1,13 @@
 # Permissions Matrix
 
-Source of truth: migration `0083_rbac_seed_rpcs.sql` (catalog + matrix) and
-`api/rbac/core/policy.py` (legacy compat + ownership scoping). This document
-mirrors them; if they disagree, the code/migration wins.
+Source of truth: migrations `0083_rbac_seed_rpcs.sql` (catalog + matrix),
+`0121_treasury_v1_rbac_seeds.sql`, `0130`, `0144`, and
+`0147_authority_one_gate.sql`, plus `api/rbac/core/policy.py` (legacy compat +
+ownership scoping). This document mirrors them; if they disagree, the
+code/migration wins. The table below is the 0083 baseline plus the treasury /
+one-gate additions; a handful of later single-key seeds
+(`announcements:send:sms` in 0130, `calendar:initiative:*` in 0144) are listed
+under "Later additions" rather than as table columns.
 
 ## Model
 
@@ -24,8 +29,10 @@ it via `LEGACY_ROLE_COMPAT`:
 | `officer` | `officer` |
 | `member` | `member` |
 
-So existing users keep working with zero data migration; migration 0083 also
-backfilled matching `member_roles` rows.
+So existing users keep working with zero data migration; migrations 0083 and
+0147 also backfilled matching `member_roles` rows, and audience resolution
+(announcements / SMS) now reads `member_roles` only. `LEGACY_ROLE_COMPAT`
+itself stays until the roles UI is the only assignment path (imp-one-gate D6).
 
 ## Ownership-scoped permissions
 
@@ -42,8 +49,11 @@ else's task requires `tasks:review`.
 
 ## Roles × permissions
 
-`admin` holds **every** permission (including `roles:assign`, which no other
-role has). Below, ✓ marks seeded grants for the remaining roles.
+`admin` holds **every** permission. Below, ✓ marks seeded grants for the
+remaining roles. `officer` is the behavior-preserving image of the deleted
+`require_officer` dependency (0147 step 3) — it holds `roles:assign`, but
+deliberately **not** `treasury:invoice:void` (0121 decision #5: void/waive is
+Treasurer only).
 
 | Permission | officer | member | pres | vp | treas | sec | risk | social | recruit | brother | philan | standards | nme | alumni |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -54,10 +64,18 @@ role has). Below, ✓ marks seeded grants for the remaining roles.
 | attendance:checkin:create | ✓ | | ✓ | | | ✓ | | | | | | | | |
 | attendance:override | ✓ | | ✓ | | | ✓ | | | | | | | | |
 | attendance:excuse:review | ✓ | | ✓ | ✓ | | ✓ | | | | | | ✓ | | |
-| treasury:invoice:create | | | | | ✓ | | | | | | | | | |
-| treasury:payment:verify | | | | | ✓ | | | | | | | | | |
-| treasury:budget:view | | | ✓ | | ✓ | | | | | | | | | |
-| treasury:audit:view | | | ✓ | | ✓ | | | | | | | | | |
+| attendance:checkin_link:manage | ✓ | | | | | | | | | | | | | |
+| members:invite | ✓ | | | | | | | | | | | | | |
+| treasury:invoice:create | ✓ | | | | ✓ | | | | | | | | | |
+| treasury:invoice:void | | | | | ✓ | | | | | | | | | |
+| treasury:payment:verify | ✓ | | | | ✓ | | | | | | | | | |
+| treasury:fines:issue | ✓ | | | | ✓ | | | | | | | | | |
+| treasury:budget:view | ✓ | | ✓ | | ✓ | | | | | | | | | |
+| treasury:audit:view | ✓ | | ✓ | | ✓ | | | | | | | | | |
+| treasury:expense:create | ✓ | | | | ✓ | | | | | | | | | |
+| treasury:adjustment:create | ✓ | | | | ✓ | | | | | | | | | |
+| treasury:refund:create | ✓ | | | | ✓ | | | | | | | | | |
+| treasury:rebuild:run | ✓ | | | | ✓ | | | | | | | | | |
 | tasks:create | ✓ | | ✓ | ✓ | | | | ✓ | ✓ | ✓ | ✓ | | ✓ | |
 | tasks:assign | ✓ | | ✓ | ✓ | | | | ✓ | | | | | ✓ | |
 | tasks:complete | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
@@ -65,14 +83,15 @@ role has). Below, ✓ marks seeded grants for the remaining roles.
 | announcements:create | ✓ | | ✓ | ✓ | | ✓ | | | | | | | | |
 | announcements:send | ✓ | | ✓ | ✓ | | ✓ | | | | | | | | |
 | standing:view_all | ✓ | | ✓ | ✓ | ✓ | | ✓ | | | | | ✓ | | |
-| standing:update | | | ✓ | | | | | | | | | ✓ | | |
+| standing:update | ✓ | | ✓ | | | | | | | | | ✓ | | |
+| standing:remind | ✓ | | | | | | | | | | | | | |
 | recruitment:pipeline:view | ✓ | | ✓ | | | | | | ✓ | | | | ✓ | |
 | recruitment:pipeline:update | ✓ | | ✓ | | | | | | ✓ | | | | | |
 | bylaws:query | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | bylaws:admin | | | ✓ | | | | | | | | | | | |
 | nl_controller:execute | ✓ | | ✓ | ✓ | | | | | | | | | | |
 | nl_controller:approve | | | ✓ | | | | | | | | | | | |
-| roles:assign | | | | | | | | | | | | | | |
+| roles:assign | ✓ | | | | | | | | | | | | | |
 
 (Column key: pres=president, vp=vice_president, treas=treasurer,
 sec=secretary, risk=risk_chair, social=social_chair,
@@ -80,13 +99,40 @@ recruit=recruitment_chair, brother=brotherhood_chair,
 philan=philanthropy_chair, standards=standards_chair,
 nme=new_member_educator, alumni=alumni_advisor.)
 
+## Later additions (not table columns)
+
+| role | added by | permissions |
+|---|---|---|
+| `finance_board` | 0121 | `treasury:payment:verify`, `treasury:fines:issue`, `treasury:budget:view`, `treasury:audit:view`, `bylaws:query`, `tasks:complete` |
+| `treasury_viewer` | 0147 | `treasury:budget:view`, `treasury:audit:view` |
+
+`announcements:send:sms` (0130) is held by `president` / `secretary`;
+`calendar:initiative:create|update` (0144) by the chair roles. See those
+migrations for the exact grants.
+
 ## Treasury note
 
-Treasury keeps its own `treasury_grants` capability system for its internal
-operations — RBAC seeds the `treasury:*` permission strings for cross-service
-visibility (budgets, audit views) but did **not** replace treasury's
-authorization. Unifying them is a CONFORM_TODO, not a behavior change to make
-casually.
+Treasury used to run its own `treasury_grants` capability table with a
+`require_capability` dependency. **Migration 0147 deleted both** (ADR-0003: no
+grant tables): every treasury gate is now a catalog key checked through
+`require_permission` / `has_permission`, and the legacy capability strings are
+mapped onto catalog keys as follows.
+
+| legacy capability | catalog key |
+|---|---|
+| `treasury:read` | `treasury:budget:view` (chapter aggregates) or `treasury:audit:view` (row-level records, ledger) |
+| `invoice:create` | `treasury:invoice:create` |
+| `payment:review` | `treasury:payment:verify` |
+| `expense:create` | `treasury:expense:create` |
+| `adjustment:create` | `treasury:adjustment:create` |
+| `refund:create` | `treasury:refund:create` |
+| `rebuild:run` | `treasury:rebuild:run` |
+
+The SQL helper `treasury_has_capability(chapter_id, capability)` still exists
+and still takes a *legacy* capability string — many RLS policies (0006, 0010,
+0020, 0030, 0040, 0050, 0120, 0123, 0124) call it. 0147 re-pointed its body at
+`member_roles` × `role_permissions` using the same map, so the policies were
+left untouched.
 
 ## Frontend
 

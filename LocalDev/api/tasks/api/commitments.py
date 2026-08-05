@@ -112,10 +112,7 @@ async def my_attribution(user=Depends(get_current_user)):
 
 @router.get("/attribution/{member_id}")
 async def member_attribution(member_id: str, user=Depends(get_current_user)):
-    """Any member can view any member's ledger (chapter-visible by design).
-
-    TODO(events): include events organized/supervised once the events domain
-    lands organizer/supervisor attribution (later agent)."""
+    """Any member can view any member's ledger (chapter-visible by design)."""
     return svc.attribution(
         get_tasks_db(), chapter_id=user["chapter_id"], member_id=member_id
     )

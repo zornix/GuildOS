@@ -1,7 +1,8 @@
 """Payment review HTTP surface: verify, reject, fetch receipt.
 
 Mounted on the Treasury router under `/api/treasury`. Verification and rejection
-require the `payment:review` capability; reading a receipt requires `treasury:read`.
+require `treasury:payment:verify`; reading a receipt (a row-level financial
+record) requires `treasury:audit:view`.
 """
 
 from __future__ import annotations
@@ -14,9 +15,12 @@ from pydantic import BaseModel, Field
 from api.dependencies import get_current_user
 from api.rbac.auth import require_permission
 from api.rbac.services.permissions import has_permission
-from api.treasury.auth import PAYMENT_REVIEW, TREASURY_READ, require_capability
 from api.treasury.db.session import get_treasury_db
 from api.treasury.services import payments as svc
+
+# Catalog permission keys gating this surface (ADR-0001; 0147).
+PAYMENT_REVIEW = "treasury:payment:verify"
+RECEIPT_VIEW = "treasury:audit:view"
 
 router = APIRouter()
 
@@ -53,7 +57,7 @@ class ReallocateBody(BaseModel):
 @router.post("/payments/submissions/{submission_id}/verify")
 async def verify_payment(
     submission_id: str,
-    user=Depends(require_capability(PAYMENT_REVIEW)),
+    user=Depends(require_permission(PAYMENT_REVIEW)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
     sb = get_treasury_db()
@@ -70,7 +74,7 @@ async def verify_payment(
 async def reject_payment(
     submission_id: str,
     body: RejectBody | None = None,
-    user=Depends(require_capability(PAYMENT_REVIEW)),
+    user=Depends(require_permission(PAYMENT_REVIEW)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
     sb = get_treasury_db()
@@ -85,8 +89,8 @@ async def reject_payment(
 
 
 # ── TREASURY V1 surface ───────────────────────────────────────────────────────
-# New routes; the legacy /payments/submissions/{id}/verify|reject above stay
-# capability-gated and untouched.
+# New routes; the legacy /payments/submissions/{id}/verify|reject above resolve
+# to the same catalog key (treasury:payment:verify) since 0147.
 
 
 @router.post("/payments/balance-submissions")
@@ -255,7 +259,7 @@ async def get_payment_allocations(
 @router.get("/payments/receipts/{receipt_id}")
 async def get_receipt(
     receipt_id: str,
-    user=Depends(require_capability(TREASURY_READ)),
+    user=Depends(require_permission(RECEIPT_VIEW)),
 ):
     sb = get_treasury_db()
     receipt = svc.get_receipt(sb, chapter_id=user["chapter_id"], receipt_id=receipt_id)

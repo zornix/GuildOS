@@ -116,20 +116,29 @@ def test_submit_payment_rejects_another_members_invoice(
         )
 
 
-# ── balance read endpoint: capability + same-chapter (read-side guard) ───────
+# ── balance read endpoint: permission + same-chapter (read-side guard) ──────
 # GET /members/{id}/balance previously let any role=="officer" read ANY member's
 # balance, including across chapters. The hardened guard (mirroring /statement)
-# requires the member themself OR a same-chapter treasury:read holder, and 404s
-# anything outside the caller's chapter so cross-chapter existence never leaks.
+# requires the member themself OR a same-chapter treasury:audit:view holder, and
+# 404s anything outside the caller's chapter so cross-chapter existence never
+# leaks. Since 0147 that holder is a role in member_roles (treasury_viewer /
+# treasurer / officer), not a treasury_grants row.
 # The endpoint reads `sb` from get_treasury_db(); we point it at the test client
 # and call the handler directly with a plain user dict (no FastAPI Depends).
 
 
-def _grant(cursor, chapter, member, capability):
+def _assign_role(cursor, chapter, member, role_key):
     cursor.execute(
-        "INSERT INTO treasury_grants (chapter_id, member_id, capability) VALUES (%s, %s, %s)",
-        (chapter, member, capability),
+        "INSERT INTO member_roles (chapter_id, member_id, role_key) VALUES (%s, %s, %s) "
+        "ON CONFLICT DO NOTHING",
+        (chapter, member, role_key),
     )
+
+
+def _rbac_on_test_db(monkeypatch, sb_client):
+    import api.rbac.services.permissions as rbac_permissions
+
+    monkeypatch.setattr(rbac_permissions, "get_rbac_db", lambda: sb_client)
 
 
 async def test_balance_self_read_allowed(
@@ -138,6 +147,7 @@ async def test_balance_self_read_allowed(
     from api.treasury.api import balances
 
     monkeypatch.setattr(balances, "get_treasury_db", lambda: sb_client)
+    _rbac_on_test_db(monkeypatch, sb_client)
     member = member_factory()
     result = await balances.get_member_balance(
         member, user={"id": member, "chapter_id": chapter_id}
@@ -145,32 +155,34 @@ async def test_balance_self_read_allowed(
     assert result["member_id"] == member
 
 
-async def test_balance_read_requires_capability(
+async def test_balance_read_requires_permission(
     sb_client, monkeypatch, chapter_id, member_factory
 ):
     from api.treasury.api import balances
 
     monkeypatch.setattr(balances, "get_treasury_db", lambda: sb_client)
+    _rbac_on_test_db(monkeypatch, sb_client)
     target = member_factory()
-    requester = member_factory(role="officer")  # role alone no longer grants access
+    requester = member_factory()  # plain member: no role carries treasury:audit:view
     with pytest.raises(HTTPException) as exc:
         await balances.get_member_balance(
-            target, user={"id": requester, "chapter_id": chapter_id}
+            target, user={"id": requester, "chapter_id": chapter_id, "role": "member"}
         )
     assert exc.value.status_code == 403
 
 
-async def test_balance_read_allowed_for_same_chapter_treasury_read(
+async def test_balance_read_allowed_for_same_chapter_treasury_viewer(
     sb_client, cursor, monkeypatch, chapter_id, member_factory
 ):
     from api.treasury.api import balances
 
     monkeypatch.setattr(balances, "get_treasury_db", lambda: sb_client)
+    _rbac_on_test_db(monkeypatch, sb_client)
     target = member_factory()
     requester = member_factory()
-    _grant(cursor, chapter_id, requester, "treasury:read")
+    _assign_role(cursor, chapter_id, requester, "treasury_viewer")
     result = await balances.get_member_balance(
-        target, user={"id": requester, "chapter_id": chapter_id}
+        target, user={"id": requester, "chapter_id": chapter_id, "role": "member"}
     )
     assert result["member_id"] == target
 
@@ -181,11 +193,14 @@ async def test_balance_read_404s_member_in_another_chapter(
     from api.treasury.api import balances
 
     monkeypatch.setattr(balances, "get_treasury_db", lambda: sb_client)
+    _rbac_on_test_db(monkeypatch, sb_client)
     foreign_target = member_factory(chapter=other_chapter)
     requester = member_factory()
-    _grant(cursor, chapter_id, requester, "treasury:read")  # holds the cap in their OWN chapter
+    # Holds the permission in their OWN chapter only.
+    _assign_role(cursor, chapter_id, requester, "treasury_viewer")
     with pytest.raises(HTTPException) as exc:
         await balances.get_member_balance(
-            foreign_target, user={"id": requester, "chapter_id": chapter_id}
+            foreign_target,
+            user={"id": requester, "chapter_id": chapter_id, "role": "member"},
         )
     assert exc.value.status_code == 404

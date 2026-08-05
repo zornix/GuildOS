@@ -263,25 +263,29 @@ def test_over_threshold_adjustment_cannot_be_self_approved(sb_client, chapter_id
         )
 
 
-# ── capability gating: refund requires refund:create ─────────────────────────
-async def test_refund_requires_refund_create_capability(sb_client, cursor, chapter_id, member_id, monkeypatch):
+# ── permission gating: refund requires treasury:refund:create ────────────────
+# 0147 folded treasury_grants into the central catalog: authority is a role in
+# member_roles carrying the key, never a per-member grant row.
+async def test_refund_requires_refund_create_permission(sb_client, cursor, chapter_id, member_id, monkeypatch):
     from fastapi import HTTPException
 
-    from api.treasury import auth
+    import api.rbac.services.permissions as rbac_permissions
+    from api.rbac.auth import require_permission
+    from api.treasury.api import refunds
 
-    # Route the capability check at the same demo DB through the test shim.
-    monkeypatch.setattr(auth, "get_supabase_admin", lambda: sb_client)
-    dep = auth.require_capability(auth.REFUND_CREATE)
-    user = {"id": member_id, "chapter_id": chapter_id}
+    monkeypatch.setattr(rbac_permissions, "get_rbac_db", lambda: sb_client)
+    dep = require_permission(refunds.REFUND_CREATE)
+    user = {"id": member_id, "chapter_id": chapter_id, "role": "member"}
 
-    # A plain member holds no grant → refused.
+    # A plain member holds no role granting the key → refused.
     with pytest.raises(HTTPException) as exc:
         await dep(user=user)
     assert exc.value.status_code == 403
 
-    # Grant the capability → the same call now passes.
+    # Assign the treasurer role → the same call now passes.
     cursor.execute(
-        "INSERT INTO treasury_grants (chapter_id, member_id, capability) VALUES (%s,%s,'refund:create')",
+        "INSERT INTO member_roles (chapter_id, member_id, role_key) VALUES (%s,%s,'treasurer') "
+        "ON CONFLICT DO NOTHING",
         (chapter_id, member_id),
     )
     assert await dep(user=user) == user

@@ -6,6 +6,8 @@ Public surface:
   - api.rbac.services.permissions.get_member_permissions(member)
 
 No domain may hardcode role/permission checks inline; everything goes through
-these helpers. The legacy members.role + require_officer path keeps working via
-the compatibility mapping in core/policy.py.
+these helpers — `require_officer` and treasury's `require_capability` were
+deleted by migration 0147 / imp-one-gate.md. Accounts that still carry only the
+legacy `members.role` column keep working via the compatibility mapping in
+core/policy.py.
 """

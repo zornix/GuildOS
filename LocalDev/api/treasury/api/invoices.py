@@ -18,10 +18,12 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from api.dependencies import get_current_user
 from api.rbac.auth import require_permission
 from api.treasury.api.schemas import TreasuryMessage  # noqa: F401  (contract anchor)
-from api.treasury.auth import INVOICE_CREATE, require_capability
 from api.treasury.db.session import get_treasury_db
 from api.treasury.services import invoices as svc
 from pydantic import BaseModel, Field
+
+# Catalog permission keys gating this surface (ADR-0001; 0147).
+INVOICE_CREATE = "treasury:invoice:create"
 
 router = APIRouter()
 
@@ -67,7 +69,7 @@ class VoidBody(BaseModel):
 @router.post("/invoices")
 async def create_invoice(
     body: InvoiceCreate,
-    user=Depends(require_capability(INVOICE_CREATE)),
+    user=Depends(require_permission(INVOICE_CREATE)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
     kind = body.source or body.kind
@@ -118,7 +120,7 @@ async def void_invoice(
 @router.post("/invoices/bulk")
 async def bulk_create_invoices(
     body: BulkInvoiceCreate,
-    user=Depends(require_capability(INVOICE_CREATE)),
+    user=Depends(require_permission(INVOICE_CREATE)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
     sb = get_treasury_db()
@@ -134,7 +136,7 @@ async def bulk_create_invoices(
 @router.post("/invoices/{invoice_id}/cancel")
 async def cancel_invoice(
     invoice_id: str,
-    user=Depends(require_capability(INVOICE_CREATE)),
+    user=Depends(require_permission(INVOICE_CREATE)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
     sb = get_treasury_db()

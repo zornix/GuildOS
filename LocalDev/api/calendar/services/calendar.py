@@ -93,17 +93,14 @@ def get_calendar(
 
     # --- 2. Invoices ---
     granted = get_member_permissions(user, sb=sb)
-    treasury_grants = (
-        sb.table("treasury_grants")
-        .select("capability")
-        .eq("chapter_id", chapter_id)
-        .eq("member_id", member_id)
-        .eq("capability", "treasury:read")
-        .execute()
-    ).data or []
-    
-    can_view_all_invoices = "treasury:payment:verify" in granted or len(treasury_grants) > 0
-    
+    # Seeing OTHER members' invoices is row-level treasury access
+    # (treasury:audit:view since 0147 folded treasury_grants into the catalog),
+    # or Finance Board review access.
+    can_view_all_invoices = (
+        "treasury:payment:verify" in granted or "treasury:audit:view" in granted
+    )
+
+
     inv_query = sb.table("unpaid_invoices").select("*").eq("chapter_id", chapter_id).in_("status", ["unpaid", "partially_paid"])
     if not can_view_all_invoices:
         inv_query = inv_query.eq("member_id", member_id)

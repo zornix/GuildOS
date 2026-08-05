@@ -5,10 +5,13 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Header
 from pydantic import BaseModel, Field
 
-from api.dependencies import get_current_user
-from api.treasury.auth import EXPENSE_CREATE, TREASURY_READ, require_capability
+from api.rbac.auth import require_permission
 from api.treasury.db.session import get_treasury_db
 from api.treasury.services import expenses as svc
+
+# Catalog permission keys gating this surface (ADR-0001; 0147).
+EXPENSE_CREATE = "treasury:expense:create"
+BALANCE_VIEW = "treasury:budget:view"
 
 router = APIRouter()
 
@@ -20,7 +23,7 @@ class ExpenseCreate(BaseModel):
 
 
 @router.get("/balance")
-async def get_chapter_balance(user=Depends(require_capability(TREASURY_READ))):
+async def get_chapter_balance(user=Depends(require_permission(BALANCE_VIEW))):
     sb = get_treasury_db()
     bal = svc.chapter_balance(sb, chapter_id=user["chapter_id"])
     return {"chapter_id": user["chapter_id"], "balance_cents": bal.cents, "balance_display": bal.to_dollars_str()}
@@ -29,7 +32,7 @@ async def get_chapter_balance(user=Depends(require_capability(TREASURY_READ))):
 @router.post("/expenses")
 async def create_expense(
     body: ExpenseCreate,
-    user=Depends(require_capability(EXPENSE_CREATE)),
+    user=Depends(require_permission(EXPENSE_CREATE)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
     sb = get_treasury_db()
@@ -47,7 +50,7 @@ async def create_expense(
 @router.post("/expenses/{expense_id}/invalidate")
 async def invalidate_expense(
     expense_id: str,
-    user=Depends(require_capability(EXPENSE_CREATE)),
+    user=Depends(require_permission(EXPENSE_CREATE)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
     sb = get_treasury_db()

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from api.dependencies import get_current_user
 from api.attendance.auth import EXCUSE_REVIEW, require_permission
 from api.attendance.db.rpc import call_rpc
+from api.rbac.services.permissions import has_permission
 from .schemas import ExcuseCreate, ExcuseReview
 from api.db import get_supabase
 
@@ -76,12 +77,13 @@ async def submit_excuse(event_id: str, body: ExcuseCreate, user=Depends(get_curr
 async def list_excuses(status: str = None, user=Depends(get_current_user)):
     """
     List excuses.
-    Officers: see all for their chapter (filterable by status).
-    Members: see only their own.
+    `attendance:excuse:review` holders: all excuses for their chapter
+    (filterable by status) — the same key that gates the review action itself.
+    Everyone else: only their own.
     """
     sb = get_supabase()
 
-    if user["role"] == "officer":
+    if has_permission(user, EXCUSE_REVIEW):
         query = (
             sb.table("excuses")
             .select("*, members(name, email), events(title, date)")
