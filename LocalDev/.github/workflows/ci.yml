@@ -1,5 +1,9 @@
 name: LocalDev CI
 
+# Gates merges on the two things that can actually break: the backend suite
+# against a real, freshly migrated Postgres, and the frontend lint/unit/build.
+# Playwright e2e is deliberately excluded — it needs a live API + DB stack.
+
 on:
   push:
     paths:
@@ -14,8 +18,8 @@ defaults:
     working-directory: LocalDev
 
 jobs:
-  verify-sandbox:
-    name: Verify LocalDev sandbox
+  backend:
+    name: Backend (migrate + pytest)
     runs-on: ubuntu-latest
 
     services:
@@ -33,6 +37,12 @@ jobs:
           --health-timeout 5s
           --health-retries 10
 
+    env:
+      # localhost classifies as "local" in scripts/db_guard.py, so require_demo
+      # passes and the prod guards stay fail-closed.
+      DATABASE_URL: postgresql://fraternityos:localdev@localhost:5434/fraternityos
+      TEST_DATABASE_URL: postgresql://fraternityos:localdev@localhost:5434/fraternityos
+
     steps:
       - uses: actions/checkout@v4
 
@@ -42,22 +52,61 @@ jobs:
           cache: pip
           cache-dependency-path: LocalDev/requirements.txt
 
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Prepare environment
+        # .env.example is the reference, but it is currently gitignored
+        # (LocalDev/.gitignore) so it may be absent from a clean checkout —
+        # hence the fallback. Its placeholder DATABASE_URL would classify as
+        # "unknown" and trip require_demo, so CI-owned keys are stripped and
+        # re-appended rather than inherited.
+        run: |
+          if [ -f .env.example ]; then cp .env.example .env; else : > .env; fi
+          grep -vE '^(DATABASE_URL|TEST_DATABASE_URL|SUPABASE_DB_URL|JWT_SECRET|CRON_SECRET|DEV_AUTH_BYPASS|MESSAGE_DELIVERY_MODE)=' .env > .env.ci || true
+          mv .env.ci .env
+          cat >> .env <<'EOF'
+          DATABASE_URL=postgresql://fraternityos:localdev@localhost:5434/fraternityos
+          TEST_DATABASE_URL=postgresql://fraternityos:localdev@localhost:5434/fraternityos
+          JWT_SECRET=ci-only-secret-not-used-in-any-deployment-0123456789
+          DEV_AUTH_BYPASS=false
+          CRON_SECRET=ci-cron-secret
+          MESSAGE_DELIVERY_MODE=dry_run
+          EOF
+
+      - name: Apply migrations
+        run: python3 scripts/migrate_db.py
+
+      - name: Run pytest
+        run: python3 -m pytest
+
+  frontend:
+    name: Frontend (lint + unit + build)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: LocalDev/fratos
+
+    steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: LocalDev/fratos/package-lock.json
 
-      - name: Install Python dependencies
-        run: pip install -r requirements.txt
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Prepare environment
-        run: |
-          cp .env.example .env
-          echo "NEXT_PUBLIC_API_BASE=http://127.0.0.1:8001" > fratos/.env.local
+      - name: Lint
+        run: npm run lint
 
-      - name: Run sandbox verification
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Build
         env:
-          DATABASE_URL: postgresql://fraternityos:localdev@localhost:5434/fraternityos
-          KEEP_POSTGRES: "1"
-        run: bash deploy/verify-local.sh
+          NEXT_PUBLIC_API_BASE: http://127.0.0.1:8001
+        run: npm run build

@@ -18,12 +18,23 @@ from urllib.parse import urlsplit
 DEMO_PROJECT_REF = "kikzdpfpprfkkbmcwnhm"
 
 # ── HUMAN ACTION REQUIRED ─────────────────────────────────────────────────
-# Fill in the production project ref(s) from the Supabase dashboard
-# (production project → Settings → General → Reference ID), e.g.
-#   PROD_PROJECT_REFS: frozenset[str] = frozenset({"abcdefghijklmnopqrst"})
-# Until this is filled, `npm run migrate:prod` refuses to run at all; the
-# fail-closed demo guards already protect prod (any URL that is not the demo
-# ref or a local host is refused).
+# Paste the production project ref here. Get it from the Supabase dashboard:
+#   production project → Settings → General → Reference ID
+# (a 20-char lowercase string, e.g. `kikzdpfpprfkkbmcwnhm` above). Replace the
+# empty frozenset on the line below with exactly:
+#
+#   PROD_PROJECT_REFS: frozenset[str] = frozenset({"<paste-the-ref-here>"})
+#
+# It is an identifier, not a credential — it is checked in on purpose, so the
+# guard still works when a mispointed `.env` is the bug.
+#
+# Until this is filled, EVERY production write path refuses to run:
+#   • `npm run migrate:prod`  (scripts/migrate_db.py --prod → require_prod)
+#   • `scripts/provision_chapter.py --prod`      (→ require_prod)
+#   • the manual `migrate-prod` GitHub workflow   (runs migrate_db.py --prod)
+# Nothing else changes: the fail-closed demo guards already protect prod, since
+# require_demo refuses any URL that is not the demo ref or a local host.
+# See LocalDev/docs/ops-runbook.md for the full production procedure.
 PROD_PROJECT_REFS: frozenset[str] = frozenset()
 
 _LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "host.docker.internal"})
