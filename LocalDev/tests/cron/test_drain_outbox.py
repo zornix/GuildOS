@@ -1,0 +1,431 @@
+"""The outbox drain worker (GTMLarpChecklist 2.1).
+
+DB-backed: needs TEST_DATABASE_URL / SUPABASE_DB_URL (skipped otherwise). Covers
+the rows that had no dispatcher at all before this worker existed — treasury
+lifecycle events (target_table unpaid_invoices/payment_submissions/refunds) and
+the plpgsql-produced job/security events (target_table tasks).
+
+Every drain call here is scoped with `chapter_id=` so assertions stay inside the
+test's own chapter; the shared demo DB accumulates pending rows from other suites
+(§3.4 of the treasury harness contract).
+"""
+
+from __future__ import annotations
+
+import uuid
+
+import pytest
+
+from api.cron.services.outbox_drain import drain_outbox
+
+
+@pytest.fixture
+def drain(sb_client, chapter_id):
+    """drain_outbox scoped to this test's chapter."""
+
+    def _drain(**kwargs):
+        return drain_outbox(sb_client, chapter_id=chapter_id, **kwargs)
+
+    return _drain
+
+
+@pytest.fixture
+def member_with_phone(member_factory, cursor):
+    def _make(phone: str = "+15551110001") -> str:
+        m = member_factory()
+        cursor.execute("UPDATE members SET phone = %s WHERE id = %s", (phone, m))
+        return m
+
+    return _make
+
+
+@pytest.fixture
+def invoice_factory(cursor, chapter_id):
+    def _make(member_id: str, *, amount_cents: int = 2500, description="Missed meeting"):
+        cursor.execute(
+            """
+            INSERT INTO unpaid_invoices
+                (chapter_id, member_id, kind, amount_cents, status, description)
+            VALUES (%s, %s, 'fine', %s, 'unpaid', %s)
+            RETURNING id
+            """,
+            (chapter_id, member_id, amount_cents, description),
+        )
+        return str(cursor.fetchone()["id"])
+
+    return _make
+
+
+@pytest.fixture
+def fake_twilio(monkeypatch):
+    """Capture what would go to the provider instead of calling it."""
+    sent: list = []
+    monkeypatch.setattr(
+        "api.announcements.services.twilio_client.send_sms",
+        lambda to, body: sent.append((to, body)),
+    )
+    return sent
+
+
+# ── Happy path across producers ──────────────────────────────────────────────
+
+
+def test_dry_run_marks_rows_simulated_not_sent(
+    drain, delivery_mode, outbox_row, read_outbox, member_with_phone, invoice_factory
+):
+    """The core 2.2 fix: no network call means 'simulated', never 'sent'."""
+    delivery_mode("dry_run")
+    member = member_with_phone()
+
+    treasury_row = outbox_row(
+        event_type="INVOICE_ISSUED",
+        member_id=member,
+        target_table="unpaid_invoices",
+        target_id=invoice_factory(member),
+    )
+    task_row = outbox_row(
+        event_type="JOB_REPORTED",
+        member_id=member,
+        target_table="tasks",
+        payload={"title": "Setup crew"},
+    )
+
+    counts = drain()
+    assert counts["processed"] == 2
+    assert counts["simulated"] == 2
+    assert counts["sent"] == 0
+
+    for row in (treasury_row, task_row):
+        after = read_outbox(row["id"])
+        assert after["status"] == "simulated"
+        assert after["delivered_at"] is None
+        assert after["last_error"] is None
+
+
+def test_drain_processes_both_treasury_and_tasks_target_tables(
+    drain, delivery_mode, outbox_row, read_outbox, member_with_phone, invoice_factory
+):
+    """Every one of these target_tables was unreachable before the drain."""
+    member = member_with_phone()
+    rows = [
+        outbox_row(
+            event_type="INVOICE_ISSUED",
+            member_id=member,
+            target_table="unpaid_invoices",
+            target_id=invoice_factory(member),
+        ),
+        outbox_row(
+            event_type="JOB_APPROVED",
+            member_id=member,
+            target_table="tasks",
+            payload={"title": "Setup crew"},
+        ),
+        outbox_row(
+            event_type="SECURITY_ASSIGNED",
+            member_id=member,
+            target_table="tasks",
+            payload={"title": "Security shift", "event_date": "2026-09-01"},
+        ),
+        outbox_row(
+            event_type="SECURITY_SWAP_REQUESTED",
+            member_id=member,
+            target_table="security_swap_requests",
+            payload={"note": "family emergency"},
+        ),
+    ]
+
+    assert drain()["processed"] == len(rows)
+    for row in rows:
+        assert read_outbox(row["id"])["status"] == "simulated"
+
+
+def test_terminal_rows_are_not_reprocessed(
+    drain, delivery_mode, outbox_row, read_outbox, member_with_phone
+):
+    row = outbox_row(
+        event_type="JOB_APPROVED", member_id=member_with_phone(), payload={"title": "Job"}
+    )
+    drain()
+    first = read_outbox(row["id"])
+    assert drain()["processed"] == 0  # nothing left pending
+    second = read_outbox(row["id"])
+
+    assert first["status"] == second["status"] == "simulated"
+    assert first["attempts"] == second["attempts"] == 1
+
+
+# ── attempts / last_error bookkeeping ────────────────────────────────────────
+
+
+def test_attempts_increments_from_zero(
+    drain, delivery_mode, outbox_row, read_outbox, member_with_phone
+):
+    row = outbox_row(
+        event_type="JOB_APPROVED", member_id=member_with_phone(), payload={"title": "Job"}
+    )
+    assert row["attempts"] == 0
+
+    drain()
+    assert read_outbox(row["id"])["attempts"] == 1
+
+
+def test_template_failure_fails_one_row_without_killing_the_batch(
+    drain, delivery_mode, outbox_row, read_outbox, member_with_phone
+):
+    """An unrenderable row is closed out with a reason; its neighbours still go."""
+    member = member_with_phone()
+    # ANNOUNCEMENT_SMS passes the sender's body through — with no body there is
+    # nothing to send, which is exactly the "template cannot render" path.
+    bad = outbox_row(
+        event_type="ANNOUNCEMENT_SMS",
+        member_id=member,
+        target_table="announcement_sms_sends",
+        payload={},
+    )
+    good = outbox_row(
+        event_type="JOB_APPROVED", member_id=member, payload={"title": "Setup crew"}
+    )
+
+    counts = drain()
+    assert counts["failed"] == 1
+    assert counts["simulated"] == 1
+
+    failed = read_outbox(bad["id"])
+    assert failed["status"] == "failed"
+    assert "body" in failed["last_error"]
+    assert failed["attempts"] == 1
+    assert read_outbox(good["id"])["status"] == "simulated"
+
+
+def test_row_without_a_member_is_failed_with_a_reason(
+    drain, delivery_mode, outbox_row, read_outbox
+):
+    """ANNOUNCEMENT_PUBLISHED is chapter-wide: no SMS recipient, so no delivery."""
+    row = outbox_row(
+        event_type="ANNOUNCEMENT_PUBLISHED",
+        member_id=None,
+        target_table="announcements",
+        payload={"title": "Chapter meeting moved"},
+    )
+    drain()
+
+    after = read_outbox(row["id"])
+    assert after["status"] == "failed"
+    assert "no member_id" in after["last_error"]
+
+
+# ── twilio mode ──────────────────────────────────────────────────────────────
+
+
+def test_twilio_mode_without_a_phone_fails_with_no_phone(
+    drain, delivery_mode, outbox_row, read_outbox, member_factory, fake_twilio
+):
+    delivery_mode("twilio")
+    row = outbox_row(
+        event_type="JOB_APPROVED",
+        member_id=member_factory(),  # no phone set
+        payload={"title": "Setup crew"},
+    )
+    drain()
+
+    after = read_outbox(row["id"])
+    assert after["status"] == "failed"
+    assert after["last_error"] == "no phone"
+    assert fake_twilio == []  # nothing was attempted
+
+
+def test_twilio_mode_sends_and_records_delivered_at(
+    drain, delivery_mode, outbox_row, read_outbox, member_with_phone, fake_twilio
+):
+    delivery_mode("twilio")
+    row = outbox_row(
+        event_type="JOB_APPROVED",
+        member_id=member_with_phone("+15551119999"),
+        payload={"title": "Setup crew"},
+    )
+    drain()
+
+    after = read_outbox(row["id"])
+    assert after["status"] == "sent"
+    assert after["delivered_at"] is not None
+    assert fake_twilio == [("+15551119999", "Job approved: Setup crew. Credit recorded.")]
+
+
+def test_provider_error_fails_the_row_with_the_error_recorded(
+    drain, delivery_mode, outbox_row, read_outbox, member_with_phone, monkeypatch
+):
+    delivery_mode("twilio")
+
+    def _boom(to, body):
+        raise RuntimeError("twilio 401 unauthorized")
+
+    monkeypatch.setattr("api.announcements.services.twilio_client.send_sms", _boom)
+
+    row = outbox_row(
+        event_type="JOB_APPROVED",
+        member_id=member_with_phone(),
+        payload={"title": "Setup crew"},
+    )
+    drain()
+
+    after = read_outbox(row["id"])
+    assert after["status"] == "failed"
+    assert "twilio 401 unauthorized" in after["last_error"]
+
+
+def test_unknown_delivery_mode_fails_loudly(drain, delivery_mode):
+    """One typo in a Vercel env var must not silently park every message."""
+    delivery_mode("twilllio")
+    with pytest.raises(ValueError, match="Unknown MESSAGE_DELIVERY_MODE"):
+        drain()
+
+
+# ── Payload enrichment (producers write ids, not amounts) ────────────────────
+
+
+def test_invoice_amount_is_read_from_the_target_row(
+    drain, delivery_mode, outbox_row, member_with_phone, invoice_factory, fake_twilio
+):
+    """treasury/notifications.py enqueues identifiers only; the drain enriches."""
+    delivery_mode("twilio")
+    member = member_with_phone("+15551112222")
+    invoice = invoice_factory(member, amount_cents=4200, description="Late dues")
+    outbox_row(
+        event_type="INVOICE_ISSUED",
+        member_id=member,
+        target_table="unpaid_invoices",
+        target_id=invoice,
+        payload={"event_type": "INVOICE_ISSUED", "member_id": member},
+    )
+
+    drain()
+    assert [body for _, body in fake_twilio] == [
+        "New charge: $42.00 — Late dues. Log in to view."
+    ]
+
+
+def test_dangling_target_row_still_delivers_a_neutral_message(
+    drain, delivery_mode, outbox_row, read_outbox, member_with_phone
+):
+    """A missing target row degrades the copy; it never fails the row."""
+    row = outbox_row(
+        event_type="INVOICE_ISSUED",
+        member_id=member_with_phone(),
+        target_table="unpaid_invoices",
+        target_id=str(uuid.uuid4()),
+    )
+    drain()
+    assert read_outbox(row["id"])["status"] == "simulated"
+
+
+# ── Batch limit / ordering ───────────────────────────────────────────────────
+
+
+def test_batch_limit_takes_the_oldest_row_first(
+    drain, delivery_mode, outbox_row, read_outbox, member_with_phone
+):
+    member = member_with_phone()
+    rows = [
+        outbox_row(event_type="JOB_APPROVED", member_id=member, payload={"title": f"J{i}"})
+        for i in range(3)
+    ]
+    assert drain(limit=1)["processed"] == 1
+    assert read_outbox(rows[0]["id"])["status"] == "simulated"
+    assert read_outbox(rows[2]["id"])["status"] == "pending"
+
+
+# ── PAYMENT_REMINDER: the reminder endpoint's queue ──────────────────────────
+
+
+def test_payment_reminder_dedups_within_the_same_day(
+    sb_client, cursor, chapter_id, member_with_phone
+):
+    from api.treasury.notifications import enqueue_payment_reminder
+
+    member = member_with_phone()
+    kwargs = dict(
+        chapter_id=chapter_id,
+        member_id=member,
+        unpaid_count=2,
+        unpaid_total_cents=5000,
+        sb=sb_client,
+    )
+    first = enqueue_payment_reminder(**kwargs)
+    second = enqueue_payment_reminder(**kwargs)
+
+    assert first is not None
+    assert second is None  # today's reminder was already queued
+
+    cursor.execute(
+        """
+        SELECT count(*) AS n FROM message_outbox
+        WHERE chapter_id = %s AND event_type = 'PAYMENT_REMINDER'
+        """,
+        (chapter_id,),
+    )
+    assert cursor.fetchone()["n"] == 1
+
+
+def test_payment_reminder_can_be_resent_on_a_later_day(
+    sb_client, cursor, chapter_id, member_with_phone
+):
+    from datetime import date, timedelta
+
+    from api.treasury.notifications import enqueue_payment_reminder
+
+    member = member_with_phone()
+    today = date.today()
+    base = dict(
+        chapter_id=chapter_id,
+        member_id=member,
+        unpaid_count=1,
+        unpaid_total_cents=2500,
+        sb=sb_client,
+    )
+    assert enqueue_payment_reminder(on_date=today, **base)
+    assert enqueue_payment_reminder(on_date=today + timedelta(days=1), **base)
+
+    cursor.execute(
+        """
+        SELECT count(*) AS n FROM message_outbox
+        WHERE chapter_id = %s AND event_type = 'PAYMENT_REMINDER'
+        """,
+        (chapter_id,),
+    )
+    assert cursor.fetchone()["n"] == 2
+
+
+def test_payment_reminder_renders_the_owed_total(
+    drain, sb_client, delivery_mode, chapter_id, member_with_phone, fake_twilio
+):
+    from api.treasury.notifications import enqueue_payment_reminder
+
+    delivery_mode("twilio")
+    enqueue_payment_reminder(
+        chapter_id=chapter_id,
+        member_id=member_with_phone("+15551113333"),
+        unpaid_count=3,
+        unpaid_total_cents=7500,
+        sb=sb_client,
+    )
+    drain()
+
+    assert [body for _, body in fake_twilio] == [
+        "Reminder: 3 unpaid charges totaling $75.00. Log in to pay."
+    ]
+
+
+# ── HTTP surface ─────────────────────────────────────────────────────────────
+
+
+def test_drain_route_returns_counts(cron_client, auth_header, outbox_row, member_with_phone):
+    outbox_row(
+        event_type="JOB_APPROVED",
+        member_id=member_with_phone(),
+        payload={"title": "Setup crew"},
+    )
+    resp = cron_client.get("/api/cron/drain-outbox", headers=auth_header())
+    assert resp.status_code == 200
+    counts = resp.json()
+    assert set(counts) == {"processed", "sent", "simulated", "failed"}
+    assert counts["simulated"] >= 1

@@ -16,12 +16,28 @@ from tests.treasury.conftest import *  # noqa: F401,F403
 
 
 @pytest.fixture
-def app_on_test_db(sb_client, monkeypatch):
+def delivery_mode(monkeypatch):
+    """Set settings.MESSAGE_DELIVERY_MODE (the single source of truth, not env).
+
+    Delivery config moved from os.environ to api/config.py, so tests patch the
+    settings attribute; monkeypatch.setenv no longer reaches the code path.
+    """
+    from api.config import settings
+
+    def _set(mode: str) -> str:
+        monkeypatch.setattr(settings, "MESSAGE_DELIVERY_MODE", mode)
+        return mode
+
+    _set("dry_run")
+    return _set
+
+
+@pytest.fixture
+def app_on_test_db(sb_client, monkeypatch, delivery_mode):
     """The real app, with announcements/rbac DB access pointed at the test DB."""
     import api.announcements.api.announcements as ann_api
     import api.rbac.services.permissions as perm_mod
 
-    monkeypatch.setenv("MESSAGE_DELIVERY_MODE", "dry_run")
     monkeypatch.setattr(perm_mod, "get_rbac_db", lambda: sb_client)
     monkeypatch.setattr(ann_api, "get_announcements_db", lambda: sb_client)
 

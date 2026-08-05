@@ -1,6 +1,7 @@
 """Announcement SMS send — confirmation step, RPC effects, dispatch, send log.
 
-Runs entirely in MESSAGE_DELIVERY_MODE=dry_run: nothing leaves the process.
+Runs entirely in settings.MESSAGE_DELIVERY_MODE=dry_run: nothing leaves the
+process, and the outbox rows say so ('simulated', not 'sent').
 """
 
 from __future__ import annotations
@@ -31,8 +32,7 @@ def test_preview_excludes_members_without_phone(
     set_phone(a, "+15551230001")
     set_phone(b, "+15551230002")
     member_factory()  # phone NULL
-    blank = member_factory()
-    set_phone(blank, "   ")  # whitespace-only counts as no phone
+    member_factory()  # phone NULL — members_phone_e164 forbids storing blanks
 
     ann = announcement_factory(audience="chapter")
     resp = as_member(president).get(f"/api/announcements/{ann}/sms-preview")
@@ -45,7 +45,10 @@ def test_preview_excludes_members_without_phone(
 def test_preview_officers_audience(
     president, as_member, member_factory, give_role, set_phone, announcement_factory
 ):
+    # 0147 backfilled every active members.role='officer' account into
+    # member_roles, and the audience now resolves from member_roles only.
     legacy_officer = member_factory(role="officer")
+    give_role(legacy_officer, "officer")
     set_phone(legacy_officer, "+15551240001")
     chair = member_factory()
     give_role(chair, "social_chair")
@@ -163,7 +166,8 @@ def test_send_writes_log_outbox_and_audit(
     outbox = cursor.fetchall()
     assert len(outbox) == 2
     assert {str(r["member_id"]) for r in outbox} == {president, a}
-    assert all(r["status"] == "sent" for r in outbox)  # dry_run: marked sent, no network
+    # dry_run made no network call, so the rows say 'simulated' — never 'sent'.
+    assert all(r["status"] == "simulated" for r in outbox)
     assert all(r["delivery_mode"] == "sms" for r in outbox)
 
     cursor.execute(

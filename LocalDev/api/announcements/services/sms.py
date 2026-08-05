@@ -12,14 +12,18 @@ Flow:
      re-show the confirmation. Otherwise the atomic `an_send_announcement_sms`
      RPC (0132) writes the append-only send log, one outbox row per recipient,
      and the audit entry.
-  3. dispatch — honors MESSAGE_DELIVERY_MODE:
-       dry_run (default) — no network; outbox rows are marked 'sent' locally.
-       twilio            — POST each message to the Twilio REST API using
-                           TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN /
-                           TWILIO_FROM_NUMBER.
+  3. dispatch — honors settings.MESSAGE_DELIVERY_MODE:
+       dry_run (default) — no network; outbox rows are marked 'simulated', which
+                           is what actually happened. They are NOT marked 'sent'
+                           (GTMLarpChecklist 2.2: the exec SMS log must not render
+                           a clean delivery history of messages nobody received).
+       twilio            — POST each message to the Twilio REST API via
+                           api/announcements/services/twilio_client.py.
+     Any other value raises ValueError: one typo in a Vercel env var must not
+     silently park every message as 'pending' forever.
 
-TODO(ops): verify A2P 10DLC campaign registration covers application-initiated
-announcement SMS before enabling twilio mode.
+Delivery config lives in api/config.py (settings), never os.environ, so it is
+part of the settings surface and the production boot guard.
 
 No FastAPI imports here — routes translate the domain exceptions below into
 HTTP status codes.
@@ -27,10 +31,14 @@ HTTP status codes.
 
 from __future__ import annotations
 
-import os
+import logging
 from datetime import datetime, timezone
 
 from api.announcements.db.rpc import call_rpc
+from api.announcements.services import twilio_client
+from api.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class AnnouncementNotFound(Exception):
@@ -58,7 +66,7 @@ _NON_OFFICER_ROLE_KEYS = {"member"}
 
 
 def _delivery_mode() -> str:
-    return os.environ.get("MESSAGE_DELIVERY_MODE", "dry_run")
+    return settings.MESSAGE_DELIVERY_MODE or "dry_run"
 
 
 def _now_iso() -> str:
@@ -101,20 +109,21 @@ def resolve_recipients(sb, *, chapter_id: str, audience: str) -> dict:
     ).data or []
 
     if audience == "officers":
+        # member_roles is the single source of truth (0147 backfilled every
+        # legacy members.role='officer' account into it), so no members.role
+        # compare and no ad-hoc union with it.
         role_rows = (
             sb.table("member_roles")
             .select("member_id, role_key")
             .eq("chapter_id", chapter_id)
             .execute()
         ).data or []
-        rbac_officers = {
+        officer_ids = {
             r["member_id"]
             for r in role_rows
             if r["role_key"] not in _NON_OFFICER_ROLE_KEYS
         }
-        members = [
-            m for m in members if m["role"] == "officer" or m["id"] in rbac_officers
-        ]
+        members = [m for m in members if m["id"] in officer_ids]
     elif audience == "members_with_balance":
         accounts = (
             sb.table("member_finance_accounts")
@@ -194,11 +203,16 @@ def send_announcement_sms(
 
 
 def dispatch_send(sb, send_row: dict, *, send_table: str = "announcement_sms_sends") -> dict:
-    """Deliver a send's pending outbox rows per MESSAGE_DELIVERY_MODE.
+    """Deliver a send's pending outbox rows per settings.MESSAGE_DELIVERY_MODE.
 
-    dry_run marks rows 'sent' without any network call; twilio POSTs to the
-    Twilio REST API. Unknown modes leave everything 'queued'/'pending' for an
-    external worker. Idempotent: already-delivered rows are not re-sent.
+    dry_run marks rows 'simulated' without any network call; twilio POSTs to the
+    Twilio REST API. An unrecognized mode raises ValueError rather than parking
+    the rows silently. Idempotent: already-delivered rows are not re-sent.
+
+    The send-log row itself advances to 'sent'/'failed' — its CHECK constraint
+    (0131:20, 0143:23) allows only queued/sent/failed — but it carries its own
+    `delivery_mode` column, so a dry_run send reads as "sent, delivery_mode=dry_run"
+    and the per-recipient truth lives on the 'simulated' outbox rows.
 
     send_table names the append-only send-log table the outbox rows target
     (default: announcement_sms_sends). Other domains with their own send-log
@@ -217,15 +231,19 @@ def dispatch_send(sb, send_row: dict, *, send_table: str = "announcement_sms_sen
 
     if mode == "dry_run":
         for row in pending:
+            # 'simulated', not 'sent': no network call was made (checklist 2.2).
+            # delivered_at stays NULL — nothing was delivered to time-stamp.
             sb.table("message_outbox").update(
-                {"status": "sent", "delivered_at": _now_iso()}
+                {"status": "simulated", "last_error": None}
             ).eq("id", row["id"]).execute()
         final_status = "sent"
     elif mode == "twilio":
         statuses = [_dispatch_twilio_row(sb, row) for row in pending]
         final_status = "failed" if "failed" in statuses else "sent"
     else:
-        return send_row
+        raise ValueError(
+            f"Unknown MESSAGE_DELIVERY_MODE {mode!r}; expected 'dry_run' or 'twilio'"
+        )
 
     sb.table(send_table).update({"status": final_status}).eq(
         "id", send_row["id"]
@@ -250,39 +268,25 @@ def _dispatch_twilio_row(sb, row: dict) -> str:
     ).data
     phone = ((member or {}).get("phone") or "").strip()
     body = (row.get("payload") or {}).get("body", "")
+    last_error: str | None = None
     try:
         if not phone:
             raise RuntimeError(f"member {row['member_id']} has no phone")
-        _send_via_twilio(to_number=phone, body=body)
+        twilio_client.send_sms(phone, body)
         status = "sent"
-    except Exception:
+    except Exception as exc:
+        # A swallowed, unlogged failure is how "flip to twilio" turns into
+        # "every row failed and nobody was told" (checklist 2.3).
+        logger.exception(
+            "twilio dispatch failed for message_outbox row %s", row.get("id")
+        )
         status = "failed"
-    sb.table("message_outbox").update(
-        {"status": status, "delivered_at": _now_iso()}
-    ).eq("id", row["id"]).execute()
+        last_error = f"{type(exc).__name__}: {exc}"[:1000]
+    patch = {"status": status, "last_error": last_error}
+    if status == "sent":
+        patch["delivered_at"] = _now_iso()  # only a real send has a delivery time
+    sb.table("message_outbox").update(patch).eq("id", row["id"]).execute()
     return status
-
-
-def _send_via_twilio(*, to_number: str, body: str) -> dict:
-    """POST one SMS to the Twilio REST API. Never called in tests (dry_run).
-
-    TODO(ops): verify A2P 10DLC campaign registration covers
-    application-initiated announcement SMS before enabling twilio mode.
-    """
-    import httpx
-
-    account_sid = os.environ["TWILIO_ACCOUNT_SID"]
-    auth_token = os.environ["TWILIO_AUTH_TOKEN"]
-    from_number = os.environ["TWILIO_FROM_NUMBER"]
-
-    resp = httpx.post(
-        f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json",
-        data={"To": to_number, "From": from_number, "Body": body},
-        auth=(account_sid, auth_token),
-        timeout=15.0,
-    )
-    resp.raise_for_status()
-    return resp.json()
 
 
 # ── Send log (exec visibility) ───────────────────────────────────────────────

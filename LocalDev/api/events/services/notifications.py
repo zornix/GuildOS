@@ -19,13 +19,12 @@ HTTP status codes.
 
 from __future__ import annotations
 
-import os
-
 from api.announcements.services.sms import (
     RecipientCountMismatch,
     dispatch_send,
     resolve_recipients,
 )
+from api.config import settings
 from api.events.auth import EVENT_UPDATE
 from api.events.core.rules import completeness as compute_completeness
 from api.events.db.rpc import call_rpc
@@ -63,7 +62,8 @@ class NoRecipients(EventsError):
 
 
 def _delivery_mode() -> str:
-    return os.environ.get("MESSAGE_DELIVERY_MODE", "dry_run")
+    """Single source of truth: api/config.py settings, never os.environ."""
+    return settings.MESSAGE_DELIVERY_MODE or "dry_run"
 
 
 def _actor_is_organizer(sb, *, event_id: str, member_id: str) -> bool:

@@ -112,7 +112,7 @@ def test_notify_happy_path_dry_run(
     outbox = cursor.fetchall()
     assert len(outbox) == 1
     assert str(outbox[0]["member_id"]) == officer["id"]
-    assert outbox[0]["status"] == "sent"
+    assert outbox[0]["status"] == "simulated"
     assert outbox[0]["delivery_mode"] == "sms"
 
     cursor.execute(
