@@ -92,12 +92,16 @@ domain package.
 
 ### Database access abstraction
 
-`api/db.py` returns either a Supabase client (prod) or a `PostgresClient`
-(`api/postgres_client.py`, local) that **mimics the supabase-py interface** over
-raw psycopg2. The switch is `settings.use_local_db`, which is simply
-`bool(DATABASE_URL)` — set `DATABASE_URL` and the whole app talks to local
-Postgres with no Supabase. Demo/local auth uses `member.id` as the JWT subject;
-Supabase auth uses `auth_id` (see `api/dependencies.py`).
+`api/db.py` returns a `PostgresClient` (`api/postgres_client.py`) that **mimics
+the supabase-py interface** over raw psycopg2 whenever `DATABASE_URL` is set
+(`settings.use_local_db`). Per ADR-0002 this is the path that carries traffic
+in **every** environment — the production boot guard (`api/index.py`) refuses
+to start without `DATABASE_URL`, so prod runs the psycopg2 client too, and
+`_LocalAuth` in `api/postgres_client.py` is the production JWT verifier
+(`sub = member.id`, HS256 over `JWT_SECRET`, `iss`/`aud` = `guildos`). The
+supabase-py branch (auth via `auth_id`) is vestigial fallback code, not the
+prod path; RLS policies are defense-in-depth only — the runtime tenant guard
+is the RPC layer (see Hard rules).
 
 **RPC params typed as true SQL arrays need registration.** The local shim
 JSON-encodes every list/dict RPC param, which is correct for JSONB-typed

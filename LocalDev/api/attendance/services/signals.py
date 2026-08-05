@@ -1,6 +1,6 @@
 """Attendance → treasury/standing signal seam (§7).
 
-Absence-driven FINES already flow through api/services/fine_processor.py →
+Absence-driven FINES already flow through api/treasury/services/fine_processor.py →
 FineToInvoice → tr_create_invoice; that path is authoritative and is NOT
 duplicated here. This module exposes the read-side absence signal for standing
 derivation (memberadmin) and announcements audiences.

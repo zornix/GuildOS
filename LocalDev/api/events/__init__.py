@@ -1,6 +1,5 @@
 """Events (Calendar) — domain package boundary.
 
-The HTTP handlers still live in api/routes/events.py and are delegated to via
-api/events/api/router.py so every existing path keeps working; see
-CONFORM_TODO.md for the remaining move.
+HTTP handlers live in api/events/api/*.py, aggregated by api/events/api/router.py
+and mounted from api/index.py. The legacy api/routes/ tree is gone.
 """
