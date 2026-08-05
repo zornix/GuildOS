@@ -11,12 +11,13 @@ from contextlib import contextmanager
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 
+from api.attendance.auth import CHECKIN_LINK_MANAGE
 from api.attendance.services.checkin_links import (
     create_checkin_link,
     deactivate_checkin_link,
     get_active_link_for_event,
 )
-from api.dependencies import get_current_user, require_officer
+from api.dependencies import get_current_user
 from api.events.auth import (
     EVENT_CREATE,
     EVENT_DELETE,
@@ -259,7 +260,7 @@ async def get_checkin_link(event_id: str, user=Depends(get_current_user)):
 
 
 @router.post("/{event_id}/checkin-link", response_model=CheckInLinkResponse)
-async def generate_checkin_link(event_id: str, officer=Depends(require_officer)):
+async def generate_checkin_link(event_id: str, officer=Depends(require_permission(CHECKIN_LINK_MANAGE))):
     """
     Generate a short-lived check-in link for an event.
     Officer shows this link (or its QR) to members in-person.
@@ -282,7 +283,23 @@ async def generate_checkin_link(event_id: str, officer=Depends(require_officer))
 
 
 @router.delete("/{event_id}/checkin-link")
-async def kill_checkin_link(event_id: str, officer=Depends(require_officer)):
-    """Manually deactivate the current check-in link."""
-    await deactivate_checkin_link(event_id)
+async def kill_checkin_link(event_id: str, officer=Depends(require_permission(CHECKIN_LINK_MANAGE))):
+    """Manually deactivate the current check-in link.
+
+    Ownership is verified exactly as the POST above does: without it, an officer
+    could kill another chapter's live check-in link with a guessed event id.
+    """
+    sb = get_events_db()
+    event = (
+        sb.table("events")
+        .select("id")
+        .eq("id", event_id)
+        .eq("chapter_id", officer["chapter_id"])
+        .single()
+        .execute()
+    )
+    if not event.data:
+        raise HTTPException(404, "Event not found")
+
+    await deactivate_checkin_link(event_id, officer["chapter_id"])
     return {"deactivated": True}

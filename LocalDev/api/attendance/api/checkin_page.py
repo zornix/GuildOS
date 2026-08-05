@@ -1,3 +1,6 @@
+import html as html_lib
+import json
+
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 
@@ -7,6 +10,29 @@ from api.config import settings
 router = APIRouter()
 
 
+def _js_literal(value) -> str:
+    """Render a value as a JS literal that is safe inside a <script> block.
+
+    json.dumps alone is NOT enough here. Its output is valid JSON, but this
+    string is embedded in HTML: a title containing `</script>` would close the
+    script element and everything after it would be parsed as markup. So the
+    HTML-significant characters are escaped to their \\u form (still the same
+    JS string, invisible to the reader), along with U+2028/U+2029, which are
+    literal line terminators in JS but not in JSON.
+
+    Returns the surrounding quotes too — emit it as `const X = {_js_literal(x)};`
+    with no quotes of your own.
+    """
+    return (
+        json.dumps(value)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
+    )
+
+
 @router.get("/{short_code}", response_class=HTMLResponse)
 async def checkin_page(short_code: str):
     """
@@ -14,6 +40,10 @@ async def checkin_page(short_code: str):
 
     Members enter their 10-digit phone number to check in.
     No Supabase session or JWT required.
+
+    This page is unauthenticated and renders officer-supplied event text, so
+    every interpolation is escaped for its context: html.escape for markup,
+    _js_literal for the <script> block. Nothing reaches the template raw.
     """
     link_data = await validate_checkin_link(short_code)
 
@@ -25,12 +55,20 @@ async def checkin_page(short_code: str):
 
     event = link_data["events"]
 
+    # HTML-context values (escaped) and JS-context values (quoted + escaped).
+    title_html = html_lib.escape(str(event.get("title") or ""))
+    date_html = html_lib.escape(str(event.get("date") or ""))
+    location_html = html_lib.escape(str(event.get("location") or ""))
+    title_js = _js_literal(str(event.get("title") or ""))
+    short_code_js = _js_literal(short_code)
+    api_base_js = _js_literal(settings.BASE_URL)
+
     html = f"""
     <!DOCTYPE html>
     <html>
     <head>
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Check In — {event['title']}</title>
+        <title>Check In — {title_html}</title>
         <style>
             * {{ margin: 0; padding: 0; box-sizing: border-box; }}
             body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -65,8 +103,8 @@ async def checkin_page(short_code: str):
     </head>
     <body>
         <div class="card">
-            <h1>{event['title']}</h1>
-            <p class="sub">{event['date']} &middot; {event['location']}</p>
+            <h1>{title_html}</h1>
+            <p class="sub">{date_html} &middot; {location_html}</p>
 
             <form id="checkin-form">
                 <input
@@ -88,8 +126,8 @@ async def checkin_page(short_code: str):
             <div id="status" class="status"></div>
         </div>
         <script>
-            const SHORT_CODE = '{short_code}';
-            const API_BASE = '{settings.BASE_URL}';
+            const SHORT_CODE = {short_code_js};
+            const API_BASE = {api_base_js};
             const phoneInput = document.getElementById('phone');
             const form = document.getElementById('checkin-form');
             const submitBtn = document.getElementById('submit-btn');
@@ -145,7 +183,7 @@ async def checkin_page(short_code: str):
                         line1.textContent = 'You successfully signed in for this event.';
                         const line2 = document.createElement('div');
                         line2.style.cssText = 'font-size:13px;font-weight:500;opacity:0.92;margin-top:10px;';
-                        line2.textContent = (data && data.event_title) ? data.event_title : '{event['title']}';
+                        line2.textContent = (data && data.event_title) ? data.event_title : {title_js};
                         statusEl.appendChild(line1);
                         statusEl.appendChild(line2);
                         form.style.display = 'none';

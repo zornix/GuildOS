@@ -49,9 +49,15 @@ async def checkin_via_link(short_code: str, user=Depends(get_current_user)):
     if existing.data and existing.data[0].get("checked_in"):
         raise HTTPException(409, "Already checked in")
 
+    # chapter_id is stamped explicitly rather than left to the 0146 derive
+    # trigger: the trigger raises on a mismatch, so passing it makes the tenant
+    # invariant assert itself on every write instead of being inferred.
+    # (There is no attendance.session_id column to stamp — the link/session
+    # relation is attendance_sessions.checkin_link_id, see checkin_links.)
     sb.table("attendance").upsert({
         "event_id": event["id"],
         "member_id": user["id"],
+        "chapter_id": event["chapter_id"],
         "checked_in": True,
         "checked_in_at": datetime.now(timezone.utc).isoformat(),
         "method": "link",
@@ -78,6 +84,9 @@ async def checkin_via_phone(short_code: str, body: PhoneCheckIn):
     event = link_data["events"]
     sb = get_supabase()
 
+    # body.phone is already E.164 (PhoneCheckIn normalizes through api.phone),
+    # and members.phone is E.164 since 0149 — so this compares like with like
+    # however the member typed it in.
     member_result = (
         sb.table("members")
         .select("id, chapter_id")
@@ -105,6 +114,7 @@ async def checkin_via_phone(short_code: str, body: PhoneCheckIn):
     sb.table("attendance").upsert({
         "event_id": event["id"],
         "member_id": member["id"],
+        "chapter_id": event["chapter_id"],
         "checked_in": True,
         "checked_in_at": datetime.now(timezone.utc).isoformat(),
         "method": "link",
