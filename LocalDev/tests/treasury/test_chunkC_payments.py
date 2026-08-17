@@ -219,7 +219,7 @@ def test_concurrent_double_verify_yields_exactly_one(cursor, chapter_id, member_
     if not db_url:
         pytest.skip("no DB url")
 
-    from api.postgres_client import PostgresClient
+    from api.platform.postgres import PostgresClient
 
     setup = PostgresClient(db_url)
     try:

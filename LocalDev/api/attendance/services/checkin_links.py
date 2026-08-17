@@ -51,7 +51,7 @@ def _is_duplicate_code(exc: Exception) -> bool:
     """True only for a unique-key collision on the generated short_code.
 
     The two clients raise this differently: the offline psycopg2 shim
-    (api/postgres_client.py) lets `psycopg2.errors.UniqueViolation` through
+    (api/platform/postgres.py) lets `psycopg2.errors.UniqueViolation` through
     untouched, while supabase-py wraps PostgREST's response in an APIError
     carrying `code='23505'`. Anything else -- a dropped connection, a NOT NULL
     violation, a bad payload -- must NOT be swallowed as a collision: the old

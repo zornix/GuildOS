@@ -30,7 +30,7 @@ def auth_sb(db_url):
     """Postgres shim bound to the app's JWT secret, so tokens minted by the auth
     module verify through this client's auth shim."""
     from api.config import settings
-    from api.postgres_client import PostgresClient
+    from api.platform.postgres import PostgresClient
 
     client = PostgresClient(db_url, settings.JWT_SECRET)
     try:

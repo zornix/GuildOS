@@ -9,7 +9,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# The client abstraction (api/postgres_client.py, mimicking supabase-py) has no
+# The client abstraction (api/platform/postgres.py, mimicking supabase-py) has no
 # GROUP BY: only filters, ordering, limit, and an exact COUNT(*). So the total
 # is aggregated in SQL via count='exact' (the count query ignores LIMIT), while
 # the per-event-name breakdown is computed over a capped page of rows.

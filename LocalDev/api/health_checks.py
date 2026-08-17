@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from typing import Any, Callable
 
-from api.postgres_client import PostgresClient
+from api.platform.postgres import PostgresClient
 
 
 def retry_with_backoff(

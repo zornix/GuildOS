@@ -19,7 +19,7 @@ from api.config import settings
 
 router = APIRouter()
 
-# Token claims. iss/aud are verified on decode (api/postgres_client.py), so a
+# Token claims. iss/aud are verified on decode (api/platform/postgres.py), so a
 # token minted for another audience — or a pre-hardening token carrying neither —
 # is rejected and the holder is forced to log in again.
 TOKEN_ISSUER = "guildos"

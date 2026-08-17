@@ -143,7 +143,7 @@ def sb_client(db_url):
     (supabase-py) and offline (PostgresClient shim), so writer tests exercise the real
     write path rather than raw SQL. Connects as the DB superuser (bypasses RLS).
     """
-    from api.postgres_client import PostgresClient
+    from api.platform.postgres import PostgresClient
 
     client = PostgresClient(db_url)
     try:

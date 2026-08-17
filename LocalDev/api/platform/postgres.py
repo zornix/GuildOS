@@ -1,7 +1,12 @@
 """
-Supabase-compatible query builder backed by psycopg2.
+The database client: a query builder backed by psycopg2.
 
-Implements the subset of the supabase-py API actually used by the routes:
+Per ADR-0002 this is *the* client in every environment — demo and prod are both
+Supabase-hosted Postgres reached over the pooler by `DATABASE_URL`, and
+supabase-py is not installed. The builder surface below is PostgREST-shaped for
+historical reasons; it is no longer a "local fallback" for anything.
+
+Supported calls:
   sb.table("x").select("cols").eq("c", v).execute()
   sb.table("x").insert({...}).execute()
   sb.table("x").update({...}).eq(...).execute()
@@ -196,7 +201,7 @@ class QueryBuilder:
                 cols = JOIN_STAR_COLUMNS.get(tbl)
                 if not cols:
                     raise ValueError(
-                        f'postgres_client: join "{tbl}(*)" needs a JOIN_STAR_COLUMNS entry '
+                        f'platform.postgres: join "{tbl}(*)" needs a JOIN_STAR_COLUMNS entry '
                         "or use explicit columns, e.g. chapters(name)."
                     )
             else:
