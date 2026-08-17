@@ -196,9 +196,9 @@ def harness(sb_client, monkeypatch):
     import api.calendar.api.calendar as calendar_api
     import api.instrumentation.api.usage as usage_api
     import api.rbac.services.permissions as rbac_permissions
-    from api.calendar.api.router import router as calendar_router
+    from api.calendar.api.calendar import router as calendar_router
     from api.dependencies import get_current_user
-    from api.instrumentation.api.router import router as usage_router
+    from api.instrumentation.api.usage import router as usage_router
 
     monkeypatch.setattr(calendar_api, "get_db", lambda: sb_client)
     monkeypatch.setattr(usage_api, "get_db", lambda: sb_client)

@@ -97,30 +97,35 @@ if _violations:
         f"Refusing to boot in {settings.VERCEL_ENV} — fix: " + "; ".join(_violations)
     )
 
-from api.auth.api.router import router as auth_router
-from api.members.api.router import router as members_router
-from api.cron.api.router import router as cron_router
-from api.standing.api.router import router as standing_router
-from api.announcements.api.router import router as announcements_router
+# Domains whose routes live in one module mount that module's router directly.
+from api.auth.api.auth import router as auth_router
+from api.members.api.members import router as members_router
+from api.cron.api.cron import router as cron_router
+from api.announcements.api.announcements import router as announcements_router
+from api.bylaws.api.documents import router as bylaws_router
+from api.nl_controller.api.commands import router as nl_controller_router
+from api.rbac.api.roles import router as rbac_router
+from api.recruitment.api.pipeline import router as recruitment_router
+from api.calendar.api.calendar import router as calendar_router
+from api.instrumentation.api.usage import router as usage_router
+from api.initiatives.api.initiatives import router as initiatives_router
+from api.tasks.api.operations import router as operations_router
+from api.treasury.api.fines_legacy import router as fines_router
+
+# MemberAdmin owns standing; /api/standing stays its own mount for the frontend.
+from api.memberadmin.api.scores import router as memberadmin_router
+from api.memberadmin.api.standing import router as standing_router
+
+# Domains with several sub-routers keep a real aggregator that fixes their order.
 from api.attendance.api.router import (
     router as attendance_router,
     checkin_links_router,
     checkin_page_router,
     excuses_router,
 )
-from api.bylaws.api.router import router as bylaws_router
 from api.events.api.router import router as events_router
-from api.memberadmin.api.router import router as memberadmin_router
-from api.nl_controller.api.router import router as nl_controller_router
-from api.rbac.api.router import router as rbac_router
-from api.recruitment.api.router import router as recruitment_router
 from api.tasks.api.router import router as tasks_router
-from api.tasks.api.operations import router as operations_router
 from api.treasury.api.router import router as treasury_router
-from api.treasury.api.fines_legacy import router as fines_router
-from api.calendar.api.router import router as calendar_router
-from api.instrumentation.api.router import router as usage_router
-from api.initiatives.api.router import router as initiatives_router
 
 # Swagger and the OpenAPI schema stay on locally (CLAUDE.md documents /api/docs
 # for dev) but are withdrawn from every deploy — the schema enumerates the whole
