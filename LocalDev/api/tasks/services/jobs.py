@@ -7,7 +7,7 @@ api/tasks/services/approvals.py and enforced by the routes.
 
 from __future__ import annotations
 
-from api.tasks.db.rpc import call_rpc
+from api.platform.rpc import call_rpc
 
 
 def report_done(

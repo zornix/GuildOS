@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Header
 from pydantic import BaseModel, Field
 
 from api.rbac.auth import require_permission
-from api.treasury.db.session import get_treasury_db
+from api.platform.db import get_db
 from api.treasury.services import expenses as svc
 
 # Catalog permission keys gating this surface (ADR-0001; 0147).
@@ -24,7 +24,7 @@ class ExpenseCreate(BaseModel):
 
 @router.get("/balance")
 async def get_chapter_balance(user=Depends(require_permission(BALANCE_VIEW))):
-    sb = get_treasury_db()
+    sb = get_db()
     bal = svc.chapter_balance(sb, chapter_id=user["chapter_id"])
     return {"chapter_id": user["chapter_id"], "balance_cents": bal.cents, "balance_display": bal.to_dollars_str()}
 
@@ -35,7 +35,7 @@ async def create_expense(
     user=Depends(require_permission(EXPENSE_CREATE)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
-    sb = get_treasury_db()
+    sb = get_db()
     return svc.create_expense(
         sb,
         chapter_id=user["chapter_id"],
@@ -53,7 +53,7 @@ async def invalidate_expense(
     user=Depends(require_permission(EXPENSE_CREATE)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
-    sb = get_treasury_db()
+    sb = get_db()
     return svc.invalidate_expense(
         sb,
         chapter_id=user["chapter_id"],

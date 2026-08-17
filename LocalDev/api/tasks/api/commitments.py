@@ -12,7 +12,7 @@ from api.dependencies import get_current_user
 from api.rbac.services.permissions import has_permission
 from api.tasks.api.schemas import CommitRequest, UncommitRequest
 from api.tasks.auth import TASKS_ASSIGN, TASKS_REVIEW
-from api.tasks.db.session import get_tasks_db
+from api.platform.db import get_db
 from api.tasks.services import commitments as svc
 
 router = APIRouter()
@@ -42,7 +42,7 @@ async def commit_task(
 ):
     """Self-commit for any authenticated member; committing someone else
     requires tasks:assign."""
-    sb = get_tasks_db()
+    sb = get_db()
     member_id = (body.member_id if body else None) or user["id"]
     if member_id != user["id"] and not has_permission(user, TASKS_ASSIGN, sb=sb):
         raise HTTPException(403, "Missing permission: tasks:assign (required to commit another member)")
@@ -69,7 +69,7 @@ async def uncommit_task(
 ):
     """Always allowed (no hard lock — spec §4); the response carries `late` and
     `hours_before_event`. Uncommitting someone else requires tasks:review."""
-    sb = get_tasks_db()
+    sb = get_db()
     member_id = (body.member_id if body else None) or user["id"]
     if member_id != user["id"] and not has_permission(user, TASKS_REVIEW, sb=sb):
         raise HTTPException(403, "Missing permission: tasks:review (required to uncommit another member)")
@@ -96,7 +96,7 @@ async def get_uncommit_log(
 ):
     """Visible to ALL chapter members — social accountability over hard locks."""
     return svc.uncommit_log(
-        get_tasks_db(),
+        get_db(),
         chapter_id=user["chapter_id"],
         member_id=member_id,
         limit=limit,
@@ -106,7 +106,7 @@ async def get_uncommit_log(
 @router.get("/attribution/me")
 async def my_attribution(user=Depends(get_current_user)):
     return svc.attribution(
-        get_tasks_db(), chapter_id=user["chapter_id"], member_id=user["id"]
+        get_db(), chapter_id=user["chapter_id"], member_id=user["id"]
     )
 
 
@@ -114,7 +114,7 @@ async def my_attribution(user=Depends(get_current_user)):
 async def member_attribution(member_id: str, user=Depends(get_current_user)):
     """Any member can view any member's ledger (chapter-visible by design)."""
     return svc.attribution(
-        get_tasks_db(), chapter_id=user["chapter_id"], member_id=member_id
+        get_db(), chapter_id=user["chapter_id"], member_id=member_id
     )
 
 
@@ -122,5 +122,5 @@ async def member_attribution(member_id: str, user=Depends(get_current_user)):
 async def task_commitments(task_id: str, user=Depends(get_current_user)):
     """Active commitments + full commit/uncommit history for a task."""
     return svc.list_task_commitments(
-        get_tasks_db(), chapter_id=user["chapter_id"], task_id=task_id
+        get_db(), chapter_id=user["chapter_id"], task_id=task_id
     )

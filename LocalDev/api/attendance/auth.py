@@ -1,8 +1,6 @@
-"""Attendance domain permissions — thin layer over the central RBAC helper."""
+"""Attendance permission keys (catalog-seeded; gate with api.rbac.auth.require_permission)."""
 
 from __future__ import annotations
-
-from api.rbac.auth import require_permission  # noqa: F401  (domain re-export)
 
 CHECKIN_CREATE = "attendance:checkin:create"
 CHECKIN_LINK_MANAGE = "attendance:checkin_link:manage"

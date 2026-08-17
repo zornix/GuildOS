@@ -7,8 +7,9 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from api.dependencies import get_current_user
 from api.rbac.services.permissions import has_permission
 from api.tasks.api.schemas import TaskCreate, TaskStatusUpdate
-from api.tasks.auth import TASKS_COMPLETE, TASKS_CREATE, require_permission
-from api.tasks.db.session import get_tasks_db
+from api.tasks.auth import TASKS_COMPLETE, TASKS_CREATE
+from api.rbac.auth import require_permission
+from api.platform.db import get_db
 from api.tasks.services import tasks as svc
 from api.tasks.services.approvals import can_create_event_job, can_create_initiative_job
 
@@ -18,7 +19,7 @@ router = APIRouter()
 @router.get("/")
 async def list_tasks(status: str | None = None, user=Depends(get_current_user)):
     """List the chapter's tasks. Any authenticated member can view."""
-    return svc.list_tasks(get_tasks_db(), chapter_id=user["chapter_id"], status=status)
+    return svc.list_tasks(get_db(), chapter_id=user["chapter_id"], status=status)
 
 
 @router.post("/")
@@ -27,7 +28,7 @@ async def create_task(
     user=Depends(require_permission(TASKS_CREATE)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
-    sb = get_tasks_db()
+    sb = get_db()
     if body.event_id and body.initiative_id:
         raise HTTPException(422, "A job may not be linked to both an event and an initiative")
     # Attaching a job to an event requires running that event (supervisor/organizer)
@@ -74,7 +75,7 @@ async def update_task_status(
 ):
     """Ownership-scoped: tasks:complete covers your OWN task; anyone else's
     requires the tasks:review escalation (see docs/services/permissions-matrix.md)."""
-    sb = get_tasks_db()
+    sb = get_db()
     task = svc.get_task(sb, chapter_id=user["chapter_id"], task_id=task_id)
     if not task:
         raise HTTPException(404, "Task not found")

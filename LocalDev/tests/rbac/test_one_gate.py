@@ -94,7 +94,7 @@ def _officer_catalog():
 @pytest.fixture
 def rbac_on_fake(monkeypatch):
     def _use(sb):
-        monkeypatch.setattr(permissions_service, "get_rbac_db", lambda: sb)
+        monkeypatch.setattr(permissions_service, "get_db", lambda: sb)
         return sb
 
     return _use

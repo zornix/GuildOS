@@ -4,23 +4,14 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from api.platform.db import get_db
-
-
-def get_nl_db():
-    return get_db()
-
-
-def _row(result) -> dict:
-    data = result.data
-    return data[0] if isinstance(data, list) else data
+from api.platform.rows import unwrap_row
 
 
 def submit_command(sb, *, chapter_id: str, input_text: str, actor_id: str) -> dict:
     # TODO(nl_controller): a real parser would populate proposed_actions with
     # typed action descriptors (e.g. {"service": "events", "op": "create", ...}).
     # Until then requests are recorded verbatim with no proposed actions.
-    return _row(
+    return unwrap_row(
         sb.table("command_requests")
         .insert(
             {

@@ -1,4 +1,4 @@
-"""Events domain permissions — thin layer over the central RBAC helper.
+"""Events domain permissions and role sets.
 
 No inline role/permission strings in route handlers: the service layer checks
 CHAIR_ROLES (supervisor eligibility, spec §1) and the routes gate with
@@ -6,8 +6,6 @@ require_permission on the calendar:* permissions below.
 """
 
 from __future__ import annotations
-
-from api.rbac.auth import require_permission  # noqa: F401  (domain re-export)
 
 EVENT_CREATE = "calendar:event:create"
 EVENT_UPDATE = "calendar:event:update"

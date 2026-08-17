@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 
 from api.announcements.services.sms import RecipientCountMismatch
 from api.dependencies import get_current_user
-from api.events.db.session import get_events_db
+from api.platform.db import get_db
 from api.events.services import events as events_svc
 from api.events.services import notifications as svc
 
@@ -58,7 +58,7 @@ def _map_domain_errors():
 async def notify_preview(event_id: str, user=Depends(get_current_user)):
     """Confirmation step: checklist + who this would reach. No side effects."""
     with _map_domain_errors():
-        return svc.preview_notify(get_events_db(), actor=user, event_id=event_id)
+        return svc.preview_notify(get_db(), actor=user, event_id=event_id)
 
 
 @router.post("/{event_id}/notify")
@@ -71,7 +71,7 @@ async def notify(
     """Two-phase confirmed notify blast. 409 returns fresh counts to re-confirm."""
     with _map_domain_errors():
         return svc.notify_event(
-            get_events_db(),
+            get_db(),
             actor=user,
             event_id=event_id,
             confirmed_recipient_count=body.confirmed_recipient_count,

@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Header
 from pydantic import BaseModel, Field
 
 from api.rbac.auth import require_permission
-from api.treasury.db.session import get_treasury_db
+from api.platform.db import get_db
 from api.treasury.services import refunds as svc
 
 # Catalog permission keys gating this surface (ADR-0001; 0147).
@@ -31,7 +31,7 @@ async def issue_refund(
     user=Depends(require_permission(REFUND_CREATE)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
-    sb = get_treasury_db()
+    sb = get_db()
     return svc.issue_refund(
         sb,
         chapter_id=user["chapter_id"],

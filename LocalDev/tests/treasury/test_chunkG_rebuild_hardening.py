@@ -374,7 +374,7 @@ async def test_rebuild_requires_rebuild_run_permission(sb_client, cursor, chapte
     from api.rbac.auth import require_permission
     from api.treasury.api import rebuild
 
-    monkeypatch.setattr(rbac_permissions, "get_rbac_db", lambda: sb_client)
+    monkeypatch.setattr(rbac_permissions, "get_db", lambda: sb_client)
     dep = require_permission(rebuild.REBUILD_RUN)
     user = {"id": member_id, "chapter_id": chapter_id, "role": "member"}
 

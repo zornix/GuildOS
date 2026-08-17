@@ -123,7 +123,7 @@ def test_submit_payment_rejects_another_members_invoice(
 # 404s anything outside the caller's chapter so cross-chapter existence never
 # leaks. Since 0147 that holder is a role in member_roles (treasury_viewer /
 # treasurer / officer), not a treasury_grants row.
-# The endpoint reads `sb` from get_treasury_db(); we point it at the test client
+# The endpoint reads `sb` from get_db(); we point it at the test client
 # and call the handler directly with a plain user dict (no FastAPI Depends).
 
 
@@ -138,7 +138,7 @@ def _assign_role(cursor, chapter, member, role_key):
 def _rbac_on_test_db(monkeypatch, sb_client):
     import api.rbac.services.permissions as rbac_permissions
 
-    monkeypatch.setattr(rbac_permissions, "get_rbac_db", lambda: sb_client)
+    monkeypatch.setattr(rbac_permissions, "get_db", lambda: sb_client)
 
 
 async def test_balance_self_read_allowed(
@@ -146,7 +146,7 @@ async def test_balance_self_read_allowed(
 ):
     from api.treasury.api import balances
 
-    monkeypatch.setattr(balances, "get_treasury_db", lambda: sb_client)
+    monkeypatch.setattr(balances, "get_db", lambda: sb_client)
     _rbac_on_test_db(monkeypatch, sb_client)
     member = member_factory()
     result = await balances.get_member_balance(
@@ -160,7 +160,7 @@ async def test_balance_read_requires_permission(
 ):
     from api.treasury.api import balances
 
-    monkeypatch.setattr(balances, "get_treasury_db", lambda: sb_client)
+    monkeypatch.setattr(balances, "get_db", lambda: sb_client)
     _rbac_on_test_db(monkeypatch, sb_client)
     target = member_factory()
     requester = member_factory()  # plain member: no role carries treasury:audit:view
@@ -176,7 +176,7 @@ async def test_balance_read_allowed_for_same_chapter_treasury_viewer(
 ):
     from api.treasury.api import balances
 
-    monkeypatch.setattr(balances, "get_treasury_db", lambda: sb_client)
+    monkeypatch.setattr(balances, "get_db", lambda: sb_client)
     _rbac_on_test_db(monkeypatch, sb_client)
     target = member_factory()
     requester = member_factory()
@@ -192,7 +192,7 @@ async def test_balance_read_404s_member_in_another_chapter(
 ):
     from api.treasury.api import balances
 
-    monkeypatch.setattr(balances, "get_treasury_db", lambda: sb_client)
+    monkeypatch.setattr(balances, "get_db", lambda: sb_client)
     _rbac_on_test_db(monkeypatch, sb_client)
     foreign_target = member_factory(chapter=other_chapter)
     requester = member_factory()

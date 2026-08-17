@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Header
 from pydantic import BaseModel, Field
 
 from api.rbac.auth import require_permission
-from api.treasury.db.session import get_treasury_db
+from api.platform.db import get_db
 from api.treasury.services import adjustments as svc
 
 # Catalog permission keys gating this surface (ADR-0001; 0147).
@@ -32,7 +32,7 @@ async def create_adjustment(
     user=Depends(require_permission(ADJUSTMENT_CREATE)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
-    sb = get_treasury_db()
+    sb = get_db()
     return svc.create_adjustment(
         sb,
         chapter_id=user["chapter_id"],
@@ -50,7 +50,7 @@ async def approve_adjustment(
     adjustment_id: str,
     user=Depends(require_permission(ADJUSTMENT_CREATE)),
 ):
-    sb = get_treasury_db()
+    sb = get_db()
     return svc.approve_adjustment(
         sb,
         chapter_id=user["chapter_id"],

@@ -200,9 +200,9 @@ def harness(sb_client, monkeypatch):
     from api.dependencies import get_current_user
     from api.instrumentation.api.router import router as usage_router
 
-    monkeypatch.setattr(calendar_api, "get_calendar_db", lambda: sb_client)
-    monkeypatch.setattr(usage_api, "get_usage_db", lambda: sb_client)
-    monkeypatch.setattr(rbac_permissions, "get_rbac_db", lambda: sb_client)
+    monkeypatch.setattr(calendar_api, "get_db", lambda: sb_client)
+    monkeypatch.setattr(usage_api, "get_db", lambda: sb_client)
+    monkeypatch.setattr(rbac_permissions, "get_db", lambda: sb_client)
 
     app = FastAPI()
     app.include_router(calendar_router, prefix="/api/calendar")

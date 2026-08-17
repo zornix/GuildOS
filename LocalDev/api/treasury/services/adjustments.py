@@ -8,7 +8,7 @@ the BalanceEngine writes).
 from __future__ import annotations
 
 from api.treasury.core.balance import BalanceEngine
-from api.treasury.db.rpc import call_rpc
+from api.platform.rpc import call_rpc
 
 # Adjustments at or above this magnitude (cents) need a second officer's sign-off
 # before they take effect. Cheap insurance against one mistaken/compromised officer

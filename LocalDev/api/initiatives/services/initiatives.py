@@ -11,7 +11,7 @@ hitting the database mutation.
 from __future__ import annotations
 
 from api.initiatives.auth import is_assigned_chair
-from api.initiatives.db.rpc import call_rpc
+from api.platform.rpc import call_rpc
 
 
 class InitiativesError(Exception):

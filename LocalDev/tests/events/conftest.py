@@ -96,10 +96,10 @@ def app_on_test_db(sb_client, monkeypatch):
     import api.rbac.services.permissions as perm_mod
 
     monkeypatch.setenv("MESSAGE_DELIVERY_MODE", "dry_run")
-    monkeypatch.setattr(perm_mod, "get_rbac_db", lambda: sb_client)
-    monkeypatch.setattr(events_api, "get_events_db", lambda: sb_client)
-    monkeypatch.setattr(notify_api, "get_events_db", lambda: sb_client)
-    monkeypatch.setattr(security_api, "get_events_db", lambda: sb_client)
+    monkeypatch.setattr(perm_mod, "get_db", lambda: sb_client)
+    monkeypatch.setattr(events_api, "get_db", lambda: sb_client)
+    monkeypatch.setattr(notify_api, "get_db", lambda: sb_client)
+    monkeypatch.setattr(security_api, "get_db", lambda: sb_client)
 
     from api.index import app
 

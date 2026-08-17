@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from api.dependencies import get_current_user
 from api.rbac.auth import require_permission
 from api.treasury.api.schemas import TreasuryMessage  # noqa: F401  (contract anchor)
-from api.treasury.db.session import get_treasury_db
+from api.platform.db import get_db
 from api.treasury.services import invoices as svc
 from pydantic import BaseModel, Field
 
@@ -75,7 +75,7 @@ async def create_invoice(
     kind = body.source or body.kind
     if not kind:
         raise HTTPException(422, "one of `source` (dues|fine|manual) or `kind` is required")
-    sb = get_treasury_db()
+    sb = get_db()
     invoice = svc.create_invoice_v2(
         sb,
         chapter_id=user["chapter_id"],
@@ -102,7 +102,7 @@ async def void_invoice(
     """Void/waive an invoice — Treasurer only, reason required, logged (decision #5)."""
     if not body.reason.strip():
         raise HTTPException(422, "a non-empty reason is required to void an invoice")
-    sb = get_treasury_db()
+    sb = get_db()
     try:
         invoice = svc.void_invoice(
             sb,
@@ -123,7 +123,7 @@ async def bulk_create_invoices(
     user=Depends(require_permission(INVOICE_CREATE)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
-    sb = get_treasury_db()
+    sb = get_db()
     return svc.bulk_create_invoices(
         sb,
         chapter_id=user["chapter_id"],
@@ -139,7 +139,7 @@ async def cancel_invoice(
     user=Depends(require_permission(INVOICE_CREATE)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
-    sb = get_treasury_db()
+    sb = get_db()
     invoice = svc.cancel_invoice(
         sb,
         chapter_id=user["chapter_id"],
@@ -156,7 +156,7 @@ async def submit_payment(
     user=Depends(get_current_user),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
-    sb = get_treasury_db()
+    sb = get_db()
     return svc.submit_payment(
         sb,
         chapter_id=user["chapter_id"],

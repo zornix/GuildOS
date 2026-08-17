@@ -13,11 +13,11 @@ from api.rbac.db.repositories.member_roles import (
     list_member_role_keys,
     list_permissions_for_roles,
 )
-from api.rbac.db.session import get_rbac_db
+from api.platform.db import get_db
 
 
 def get_member_permissions(member: dict, *, sb=None) -> set[str]:
-    client = sb or get_rbac_db()
+    client = sb or get_db()
     role_keys = set(
         list_member_role_keys(
             client, chapter_id=member["chapter_id"], member_id=member["id"]

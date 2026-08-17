@@ -38,8 +38,8 @@ def app_on_test_db(sb_client, monkeypatch, delivery_mode):
     import api.announcements.api.announcements as ann_api
     import api.rbac.services.permissions as perm_mod
 
-    monkeypatch.setattr(perm_mod, "get_rbac_db", lambda: sb_client)
-    monkeypatch.setattr(ann_api, "get_announcements_db", lambda: sb_client)
+    monkeypatch.setattr(perm_mod, "get_db", lambda: sb_client)
+    monkeypatch.setattr(ann_api, "get_db", lambda: sb_client)
 
     from api.index import app
 

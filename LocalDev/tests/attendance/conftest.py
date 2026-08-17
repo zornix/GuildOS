@@ -121,8 +121,8 @@ def attendance_app(sb_client, monkeypatch):
 
     monkeypatch.setattr(att_api, "get_db", lambda: sb_client)
     monkeypatch.setattr(links_svc, "get_db", lambda: sb_client)
-    monkeypatch.setattr(events_api, "get_events_db", lambda: sb_client)
-    monkeypatch.setattr(perm_mod, "get_rbac_db", lambda: sb_client)
+    monkeypatch.setattr(events_api, "get_db", lambda: sb_client)
+    monkeypatch.setattr(perm_mod, "get_db", lambda: sb_client)
 
     from api.index import app
 

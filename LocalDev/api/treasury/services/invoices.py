@@ -6,10 +6,9 @@ path). Reads use the `sb.table(...)` builder.
 
 from __future__ import annotations
 
-from typing import Any
 
 from api.treasury.core.idempotency import idempotency_operation  # noqa: F401  (contract anchor)
-from api.treasury.db.rpc import call_rpc
+from api.platform.rpc import call_rpc
 from api.treasury.notifications import notify_invoice_issued
 
 
@@ -24,13 +23,6 @@ def recompute_member_balance(sb, member_id: str) -> None:
     from api.treasury.core.balance import BalanceEngine
 
     BalanceEngine(sb).recompute_member(member_id)
-
-
-def _row(result: Any) -> dict:
-    data = result.data
-    if isinstance(data, list):
-        return data[0]
-    return data
 
 
 def create_invoice(

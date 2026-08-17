@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from api.tasks.db.rpc import call_rpc
+from api.platform.rpc import call_rpc
 
 
 def commit_task(

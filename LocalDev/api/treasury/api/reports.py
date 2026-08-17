@@ -13,7 +13,7 @@ from fastapi.responses import Response
 from api.dependencies import get_current_user
 from api.rbac.auth import require_permission
 from api.rbac.services.permissions import has_permission
-from api.treasury.db.session import get_treasury_db
+from api.platform.db import get_db
 from api.treasury.services import reports as svc
 
 # Catalog permission keys gating this surface (ADR-0001; 0147). Chapter-level
@@ -54,7 +54,7 @@ async def list_payment_submissions(
     Returns: {"data": [...], "next_cursor": str|null, "total": int}
     """
     offset = int(cursor) if cursor else 0
-    sb = get_treasury_db()
+    sb = get_db()
     return svc.list_payment_submissions(
         sb,
         chapter_id=user["chapter_id"],
@@ -77,7 +77,7 @@ async def treasury_dashboard(
     user=Depends(require_permission(DASHBOARD_VIEW)),
 ):
     """Single treasurer aggregate for the authed user's chapter (integer cents)."""
-    sb = get_treasury_db()
+    sb = get_db()
     return svc.dashboard_summary(sb, chapter_id=user["chapter_id"])
 
 
@@ -92,7 +92,7 @@ async def member_statement(
     CHAPTER. A non-existent member, or one outside the requester's chapter,
     returns 404 so cross-chapter existence is never leaked.
     """
-    sb = get_treasury_db()
+    sb = get_db()
 
     if str(user["id"]) != str(member_id) and not has_permission(user, RECORD_VIEW):
         raise HTTPException(403, f"Missing permission: {RECORD_VIEW}")
@@ -117,7 +117,7 @@ async def period_report(
     user=Depends(require_permission(RECORD_VIEW)),
 ):
     """Return one chapter-scoped `dataset` for `period` as a CSV download."""
-    sb = get_treasury_db()
+    sb = get_db()
     try:
         csv_text = svc.period_report_csv(
             sb, chapter_id=user["chapter_id"], period=period, dataset=dataset

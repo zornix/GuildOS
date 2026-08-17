@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from api.tasks.db.rpc import call_rpc
+from api.platform.rpc import call_rpc
 
 
 def create_task(

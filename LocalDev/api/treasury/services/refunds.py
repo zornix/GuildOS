@@ -9,7 +9,7 @@ balances are refreshed and a single refund notification is fired. Gated on the
 from __future__ import annotations
 
 from api.treasury.core.balance import BalanceEngine
-from api.treasury.db.rpc import call_rpc
+from api.platform.rpc import call_rpc
 from api.treasury.notifications import notify_refund_issued
 
 

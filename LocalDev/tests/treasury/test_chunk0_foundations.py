@@ -307,7 +307,7 @@ def test_audit_logger_record_stores_fields(sb_client, cursor, chapter_id, member
 
 
 def test_call_rpc_rolls_back_multi_write_when_function_raises(sb_client, cursor, chapter_id):
-    from api.treasury.db.rpc import call_rpc
+    from api.platform.rpc import call_rpc
 
     with pytest.raises(Exception):
         call_rpc(

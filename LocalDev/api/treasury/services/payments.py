@@ -10,7 +10,7 @@ approval notification (never on an idempotent replay).
 from __future__ import annotations
 
 from api.treasury.core.balance import BalanceEngine
-from api.treasury.db.rpc import call_rpc
+from api.platform.rpc import call_rpc
 from api.treasury.notifications import notify_payment_approved, notify_payment_rejected
 
 

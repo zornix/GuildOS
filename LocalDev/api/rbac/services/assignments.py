@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from api.rbac.db.rpc import call_rpc
+from api.platform.rpc import call_rpc
 
 
 def assign_role(

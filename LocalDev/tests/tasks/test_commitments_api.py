@@ -23,9 +23,9 @@ def harness(sb_client, monkeypatch):
     from api.dependencies import get_current_user
     from api.tasks.api.router import router
 
-    monkeypatch.setattr(tasks_api, "get_tasks_db", lambda: sb_client)
-    monkeypatch.setattr(commitments_api, "get_tasks_db", lambda: sb_client)
-    monkeypatch.setattr(rbac_permissions, "get_rbac_db", lambda: sb_client)
+    monkeypatch.setattr(tasks_api, "get_db", lambda: sb_client)
+    monkeypatch.setattr(commitments_api, "get_db", lambda: sb_client)
+    monkeypatch.setattr(rbac_permissions, "get_db", lambda: sb_client)
 
     app = FastAPI()
     app.include_router(router, prefix="/api/tasks")

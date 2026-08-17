@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from api.dependencies import get_current_user
 from api.rbac.auth import require_permission
 from api.rbac.services.permissions import has_permission
-from api.treasury.db.session import get_treasury_db
+from api.platform.db import get_db
 from api.treasury.services import payments as svc
 
 # Catalog permission keys gating this surface (ADR-0001; 0147).
@@ -60,7 +60,7 @@ async def verify_payment(
     user=Depends(require_permission(PAYMENT_REVIEW)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
-    sb = get_treasury_db()
+    sb = get_db()
     return svc.verify_payment(
         sb,
         chapter_id=user["chapter_id"],
@@ -77,7 +77,7 @@ async def reject_payment(
     user=Depends(require_permission(PAYMENT_REVIEW)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
-    sb = get_treasury_db()
+    sb = get_db()
     return svc.reject_payment(
         sb,
         chapter_id=user["chapter_id"],
@@ -100,7 +100,7 @@ async def submit_balance_payment(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
     """Any member submits a payment against their OWN overall balance (self only)."""
-    sb = get_treasury_db()
+    sb = get_db()
     return svc.submit_balance_payment(
         sb,
         chapter_id=user["chapter_id"],
@@ -119,7 +119,7 @@ async def add_submission_evidence(
     user=Depends(get_current_user),
 ):
     """Attach evidence (base64 JSON) to a submission the caller owns."""
-    sb = get_treasury_db()
+    sb = get_db()
     submission = svc.get_submission(
         sb, chapter_id=user["chapter_id"], submission_id=submission_id
     )
@@ -152,7 +152,7 @@ async def get_submission_evidence(
     user=Depends(get_current_user),
 ):
     """Evidence read: reviewers (treasury:payment:verify) or the submitting member."""
-    sb = get_treasury_db()
+    sb = get_db()
     evidence = svc.get_evidence(sb, chapter_id=user["chapter_id"], evidence_id=evidence_id)
     if evidence is None:
         raise HTTPException(404, "Evidence not found")
@@ -173,7 +173,7 @@ async def verify_payment_v1(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
     """Verify + allocate oldest-first. Verifiers = full Finance Board (decision #2)."""
-    sb = get_treasury_db()
+    sb = get_db()
     return svc.verify_payment_v2(
         sb,
         chapter_id=user["chapter_id"],
@@ -193,7 +193,7 @@ async def reject_payment_v1(
     """Reject a submission — reason is MANDATORY and audit-logged (spec §5)."""
     if not body.reason.strip():
         raise HTTPException(422, "a non-empty reason is required to reject a submission")
-    sb = get_treasury_db()
+    sb = get_db()
     return svc.reject_payment(
         sb,
         chapter_id=user["chapter_id"],
@@ -214,7 +214,7 @@ async def reallocate_payment(
     """Treasurer-only allocation override (spec: 'Treasurer can override allocation')."""
     if not body.reason.strip():
         raise HTTPException(422, "a non-empty reason is required to reallocate")
-    sb = get_treasury_db()
+    sb = get_db()
     try:
         return svc.reallocate_payment(
             sb,
@@ -237,7 +237,7 @@ async def get_payment_allocations(
     user=Depends(get_current_user),
 ):
     """Allocation transparency: reviewers, or the member the payment belongs to."""
-    sb = get_treasury_db()
+    sb = get_db()
     vp = (
         sb.table("verified_payments")
         .select("member_id")
@@ -261,7 +261,7 @@ async def get_receipt(
     receipt_id: str,
     user=Depends(require_permission(RECEIPT_VIEW)),
 ):
-    sb = get_treasury_db()
+    sb = get_db()
     receipt = svc.get_receipt(sb, chapter_id=user["chapter_id"], receipt_id=receipt_id)
     if receipt is None:
         raise HTTPException(404, "Receipt not found")

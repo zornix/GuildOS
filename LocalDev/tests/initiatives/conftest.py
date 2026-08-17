@@ -68,9 +68,9 @@ def app_on_test_db(sb_client, monkeypatch):
     import api.rbac.services.permissions as perm_mod
     import api.tasks.api.tasks as tasks_api
 
-    monkeypatch.setattr(perm_mod, "get_rbac_db", lambda: sb_client)
-    monkeypatch.setattr(initiatives_api, "get_initiatives_db", lambda: sb_client)
-    monkeypatch.setattr(tasks_api, "get_tasks_db", lambda: sb_client)
+    monkeypatch.setattr(perm_mod, "get_db", lambda: sb_client)
+    monkeypatch.setattr(initiatives_api, "get_db", lambda: sb_client)
+    monkeypatch.setattr(tasks_api, "get_db", lambda: sb_client)
 
     from api.index import app
 

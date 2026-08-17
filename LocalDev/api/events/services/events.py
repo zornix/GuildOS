@@ -15,7 +15,7 @@ from api.events.core.rules import (
     organizers_needed,
     resolve_visibility,
 )
-from api.events.db.rpc import call_rpc
+from api.platform.rpc import call_rpc
 from api.rbac.services.permissions import get_member_permissions, has_permission
 
 

@@ -20,7 +20,6 @@ from api.dependencies import get_current_user
 from api.rbac.auth import require_permission
 from api.rbac.services.permissions import has_permission
 from api.treasury.core.fines import FINE_ISSUE_DELAY_HOURS, FLAT_FINE_CENTS
-from api.treasury.db.session import get_treasury_db
 from api.treasury.services import invoices as invoice_svc
 from api.treasury.services.fine_processor import process_event_fines
 
@@ -196,7 +195,7 @@ async def issue_fines(
     }
     fined = _already_fined_ids(sb, body.event_id)
 
-    tdb = get_treasury_db()
+    tdb = get_db()
     issued, skipped = [], []
     for member_id in dict.fromkeys(body.member_ids):  # de-dup, keep order
         if member_id in fined or member_id not in unexcused:
@@ -236,7 +235,7 @@ async def waive_fine(
     change is intentional per spec."""
     if not body.reason.strip():
         raise HTTPException(422, "a non-empty reason is required to waive a fine")
-    sb = get_treasury_db()
+    sb = get_db()
     try:
         return invoice_svc.void_invoice(
             sb,

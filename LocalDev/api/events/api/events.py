@@ -22,9 +22,9 @@ from api.events.auth import (
     EVENT_CREATE,
     EVENT_DELETE,
     EVENT_UPDATE,
-    require_permission,
 )
-from api.events.db.session import get_events_db
+from api.rbac.auth import require_permission
+from api.platform.db import get_db
 from api.events.services import events as svc
 
 from .schemas import (
@@ -59,13 +59,13 @@ def _map_domain_errors():
 @router.get("/types")
 async def list_event_types(user=Depends(get_current_user)):
     """List the chapter's event types (seeding defaults on first use)."""
-    return svc.list_event_types(get_events_db(), chapter_id=user["chapter_id"])
+    return svc.list_event_types(get_db(), chapter_id=user["chapter_id"])
 
 
 @router.get("/")
 async def list_events(upcoming: bool = True, user=Depends(get_current_user)):
     """List events for the user's chapter (visibility-enforced)."""
-    return svc.list_events(get_events_db(), user=user, upcoming=upcoming)
+    return svc.list_events(get_db(), user=user, upcoming=upcoming)
 
 
 @router.post("/")
@@ -77,7 +77,7 @@ async def create_event(
     """Create a new event (audience list + group handled atomically in the RPC)."""
     with _map_domain_errors():
         return svc.create_event(
-            get_events_db(),
+            get_db(),
             actor=user,
             title=body.title,
             description=body.description,
@@ -105,7 +105,7 @@ async def create_event(
 async def get_event(event_id: str, user=Depends(get_current_user)):
     """Event details with attendance summary, organizers, and group siblings."""
     with _map_domain_errors():
-        return svc.get_event(get_events_db(), user=user, event_id=event_id)
+        return svc.get_event(get_db(), user=user, event_id=event_id)
 
 
 @router.put("/{event_id}")
@@ -118,7 +118,7 @@ async def update_event(
     """Update an event."""
     with _map_domain_errors():
         return svc.update_event(
-            get_events_db(),
+            get_db(),
             actor=user,
             event_id=event_id,
             updates=body.model_dump(exclude_none=True),
@@ -129,7 +129,7 @@ async def update_event(
 @router.delete("/{event_id}")
 async def delete_event(event_id: str, user=Depends(require_permission(EVENT_DELETE))):
     """Delete an event."""
-    sb = get_events_db()
+    sb = get_db()
     event = (
         sb.table("events")
         .select("id")
@@ -159,7 +159,7 @@ async def set_supervisor(
     POST /{event_id}/supervisors."""
     with _map_domain_errors():
         return svc.set_supervisor(
-            get_events_db(),
+            get_db(),
             actor=user,
             event_id=event_id,
             member_id=body.member_id,
@@ -177,7 +177,7 @@ async def add_supervisor(
     """Add a co-supervisor (a current supervisor or calendar:event:update)."""
     with _map_domain_errors():
         return svc.add_supervisor(
-            get_events_db(),
+            get_db(),
             actor=user,
             event_id=event_id,
             member_id=body.member_id,
@@ -195,7 +195,7 @@ async def remove_supervisor(
     """Remove a co-supervisor (creator/min-1 violations surface as 409)."""
     with _map_domain_errors():
         return svc.remove_supervisor(
-            get_events_db(),
+            get_db(),
             actor=user,
             event_id=event_id,
             member_id=member_id,
@@ -213,7 +213,7 @@ async def add_organizer(
     """Self-volunteer (no special permission) or assign (calendar:event:update)."""
     with _map_domain_errors():
         return svc.add_organizer(
-            get_events_db(),
+            get_db(),
             actor=user,
             event_id=event_id,
             member_id=body.member_id if body else None,
@@ -231,7 +231,7 @@ async def remove_organizer(
     """Self-leave or officer removal."""
     with _map_domain_errors():
         return svc.remove_organizer(
-            get_events_db(),
+            get_db(),
             actor=user,
             event_id=event_id,
             member_id=member_id,
@@ -244,7 +244,7 @@ async def remove_organizer(
 @router.get("/{event_id}/checkin-link")
 async def get_checkin_link(event_id: str, user=Depends(get_current_user)):
     """Get the currently active check-in link for an event, if any."""
-    sb = get_events_db()
+    sb = get_db()
     event = (
         sb.table("events")
         .select("id")
@@ -266,7 +266,7 @@ async def generate_checkin_link(event_id: str, officer=Depends(require_permissio
     Officer shows this link (or its QR) to members in-person.
     Any previous active link for this event is deactivated.
     """
-    sb = get_events_db()
+    sb = get_db()
     event = (
         sb.table("events")
         .select("id")
@@ -289,7 +289,7 @@ async def kill_checkin_link(event_id: str, officer=Depends(require_permission(CH
     Ownership is verified exactly as the POST above does: without it, an officer
     could kill another chapter's live check-in link with a guessed event id.
     """
-    sb = get_events_db()
+    sb = get_db()
     event = (
         sb.table("events")
         .select("id")

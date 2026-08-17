@@ -1,4 +1,4 @@
-"""Initiatives domain permissions — thin layer over the central RBAC helper.
+"""Initiatives domain permissions and per-initiative chair authority.
 
 Chapter-level chair gating (`calendar:initiative:create` / `:update`, D9) is a
 seeded permission key granted to the six chair roles; per-initiative
@@ -7,8 +7,6 @@ below — never a `user["role"] == ...` string comparison (hard rule).
 """
 
 from __future__ import annotations
-
-from api.rbac.auth import require_permission  # noqa: F401  (domain re-export)
 
 INITIATIVE_CREATE = "calendar:initiative:create"
 INITIATIVE_UPDATE = "calendar:initiative:update"

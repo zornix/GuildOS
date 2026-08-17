@@ -24,10 +24,9 @@ from api.announcements.services.sms import (
     dispatch_send,
     resolve_recipients,
 )
-from api.config import settings
 from api.events.auth import EVENT_UPDATE
 from api.events.core.rules import completeness as compute_completeness
-from api.events.db.rpc import call_rpc
+from api.platform.rpc import call_rpc
 from api.events.services.events import (
     EventsError,
     EventNotFound,  # noqa: F401  (re-exported for route error mapping)
@@ -40,6 +39,7 @@ from api.events.services.events import (
     _supervisors_for_event,
 )
 from api.rbac.services.permissions import has_permission
+from api.platform.delivery import delivery_mode
 
 SEND_TABLE = "event_notification_sends"
 
@@ -59,11 +59,6 @@ class NotifyCooldown(EventsError):
 
 class NoRecipients(EventsError):
     """No SMS-reachable recipients were resolved (HTTP 409)."""
-
-
-def _delivery_mode() -> str:
-    """Single source of truth: api/config.py settings, never os.environ."""
-    return settings.MESSAGE_DELIVERY_MODE or "dry_run"
 
 
 def _actor_is_organizer(sb, *, event_id: str, member_id: str) -> bool:
@@ -164,7 +159,7 @@ def notify_event(
                 "p_actor_id": actor["id"],
                 "p_recipient_member_ids": resolved["recipient_member_ids"],
                 "p_body_snapshot": body,
-                "p_delivery_mode": _delivery_mode(),
+                "p_delivery_mode": delivery_mode(),
                 "p_idempotency_key": idempotency_key,
             },
             sb=sb,

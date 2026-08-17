@@ -27,20 +27,15 @@ from __future__ import annotations
 
 from datetime import date
 
-from api.config import settings
-
-
-def _delivery_mode() -> str:
-    """Single source of truth: api/config.py settings, never os.environ."""
-    return settings.MESSAGE_DELIVERY_MODE or "dry_run"
+from api.platform.delivery import delivery_mode
 
 
 def _resolve_sb(sb):
     if sb is not None:
         return sb
-    from api.treasury.db.session import get_treasury_db
+    from api.platform.db import get_db
 
-    return get_treasury_db()
+    return get_db()
 
 
 def _enqueue(
@@ -66,7 +61,7 @@ def _enqueue(
     worker's message templates (api/cron/core/templates.py).
     """
     client = _resolve_sb(sb)
-    mode = _delivery_mode()
+    mode = delivery_mode()
     dedup_key = dedup_key or f"{event_type}:{target_id}"
     body_payload = {
         "event_type": event_type,

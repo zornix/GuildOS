@@ -11,8 +11,9 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 
 from api.dependencies import get_current_user
 from api.tasks.api.schemas import RejectIn
-from api.tasks.auth import TASKS_COMPLETE, require_permission
-from api.tasks.db.session import get_tasks_db
+from api.tasks.auth import TASKS_COMPLETE
+from api.rbac.auth import require_permission
+from api.platform.db import get_db
 from api.tasks.services import jobs as svc
 from api.tasks.services.approvals import can_approve_job
 from api.tasks.services.tasks import get_task
@@ -57,7 +58,7 @@ async def report_done(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
     """A claimant reports their job done (🟢 → 🟡). Claimant is enforced in the RPC."""
-    sb = get_tasks_db()
+    sb = get_db()
     try:
         return svc.report_done(
             sb,
@@ -78,7 +79,7 @@ async def approve_task(
 ):
     """Approve a reported job (🟡 → ✅). Approver must run the linked event
     (supervisor) or hold tasks:review for standalone jobs."""
-    sb = get_tasks_db()
+    sb = get_db()
     task = _load_task_or_404(sb, chapter_id=user["chapter_id"], task_id=task_id)
     if not can_approve_job(sb, user=user, task=task):
         raise HTTPException(403, "You are not authorized to approve this job")
@@ -102,7 +103,7 @@ async def reject_task(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
     """Reject a reported job with a required reason (🟡 → 🟢/🔴)."""
-    sb = get_tasks_db()
+    sb = get_db()
     task = _load_task_or_404(sb, chapter_id=user["chapter_id"], task_id=task_id)
     if not can_approve_job(sb, user=user, task=task):
         raise HTTPException(403, "You are not authorized to reject this job")

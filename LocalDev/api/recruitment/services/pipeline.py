@@ -17,8 +17,8 @@ HTTP status codes.
 from __future__ import annotations
 
 from api.phone import to_e164
-from api.recruitment.db.rpc import call_rpc
-from api.recruitment.db.session import get_recruitment_db  # noqa: F401  (re-export)
+from api.platform.rpc import call_rpc
+from api.platform.rows import unwrap_row
 
 STAGES = (
     "lead",
@@ -50,11 +50,6 @@ class NotPermitted(RecruitmentError):
     """The actor is not an active member of the chapter (HTTP 403)."""
 
 
-def _row(result) -> dict:
-    data = result.data
-    return data[0] if isinstance(data, list) else data
-
-
 def _normalize_phone(raw: str | None) -> str | None:
     """E.164 or None. A non-empty value that cannot be normalized is a 422."""
     if raw is None or not str(raw).strip():
@@ -75,7 +70,7 @@ def create_recruit(
     notes: str | None,
     actor_id: str,
 ) -> dict:
-    return _row(
+    return unwrap_row(
         sb.table("recruits")
         .insert(
             {
@@ -123,7 +118,7 @@ def update_stage(
     except Exception as exc:  # RPC-side guards (the trust boundary)
         raise _rpc_error(exc) from exc
 
-    return _row(result)
+    return unwrap_row(result)
 
 
 def _rpc_error(exc: Exception) -> RecruitmentError:

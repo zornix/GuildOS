@@ -3,8 +3,9 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.dependencies import get_current_user
-from api.attendance.auth import ATTENDANCE_OVERRIDE, require_permission
-from api.attendance.db.rpc import call_rpc
+from api.attendance.auth import ATTENDANCE_OVERRIDE
+from api.rbac.auth import require_permission
+from api.platform.rpc import call_rpc
 from .schemas import PhoneCheckIn, ManualAttendance
 from api.attendance.services.checkin_links import validate_checkin_link
 from api.platform.db import get_db

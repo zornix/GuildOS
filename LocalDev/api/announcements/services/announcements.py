@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from api.announcements.db.rpc import call_rpc
+from api.platform.rpc import call_rpc
 from api.rbac.db.repositories.member_roles import list_member_role_keys
+from api.platform.rows import unwrap_row
 
 # Audience values (0086 CHECK): 'chapter' reaches every active member,
 # 'officers' every role-holder above plain member, 'members_with_balance'
@@ -42,8 +43,7 @@ def create_draft(
         )
         .execute()
     )
-    data = result.data
-    return data[0] if isinstance(data, list) else data
+    return unwrap_row(result)
 
 
 def send_announcement(

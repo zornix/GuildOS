@@ -3,8 +3,9 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.dependencies import get_current_user
-from api.attendance.auth import EXCUSE_REVIEW, require_permission
-from api.attendance.db.rpc import call_rpc
+from api.attendance.auth import EXCUSE_REVIEW
+from api.rbac.auth import require_permission
+from api.platform.rpc import call_rpc
 from api.rbac.services.permissions import has_permission
 from .schemas import ExcuseCreate, ExcuseReview
 from api.platform.db import get_db

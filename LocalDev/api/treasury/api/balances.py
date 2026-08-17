@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from api.dependencies import get_current_user
 from api.rbac.services.permissions import has_permission
-from api.treasury.db.session import get_treasury_db
+from api.platform.db import get_db
 from api.treasury.services import balance as svc
 from api.treasury.services.member_dashboard import get_member_dashboard as dashboard_svc
 
@@ -27,7 +27,7 @@ async def get_member_balance(member_id: str, user=Depends(get_current_user)):
     /statement guard exactly — an earlier `role == "officer"` check both bypassed
     the permission model and let an officer read balances in *other* chapters.
     """
-    sb = get_treasury_db()
+    sb = get_db()
 
     if str(user["id"]) != str(member_id) and not has_permission(user, RECORD_VIEW):
         raise HTTPException(403, f"Missing permission: {RECORD_VIEW}")
@@ -53,7 +53,7 @@ async def get_member_treasury_dashboard(member_id: str, user=Depends(get_current
     `treasury:payment:verify` holder (Finance Board reviewers) — all scoped
     to the requester's own chapter (404 on cross-chapter probes).
     """
-    sb = get_treasury_db()
+    sb = get_db()
 
     if str(user["id"]) != str(member_id):
         if not has_permission(user, RECORD_VIEW) and not has_permission(

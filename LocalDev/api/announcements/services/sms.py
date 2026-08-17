@@ -34,9 +34,9 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
-from api.announcements.db.rpc import call_rpc
+from api.platform.rpc import call_rpc
 from api.announcements.services import twilio_client
-from api.config import settings
+from api.platform.delivery import delivery_mode
 
 logger = logging.getLogger(__name__)
 
@@ -63,10 +63,6 @@ class RecipientCountMismatch(Exception):
 # Any granular role except plain 'member' marks an officer for the 'officers'
 # audience (president, vice_president, treasurer, secretary, chairs, ...).
 _NON_OFFICER_ROLE_KEYS = {"member"}
-
-
-def _delivery_mode() -> str:
-    return settings.MESSAGE_DELIVERY_MODE or "dry_run"
 
 
 def _now_iso() -> str:
@@ -190,7 +186,7 @@ def send_announcement_sms(
             "p_actor_id": actor_id,
             "p_recipient_member_ids": resolved["recipient_member_ids"],
             "p_body_snapshot": ann["body"],
-            "p_delivery_mode": _delivery_mode(),
+            "p_delivery_mode": delivery_mode(),
             "p_idempotency_key": idempotency_key,
         },
         sb=sb,
@@ -219,7 +215,7 @@ def dispatch_send(sb, send_row: dict, *, send_table: str = "announcement_sms_sen
     table but the same outbox/dry_run/twilio shape (e.g. events notify's
     event_notification_sends) reuse this dispatcher by passing their table.
     """
-    mode = send_row.get("delivery_mode") or _delivery_mode()
+    mode = send_row.get("delivery_mode") or delivery_mode()
     pending = (
         sb.table("message_outbox")
         .select("*")

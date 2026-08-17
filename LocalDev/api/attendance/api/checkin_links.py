@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 
-from api.attendance.auth import CHECKIN_LINK_MANAGE, require_permission
+from api.attendance.auth import CHECKIN_LINK_MANAGE
+from api.rbac.auth import require_permission
 from api.attendance.services.checkin_links import list_active_links_for_chapter
 
 router = APIRouter()

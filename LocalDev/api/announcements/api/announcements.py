@@ -9,9 +9,9 @@ from api.announcements.auth import (
     ANNOUNCEMENTS_CREATE,
     ANNOUNCEMENTS_SEND,
     ANNOUNCEMENTS_SEND_SMS,
-    require_permission,
 )
-from api.announcements.db.session import get_announcements_db
+from api.rbac.auth import require_permission
+from api.platform.db import get_db
 from api.announcements.services import announcements as svc
 from api.announcements.services import sms as sms_svc
 from api.dependencies import get_current_user
@@ -28,7 +28,7 @@ async def list_announcements(status: str | None = None, user=Depends(get_current
     announcements whose audience includes them. Drafts (and the `status`
     filter) belong to announcements:create holders.
     """
-    sb = get_announcements_db()
+    sb = get_db()
     can_manage = has_permission(user, ANNOUNCEMENTS_CREATE)
     return svc.list_announcements(
         sb,
@@ -45,7 +45,7 @@ async def create_announcement(
     user=Depends(require_permission(ANNOUNCEMENTS_CREATE)),
 ):
     return svc.create_draft(
-        get_announcements_db(),
+        get_db(),
         chapter_id=user["chapter_id"],
         title=body.title,
         body=body.body,
@@ -61,7 +61,7 @@ async def sms_log(
 ):
     """Every SMS send with sender attribution, newest first (exec visibility)."""
     return sms_svc.list_sms_log(
-        get_announcements_db(), chapter_id=user["chapter_id"], limit=limit
+        get_db(), chapter_id=user["chapter_id"], limit=limit
     )
 
 
@@ -73,7 +73,7 @@ async def sms_preview(
     """Confirmation step: who would the blast reach right now?"""
     try:
         return sms_svc.preview_sms(
-            get_announcements_db(),
+            get_db(),
             chapter_id=user["chapter_id"],
             announcement_id=announcement_id,
         )
@@ -91,7 +91,7 @@ async def send_announcement_sms(
     """Two-phase confirmed SMS blast. 409 returns the fresh count to re-confirm."""
     try:
         return sms_svc.send_announcement_sms(
-            get_announcements_db(),
+            get_db(),
             chapter_id=user["chapter_id"],
             announcement_id=announcement_id,
             actor_id=user["id"],
@@ -122,7 +122,7 @@ async def send_announcement(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
     return svc.send_announcement(
-        get_announcements_db(),
+        get_db(),
         chapter_id=user["chapter_id"],
         announcement_id=announcement_id,
         actor_id=user["id"],

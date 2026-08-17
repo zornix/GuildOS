@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-from api.platform.db import get_db
-
-
-def get_bylaws_db():
-    return get_db()
+from api.platform.rows import unwrap_row
 
 
 def create_document(
@@ -24,8 +20,7 @@ def create_document(
         )
         .execute()
     )
-    data = result.data
-    return data[0] if isinstance(data, list) else data
+    return unwrap_row(result)
 
 
 def list_documents(sb, *, chapter_id: str) -> list[dict]:

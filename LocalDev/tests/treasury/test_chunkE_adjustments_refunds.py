@@ -273,7 +273,7 @@ async def test_refund_requires_refund_create_permission(sb_client, cursor, chapt
     from api.rbac.auth import require_permission
     from api.treasury.api import refunds
 
-    monkeypatch.setattr(rbac_permissions, "get_rbac_db", lambda: sb_client)
+    monkeypatch.setattr(rbac_permissions, "get_db", lambda: sb_client)
     dep = require_permission(refunds.REFUND_CREATE)
     user = {"id": member_id, "chapter_id": chapter_id, "role": "member"}
 

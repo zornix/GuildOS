@@ -9,17 +9,8 @@ from __future__ import annotations
 
 from fastapi import HTTPException
 
-from api.platform.db import get_db
 from api.attendance.services.checkin_links import create_checkin_link
-
-
-def get_attendance_db():
-    return get_db()
-
-
-def _row(result) -> dict:
-    data = result.data
-    return data[0] if isinstance(data, list) else data
+from api.platform.rows import unwrap_row
 
 
 async def create_session(
@@ -56,7 +47,7 @@ async def create_session(
         )
         checkin_link_id = link_row.data["id"] if link_row.data else None
 
-    session = _row(
+    session = unwrap_row(
         sb.table("attendance_sessions")
         .insert(
             {

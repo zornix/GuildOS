@@ -5,8 +5,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.recruitment.api.schemas import RecruitCreate, RecruitStageUpdate
-from api.recruitment.auth import PIPELINE_UPDATE, PIPELINE_VIEW, require_permission
-from api.recruitment.db.session import get_recruitment_db
+from api.recruitment.auth import PIPELINE_UPDATE, PIPELINE_VIEW
+from api.rbac.auth import require_permission
+from api.platform.db import get_db
 from api.recruitment.services import pipeline as svc
 
 router = APIRouter()
@@ -28,7 +29,7 @@ async def list_recruits(
     stage: str | None = None,
     user=Depends(require_permission(PIPELINE_VIEW)),
 ):
-    return svc.list_recruits(get_recruitment_db(), chapter_id=user["chapter_id"], stage=stage)
+    return svc.list_recruits(get_db(), chapter_id=user["chapter_id"], stage=stage)
 
 
 @router.post("/recruits")
@@ -38,7 +39,7 @@ async def create_recruit(
 ):
     try:
         return svc.create_recruit(
-            get_recruitment_db(),
+            get_db(),
             chapter_id=user["chapter_id"],
             name=body.name,
             email=body.email,
@@ -58,7 +59,7 @@ async def update_recruit_stage(
 ):
     try:
         return svc.update_stage(
-            get_recruitment_db(),
+            get_db(),
             chapter_id=user["chapter_id"],
             recruit_id=recruit_id,
             stage=body.stage,

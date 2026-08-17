@@ -17,7 +17,7 @@ from contextlib import contextmanager
 from fastapi import APIRouter, Depends, Header, HTTPException
 
 from api.dependencies import get_current_user
-from api.events.db.session import get_events_db
+from api.platform.db import get_db
 from api.events.services import security as svc
 from api.events.services.events import EventNotFound, NotPermitted
 
@@ -74,7 +74,7 @@ def _map_security_errors():
 async def my_swaps(user=Depends(get_current_user)):
     """Pending swaps involving me: incoming (I'm the target) + outgoing."""
     return svc.list_my_swaps(
-        get_events_db(), chapter_id=user["chapter_id"], member_id=user["id"]
+        get_db(), chapter_id=user["chapter_id"], member_id=user["id"]
     )
 
 
@@ -83,7 +83,7 @@ async def list_security(event_id: str, user=Depends(get_current_user)):
     """Security roster for an event (read view). Any chapter member may view."""
     with _map_security_errors():
         return svc.list_security(
-            get_events_db(), chapter_id=user["chapter_id"], event_id=event_id
+            get_db(), chapter_id=user["chapter_id"], event_id=event_id
         )
 
 
@@ -97,7 +97,7 @@ async def assign_security(
     """Pre-assign a member to security (supervisor or calendar:event:update)."""
     with _map_security_errors():
         return svc.assign_security(
-            get_events_db(),
+            get_db(),
             actor=user,
             event_id=event_id,
             member_id=body.member_id,
@@ -115,7 +115,7 @@ async def remove_security(
     """Remove a security assignment (same gate as assign)."""
     with _map_security_errors():
         return svc.remove_security(
-            get_events_db(),
+            get_db(),
             actor=user,
             event_id=event_id,
             task_id=task_id,
@@ -134,7 +134,7 @@ async def request_swap(
     """The assignment holder asks a target member to take over (RPC-gated)."""
     with _map_security_errors():
         return svc.request_swap(
-            get_events_db(),
+            get_db(),
             actor=user,
             task_id=task_id,
             target_member_id=body.target_member_id,
@@ -153,7 +153,7 @@ async def accept_swap(
     """The swap target accepts — atomic handover (RPC enforces target identity)."""
     with _map_security_errors():
         return svc.accept_swap(
-            get_events_db(), actor=user, swap_id=swap_id, idempotency_key=idempotency_key
+            get_db(), actor=user, swap_id=swap_id, idempotency_key=idempotency_key
         )
 
 
@@ -167,5 +167,5 @@ async def decline_swap(
     """The swap target declines (RPC enforces target identity)."""
     with _map_security_errors():
         return svc.decline_swap(
-            get_events_db(), actor=user, swap_id=swap_id, idempotency_key=idempotency_key
+            get_db(), actor=user, swap_id=swap_id, idempotency_key=idempotency_key
         )

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from api.treasury.core.balance import BalanceEngine
 from api.treasury.core.money import Money
-from api.treasury.db.rpc import call_rpc
+from api.platform.rpc import call_rpc
 
 
 def create_expense(

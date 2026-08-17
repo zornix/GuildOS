@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 
 from api.dependencies import get_current_user
 from api.instrumentation.api.schemas import UsageTrack
-from api.instrumentation.db.session import get_usage_db
+from api.platform.db import get_db
 from api.instrumentation.services import usage as svc
 from api.rbac.auth import require_permission
 
@@ -17,7 +17,7 @@ async def track_usage(
     user=Depends(get_current_user),
 ):
     svc.track(
-        get_usage_db(),
+        get_db(),
         chapter_id=user["chapter_id"],
         member_id=user["id"],
         event_name=body.event_name,
@@ -31,4 +31,4 @@ async def usage_summary(
     days: int = 30,
     user=Depends(require_permission("calendar:officer:view")),
 ):
-    return svc.summary(get_usage_db(), chapter_id=user["chapter_id"], days=days)
+    return svc.summary(get_db(), chapter_id=user["chapter_id"], days=days)

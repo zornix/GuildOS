@@ -13,7 +13,7 @@ member may be a swap target). Multi-row mutations go through the ev_* RPCs.
 
 from __future__ import annotations
 
-from api.events.db.rpc import call_rpc
+from api.platform.rpc import call_rpc
 from api.events.services.events import (
     EventNotFound,  # noqa: F401  (re-exported for route error mapping)
     NotPermitted,   # noqa: F401  (re-exported for route error mapping)
