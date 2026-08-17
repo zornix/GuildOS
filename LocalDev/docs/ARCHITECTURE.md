@@ -62,14 +62,20 @@ repeated here.
 
 ## 2. Backend: domain-package pattern
 
-`api/index.py` is the app factory: it mounts **only** each domain's aggregate
-router (`api/<domain>/api/router.py`) and applies CORS. Domain routers are
-**append-only** — sub-routers `include_router` into them; existing includes are
-never removed.
+`api/index.py` is the app factory: it mounts every router and applies CORS.
+Most domains expose one resource router that `index.py` mounts directly; only
+`attendance`, `events`, `tasks` and `treasury` keep an aggregate
+`api/<domain>/api/router.py`, because their include order is load-bearing
+(fixed path segments must be registered before parameterized ones). Those
+aggregate routers are **append-only** — sub-routers `include_router` into them;
+existing includes are never removed. Mounted URL paths are frozen: check
+`fratos/lib/api-client.ts` before changing a prefix.
 
 Domains: `auth`, `events`, `attendance`, `treasury`, `tasks`, `announcements`,
-`memberadmin` (standing), `recruitment`, `bylaws`, `nl_controller`, `rbac`,
-`calendar`, `standing`, `cron`, `instrumentation`, `members`.
+`memberadmin` (owns standing, mounted at both `/api/memberadmin` and
+`/api/standing`), `recruitment`, `bylaws`, `nl_controller`, `rbac`, `calendar`,
+`initiatives`, `cron`, `instrumentation`, `members`. `api/platform/` sits
+alongside them but is plumbing, not a domain.
 
 **Treasury (`api/treasury/`) is the reference implementation.** `events/` and
 `tasks/` are also modern examples. Every domain follows this shape; small
@@ -77,16 +83,19 @@ domains omit files but never invent a different layout:
 
 ```
 api/<domain>/
-  api/router.py      # aggregates the domain's APIRouters; index.py mounts ONLY this
   api/<resource>.py  # thin route handlers: parse → service → respond
   api/schemas.py     # Pydantic v2 models, domain-local (never shared across domains)
+  api/router.py      # ONLY when several sub-routers need a fixed include order
   services/          # business logic; pure where possible, no FastAPI imports
   core/              # domain value objects / rules with no I/O (e.g. treasury/core/money.py)
-  db/session.py      # client acquisition
-  db/rpc.py          # call_rpc(name, params) — the ONLY sanctioned multi-write path
-  auth.py            # domain permission constants + capability helpers
+  auth.py            # domain permission-key constants + domain capability helpers
   notifications.py   # transactional outbox enqueue helpers
 ```
+
+Db plumbing is not per-domain: `get_db`, `call_rpc`, `unwrap_row` and
+`delivery_mode` all come from `api/platform/` (§ below). Domains have no `db/`
+directory for those, and route files import `require_permission` from
+`api.rbac.auth` directly rather than through a domain re-export.
 
 **Legacy flat modules** (`api/routes/`, `api/services/`,
 `api/models/schemas.py`) hold pre-refactor code. Some domains are "conform
@@ -99,23 +108,26 @@ return status strings; handlers map to **403** (permission/authority), **404**
 idempotency replay mismatch, cooldown, already-claimed), **422** (Pydantic
 validation).
 
-### Database access abstraction
+### `api/platform/` — the one database layer
 
-`api/db.py` returns either a Supabase client (prod) or a `PostgresClient`
-(`api/postgres_client.py`) that **mimics the supabase-py interface** over raw
-psycopg2. The switch is `settings.use_local_db`, which is simply
-`bool(DATABASE_URL)` — set `DATABASE_URL` and the whole app talks to local
-Postgres with no Supabase.
+There is exactly one database path in every environment (ADR-0002).
+`api/platform/db.py::get_db()` returns the process-wide `PostgresClient`
+(`api/platform/postgres.py`), a PostgREST-shaped query builder over psycopg2.
+`DATABASE_URL` selects the database — demo and prod are both Supabase pooler
+URLs — and it is required: `get_db()` raises without it and a deploy refuses to
+boot. supabase-py is not a dependency. Alongside the client, `platform` owns
+`rpc.py::call_rpc`, `rows.py::unwrap_row` and `delivery.py::delivery_mode`.
 
-Auth (`api/dependencies.py::get_current_user`): demo/local JWTs use
-`sub = member.id`; Supabase auth uses `auth_id`. HS256, decoded into
-`{id, chapter_id, role, ...}`. `chapter_id` always comes from the token —
-**never from a client payload**.
+Auth (`api/dependencies.py::get_current_user`): we mint every JWT ourselves, so
+`sub = member.id`. HS256, decoded into `{id, chapter_id, role, ...}`, with the
+token's `ver` claim checked against `members.token_version` (migration 0148) so
+a password set or reset kills older sessions. `chapter_id` always comes from the
+token — **never from a client payload**.
 
 ### RPC pattern (trust-boundary mutations)
 
 All multi-row / financial / state-machine writes go through plpgsql RPCs called
-via the domain's `db/rpc.py::call_rpc(name, params)`. RPC naming is prefixed
+via `api/platform/rpc.py::call_rpc(name, params)`. RPC naming is prefixed
 per domain: `tr_*` (treasury), `ev_*` (events), `tk_*` (tasks), `rbac_*`,
 `in_*` (initiatives, planned). Every RPC body enforces, in this order:
 

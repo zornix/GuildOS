@@ -64,51 +64,68 @@ the same shape; small domains omit files but **never invent a different layout**
 
 ```
 api/<domain>/
-  api/router.py      # aggregates the domain's APIRouters; index.py mounts this (+ standalone re-exports)
   api/<resource>.py  # thin route handlers: parse → service → respond
   api/schemas.py     # Pydantic v2 models, domain-local (never shared across domains)
+  api/router.py      # ONLY when the domain has several sub-routers whose include
+                     # order matters; otherwise index.py mounts the resource router
   services/          # business logic; pure where possible, no FastAPI imports
   core/              # domain value objects / rules with no I/O (e.g. treasury/core/money.py)
-  db/session.py      # client acquisition
-  db/rpc.py          # call_rpc(name, params) — the ONLY sanctioned multi-write path
-  auth.py            # domain permission constants + capability helpers
+  auth.py            # domain permission-key constants + domain capability helpers
   notifications.py   # transactional outbox enqueue helpers
 ```
 
+Db plumbing is **not** per-domain: client acquisition, `call_rpc`, row
+unwrapping and delivery-mode all come from `api/platform/` (below). A domain
+never has a `db/` directory for those, and never re-exports
+`require_permission` — route files import it from `api.rbac.auth` directly.
+
 Domains live one per directory under `api/<domain>/` — run `ls api/` for the
-authoritative list (currently ~17: `auth`, `events`, `attendance`, `treasury`,
-`tasks`, `announcements`, `memberadmin` (standing), `members`, `recruitment`,
-`bylaws`, `nl_controller`, `rbac`, `calendar`, `standing`, `initiatives`,
-`cron`, `instrumentation`). `api/index.py` is the FastAPI app: it mounts each
-domain's top `router.py` and applies CORS. A few domains (`attendance`,
-`treasury`) also re-export standalone routers that keep their own mount prefixes
-(e.g. `excuses_router`, `checkin_links_router`, `fines_router`), mounted
-alongside the aggregated router. A domain router is itself append-only —
-sub-routers `include_router` into it and existing includes are never removed.
+authoritative list (currently ~16: `auth`, `events`, `attendance`, `treasury`,
+`tasks`, `announcements`, `memberadmin` (owns standing), `members`,
+`recruitment`, `bylaws`, `nl_controller`, `rbac`, `calendar`, `initiatives`,
+`cron`, `instrumentation`, plus `platform`, which is plumbing rather than a
+domain). `api/index.py` is the FastAPI app: it mounts every router and applies
+CORS. Only `attendance`, `events`, `tasks` and `treasury` keep an
+`api/router.py` aggregator, because their include order is load-bearing (fixed
+segments must be registered before parameterized ones); such a router is
+append-only — sub-routers `include_router` into it and existing includes are
+never removed. Domains that also expose standalone routers on their own mount
+prefixes (`excuses_router`, `checkin_links_router`, `fines_router`) re-export
+them for `index.py`. **Mounted URL paths are frozen**: check
+`fratos/lib/api-client.ts` before changing any prefix.
 
 **Conform shells.** `api/attendance/` still carries a `CONFORM_TODO.md` for
 legacy handlers not yet relocated into its domain package; put new code in the
 domain package.
 
-### Database access abstraction
+### `api/platform/` — the one database layer
 
-`api/db.py` returns a `PostgresClient` (`api/postgres_client.py`) that **mimics
-the supabase-py interface** over raw psycopg2 whenever `DATABASE_URL` is set
-(`settings.use_local_db`). Per ADR-0002 this is the path that carries traffic
-in **every** environment — the production boot guard (`api/index.py`) refuses
-to start without `DATABASE_URL`, so prod runs the psycopg2 client too, and
-`_LocalAuth` in `api/postgres_client.py` is the production JWT verifier
-(`sub = member.id`, HS256 over `JWT_SECRET`, `iss`/`aud` = `guildos`). The
-supabase-py branch (auth via `auth_id`) is vestigial fallback code, not the
-prod path; RLS policies are defense-in-depth only — the runtime tenant guard
-is the RPC layer (see Hard rules).
+There is exactly **one** database path, in every environment (ADR-0002):
 
-**RPC params typed as true SQL arrays need registration.** The local shim
+```
+api/platform/
+  db.py         # get_db() — the lazy singleton PostgresClient. The ONLY accessor.
+  postgres.py   # PostgresClient: a PostgREST-shaped query builder over psycopg2
+  rpc.py        # call_rpc(name, params, *, sb=None) — the ONLY multi-write path
+  rows.py       # unwrap_row(result) — first row whether the result is a list or not
+  delivery.py   # delivery_mode() — settings.MESSAGE_DELIVERY_MODE, never os.environ
+```
+
+`DATABASE_URL` selects the database (demo or prod — both Supabase pooler URLs);
+`get_db()` raises at first use if it is unset, and the production boot guard in
+`api/index.py` refuses to start without it. supabase-py is not a dependency and
+there is no second code path: `_LocalAuth` in `api/platform/postgres.py` is *the*
+JWT verifier (`sub = member.id`, HS256 over `JWT_SECRET`, `iss`/`aud` =
+`guildos`) and every token carries our `ver` claim, checked against
+`members.token_version` in `api/dependencies.py`. RLS policies are
+defense-in-depth only — the runtime tenant guard is the RPC layer (see Hard
+rules).
+
+**RPC params typed as true SQL arrays need registration.** The client
 JSON-encodes every list/dict RPC param, which is correct for JSONB-typed
 params but breaks a plpgsql param declared as a real array (first case:
 `in_create_initiative.p_chair_member_ids UUID[]`). Any new array-typed RPC
-param must be added to `_ARRAY_TYPED_RPC_PARAMS` in `api/postgres_client.py`,
-or local/test calls fail while Supabase works.
+param must be added to `_ARRAY_TYPED_RPC_PARAMS` in `api/platform/postgres.py`.
 
 ### Migrations
 
@@ -122,8 +139,8 @@ tracked in a `schema_migrations` table (idempotent — only pending files run).
   (`api/treasury/core/money.py`); it rejects raw floats. The only float→cents
   boundary is `Money.from_numeric`, used solely by the legacy
   `events.fine_amount` → invoices import. Never add another float currency path.
-- **Trust-boundary mutations go through plpgsql RPCs** (`db/rpc.py` →
-  `call_rpc`). RPC bodies enforce tenant guards (`chapter_id`), idempotency
+- **Trust-boundary mutations go through plpgsql RPCs**
+  (`api/platform/rpc.py` → `call_rpc`). RPC bodies enforce tenant guards (`chapter_id`), idempotency
   (`idempotency_keys`), and write `audit_logs` (plus `big_ledger` for anything
   financial). Don't do multi-row financial writes from Python.
 - **`big_ledger` and `audit_logs` are append-only, signed-cents event logs.**

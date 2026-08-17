@@ -14,7 +14,7 @@ How the domains relate, which routes they own, and the seams between them.
 | `/api/treasury` | `api/treasury` | untouched; pattern source |
 | `/api/tasks` | `api/tasks` | |
 | `/api/announcements` | `api/announcements` | |
-| `/api/standing` | `api/memberadmin` | re-exported through `api/routes/standing.py` |
+| `/api/standing` | `api/memberadmin` | `api.memberadmin.api.standing` mounted at its own prefix |
 | `/api/recruitment` | `api/recruitment` | |
 | `/api/bylaws` | `api/bylaws` | |
 | `/api/nl-controller` | `api/nl_controller` | |
