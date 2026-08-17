@@ -213,7 +213,7 @@ def test_legacy_fines_table_is_frozen(cursor, chapter_id, member_id):
 async def test_fine_processor_creates_fine_invoices_and_dedups(sb_client, cursor, chapter_id, member_factory, monkeypatch):
     import api.treasury.services.fine_processor as fp
 
-    monkeypatch.setattr(fp, "get_supabase_admin", lambda: sb_client)
+    monkeypatch.setattr(fp, "get_db", lambda: sb_client)
 
     m1, m2 = member_factory(), member_factory()
     cursor.execute(

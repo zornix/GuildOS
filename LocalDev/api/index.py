@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.config import settings, Settings
-from api.db import get_supabase
+from api.platform.db import get_db
 from api.health_checks import build_health_payload
 from api.observability import init_observability
 
@@ -175,4 +175,4 @@ app.include_router(initiatives_router, prefix="/api/initiatives", tags=["Initiat
 
 @app.get("/api/health")
 async def health():
-    return await asyncio.to_thread(build_health_payload, get_supabase())
+    return await asyncio.to_thread(build_health_payload, get_db())

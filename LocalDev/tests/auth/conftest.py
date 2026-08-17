@@ -46,12 +46,9 @@ def app_on_test_db(auth_sb, db_url, monkeypatch):
     import api.dependencies as deps
     from api.config import settings
 
-    # get_current_user branches on use_local_db (member.id as JWT subject) and
-    # the token-epoch check only applies on that path — which is the path under
-    # test here.
     monkeypatch.setattr(settings, "DATABASE_URL", db_url)
-    monkeypatch.setattr(auth_api, "get_supabase", lambda: auth_sb)
-    monkeypatch.setattr(deps, "get_supabase", lambda: auth_sb)
+    monkeypatch.setattr(auth_api, "get_db", lambda: auth_sb)
+    monkeypatch.setattr(deps, "get_db", lambda: auth_sb)
 
     from api.index import app
 

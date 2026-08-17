@@ -38,9 +38,9 @@ def assign_role(cursor, chapter_id: str, member_id: str, role_key: str) -> None:
 @pytest.fixture
 def api(sb_client, monkeypatch):
     """Factory: api(user) -> TestClient acting as that user, on the test DB."""
-    import api.db as db_mod
+    import api.platform.db as db_mod
 
-    monkeypatch.setattr(db_mod, "_pg_client", sb_client)
+    monkeypatch.setattr(db_mod, "_client", sb_client)
 
     from fastapi.testclient import TestClient
 

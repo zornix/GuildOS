@@ -7,7 +7,7 @@ from api.attendance.auth import ATTENDANCE_OVERRIDE, require_permission
 from api.attendance.db.rpc import call_rpc
 from .schemas import PhoneCheckIn, ManualAttendance
 from api.attendance.services.checkin_links import validate_checkin_link
-from api.db import get_supabase
+from api.platform.db import get_db
 
 router = APIRouter()
 
@@ -38,7 +38,7 @@ async def checkin_via_link(short_code: str, user=Depends(get_current_user)):
     if event["chapter_id"] != user["chapter_id"]:
         raise HTTPException(403, "Wrong chapter")
 
-    sb = get_supabase()
+    sb = get_db()
     existing = (
         sb.table("attendance")
         .select("id")
@@ -82,7 +82,7 @@ async def checkin_via_phone(short_code: str, body: PhoneCheckIn):
         raise HTTPException(410, "Check-in link is expired or invalid")
 
     event = link_data["events"]
-    sb = get_supabase()
+    sb = get_db()
 
     # body.phone is already E.164 (PhoneCheckIn normalizes through api.phone),
     # and members.phone is E.164 since 0149 — so this compares like with like
@@ -130,7 +130,7 @@ async def checkin_via_phone(short_code: str, body: PhoneCheckIn):
 @router.get("/event/{event_id}")
 async def get_attendance(event_id: str, user=Depends(get_current_user)):
     """Get attendance roster for an event. All authenticated members can view."""
-    sb = get_supabase()
+    sb = get_db()
 
     event = (
         sb.table("events")

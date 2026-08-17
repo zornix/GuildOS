@@ -100,7 +100,7 @@ class FakeClient:
 @pytest.fixture
 def use_client(monkeypatch):
     def _use(client):
-        monkeypatch.setattr(svc, "get_supabase_admin", lambda: client)
+        monkeypatch.setattr(svc, "get_db", lambda: client)
         return client
 
     return _use

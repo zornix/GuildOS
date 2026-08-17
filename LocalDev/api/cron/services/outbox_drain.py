@@ -62,9 +62,9 @@ def _now_iso() -> str:
 def _resolve_sb(sb):
     if sb is not None:
         return sb
-    from api.db import get_supabase_admin
+    from api.platform.db import get_db
 
-    return get_supabase_admin()
+    return get_db()
 
 
 def _global_mode() -> str:

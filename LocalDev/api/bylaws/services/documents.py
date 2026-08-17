@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from api.db import get_supabase_admin
+from api.platform.db import get_db
 
 
 def get_bylaws_db():
-    return get_supabase_admin()
+    return get_db()
 
 
 def create_document(

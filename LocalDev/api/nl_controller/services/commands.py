@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from api.db import get_supabase_admin
+from api.platform.db import get_db
 
 
 def get_nl_db():
-    return get_supabase_admin()
+    return get_db()
 
 
 def _row(result) -> dict:

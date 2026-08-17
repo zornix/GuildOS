@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import HTTPException
 
-from api.db import get_supabase
+from api.platform.db import get_db
 
 
 def _coerce_rows(data):
@@ -14,7 +14,7 @@ def _coerce_rows(data):
 
 
 def list_event_templates(chapter_id: str) -> list[dict]:
-    sb = get_supabase()
+    sb = get_db()
     templates_result = (
         sb.table("event_templates")
         .select("*")
@@ -60,7 +60,7 @@ def list_event_templates(chapter_id: str) -> list[dict]:
 
 
 def apply_template_to_event(*, event_id: str, template_id: str, chapter_id: str) -> dict:
-    sb = get_supabase()
+    sb = get_db()
 
     event = (
         sb.table("events")
@@ -173,7 +173,7 @@ def apply_template_to_event(*, event_id: str, template_id: str, chapter_id: str)
 
 
 def get_event_readiness(event_id: str, chapter_id: str) -> dict:
-    sb = get_supabase()
+    sb = get_db()
     event = (
         sb.table("events")
         .select("id")

@@ -15,7 +15,7 @@ from api.attendance.auth import (
     EXCUSE_REVIEW,
 )
 from api.attendance.services.signals import attendance_summary
-from api.db import get_supabase
+from api.platform.db import get_db
 from api.dependencies import get_current_user
 from api.rbac.services.permissions import get_member_permissions
 
@@ -28,7 +28,7 @@ _VIEW_ALL_PERMS = (CALENDAR_OFFICER_VIEW, ATTENDANCE_OVERRIDE, EXCUSE_REVIEW)
 async def get_attendance_summary(
     member_id: str | None = None, user=Depends(get_current_user)
 ):
-    sb = get_supabase()
+    sb = get_db()
     granted = get_member_permissions(user, sb=sb)
     can_view_all = any(p in granted for p in _VIEW_ALL_PERMS)
 

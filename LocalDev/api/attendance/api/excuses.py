@@ -7,7 +7,7 @@ from api.attendance.auth import EXCUSE_REVIEW, require_permission
 from api.attendance.db.rpc import call_rpc
 from api.rbac.services.permissions import has_permission
 from .schemas import ExcuseCreate, ExcuseReview
-from api.db import get_supabase
+from api.platform.db import get_db
 
 router = APIRouter()
 
@@ -25,7 +25,7 @@ def _rpc_http_error(exc: Exception) -> HTTPException:
 @router.post("/event/{event_id}")
 async def submit_excuse(event_id: str, body: ExcuseCreate, user=Depends(get_current_user)):
     """Submit an excuse for missing an event."""
-    sb = get_supabase()
+    sb = get_db()
 
     event = (
         sb.table("events")
@@ -81,7 +81,7 @@ async def list_excuses(status: str = None, user=Depends(get_current_user)):
     (filterable by status) — the same key that gates the review action itself.
     Everyone else: only their own.
     """
-    sb = get_supabase()
+    sb = get_db()
 
     if has_permission(user, EXCUSE_REVIEW):
         query = (

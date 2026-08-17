@@ -10,8 +10,8 @@ from __future__ import annotations
 from api.memberadmin.core.engagement import load_member_engagement
 
 
-async def compute_engagement_scores(chapter_id: str, *, use_admin: bool = False) -> list[dict]:
-    engagements = await load_member_engagement(chapter_id, use_admin=use_admin)
+async def compute_engagement_scores(chapter_id: str) -> list[dict]:
+    engagements = await load_member_engagement(chapter_id)
 
     results = []
     for row in engagements:

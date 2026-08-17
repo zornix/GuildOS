@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from api.attendance.services.signals import list_unexcused_absences
-from api.db import get_supabase
+from api.platform.db import get_db
 from api.dependencies import get_current_user
 from api.rbac.auth import require_permission
 from api.rbac.services.permissions import has_permission
@@ -129,7 +129,7 @@ async def list_fines(status: str = None, user=Depends(get_current_user)):
     `treasury:audit:view` holders see every fine in their chapter — the same key
     that gates the fine summary; everyone else sees only their own.
     """
-    sb = get_supabase()
+    sb = get_db()
 
     query = sb.table("unpaid_invoices").select("*").eq("kind", "fine")
     if has_permission(user, "treasury:audit:view"):
@@ -152,7 +152,7 @@ async def list_missed_members(
 
     The system proposes; humans choose to invoice (spec §5 — never automatic).
     """
-    sb = get_supabase()
+    sb = get_db()
     event = _load_required_event(sb, user["chapter_id"], event_id)
     missed = list_unexcused_absences(sb, chapter_id=user["chapter_id"], event_id=event_id)
     fined = _already_fined_ids(sb, event_id)
@@ -177,7 +177,7 @@ async def issue_fines(
     user=Depends(require_permission("treasury:fines:issue")),
 ):
     """Issue flat $25 fine invoices to selected unexcused members (≥24h gate)."""
-    sb = get_supabase()
+    sb = get_db()
     event = _load_required_event(sb, user["chapter_id"], body.event_id)
 
     start = _event_start_utc(event)
@@ -255,7 +255,7 @@ async def process_fines_for_event(
     officer=Depends(require_permission("treasury:fines:issue")),
 ):
     """A fines:issue holder manually triggers fine processing for one event."""
-    sb = get_supabase()
+    sb = get_db()
     event = (
         sb.table("events")
         .select("id, chapter_id, required")
@@ -276,7 +276,7 @@ async def process_fines_for_event(
 @router.get("/summary")
 async def fine_summary(officer=Depends(require_permission("treasury:audit:view"))):
     """Aggregate fine stats for the chapter, in cents."""
-    sb = get_supabase()
+    sb = get_db()
     invoices = (
         sb.table("unpaid_invoices")
         .select("amount_cents, status")

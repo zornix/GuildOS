@@ -14,7 +14,7 @@ from .schemas import (
     SetPasswordRequest,
 )
 from api.members.api.schemas import UserProfile
-from api.db import get_supabase
+from api.platform.db import get_db
 from api.config import settings
 
 router = APIRouter()
@@ -178,7 +178,7 @@ async def login(body: LoginRequest, request: Request):
     """
     normalized_email = str(body.email).strip().lower()
     ip = _client_ip(request)
-    sb = get_supabase()
+    sb = get_db()
 
     _enforce_rate_limit(sb, email=normalized_email, ip=ip)
 
@@ -227,11 +227,11 @@ async def dev_login(body: LoginRequest):
     # env vars, so a stray DEV_AUTH_BYPASS must not be enough to open this door.
     if settings.is_deployed:
         raise HTTPException(404, "Not found")
-    if not settings.DEV_AUTH_BYPASS or not settings.use_local_db:
+    if not settings.DEV_AUTH_BYPASS:
         raise HTTPException(404, "Not found")
 
     normalized_email = str(body.email).strip().lower()
-    sb = get_supabase()
+    sb = get_db()
     result = (
         sb.table("members")
         .select("id, name, email, role, chapter_id, token_version")
@@ -257,7 +257,7 @@ async def set_password(body: SetPasswordRequest, user=Depends(get_current_user))
     Bumps token_version, which revokes every other outstanding session for this
     member, and returns a fresh token so the caller stays logged in.
     """
-    sb = get_supabase()
+    sb = get_db()
     result = sb.rpc("au_set_password", {
         "p_member_id": user["id"],
         "p_password_hash": _hash_secret(body.password),
@@ -298,7 +298,7 @@ async def invite_members(
     plaintext exactly once for the officer to hand over out of band.
     Duplicate emails are reported in failed.
     """
-    sb = get_supabase()
+    sb = get_db()
     invited: list[str] = []
     setup_codes: list[dict] = []
     failed: list[dict] = []
@@ -343,7 +343,7 @@ async def redeem_setup_code(body: RedeemSetupCodeRequest, request: Request):
     """
     normalized_email = str(body.email).strip().lower()
     ip = _client_ip(request)
-    sb = get_supabase()
+    sb = get_db()
 
     _enforce_rate_limit(sb, email=normalized_email, ip=ip)
 
@@ -417,7 +417,7 @@ async def issue_reset_code(
     Bumping token_version revokes the member's existing sessions immediately,
     which is the point when the reason for the reset is a lost or shared device.
     """
-    sb = get_supabase()
+    sb = get_db()
     result = (
         sb.table("members")
         .select("id, chapter_id")

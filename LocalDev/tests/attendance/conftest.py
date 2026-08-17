@@ -119,8 +119,8 @@ def attendance_app(sb_client, monkeypatch):
     import api.events.api.events as events_api
     import api.rbac.services.permissions as perm_mod
 
-    monkeypatch.setattr(att_api, "get_supabase", lambda: sb_client)
-    monkeypatch.setattr(links_svc, "get_supabase_admin", lambda: sb_client)
+    monkeypatch.setattr(att_api, "get_db", lambda: sb_client)
+    monkeypatch.setattr(links_svc, "get_db", lambda: sb_client)
     monkeypatch.setattr(events_api, "get_events_db", lambda: sb_client)
     monkeypatch.setattr(perm_mod, "get_rbac_db", lambda: sb_client)
 

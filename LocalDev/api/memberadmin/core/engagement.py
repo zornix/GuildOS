@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from api.db import get_supabase, get_supabase_admin
+from api.platform.db import get_db
 
 
 @dataclass(frozen=True)
@@ -25,9 +25,8 @@ async def load_member_engagement(
     chapter_id: str,
     *,
     include_role: bool = False,
-    use_admin: bool = False,
 ) -> list[MemberEngagement]:
-    sb = get_supabase_admin() if use_admin else get_supabase()
+    sb = get_db()
 
     member_fields = "id, name, email" + (", role" if include_role else "")
     query = (

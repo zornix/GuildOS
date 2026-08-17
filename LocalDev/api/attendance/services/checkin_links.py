@@ -25,7 +25,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi import HTTPException
 
 from api.config import settings
-from api.db import get_supabase_admin
+from api.platform.db import get_db
 
 try:  # psycopg2 is the offline/local driver; guarded for supabase-only installs.
     from psycopg2 import errors as _pg_errors
@@ -131,7 +131,7 @@ async def create_checkin_link(event_id: str, created_by: str) -> dict:
     Create a new short-lived check-in link for an event.
     Deactivates any existing active link for the same event.
     """
-    sb = get_supabase_admin()
+    sb = get_db()
     now = datetime.now(timezone.utc)
     expires_at = now + timedelta(minutes=settings.CHECKIN_LINK_TTL_MINUTES)
 
@@ -183,7 +183,7 @@ async def validate_checkin_link(short_code: str) -> dict | None:
     On success the resolved session is attached as `attendance_session` so
     callers need not look it up again.
     """
-    sb = get_supabase_admin()
+    sb = get_db()
     now = datetime.now(timezone.utc)
 
     result = (
@@ -212,7 +212,7 @@ async def validate_checkin_link(short_code: str) -> dict | None:
 
 async def get_active_link_for_event(event_id: str) -> dict | None:
     """Return the currently active, non-expired link for an event (or None)."""
-    sb = get_supabase_admin()
+    sb = get_db()
     now = datetime.now(timezone.utc)
     result = (
         sb.table("checkin_links")
@@ -240,7 +240,7 @@ async def list_active_links_for_chapter(chapter_id: str) -> list[dict]:
     since 0146). This used to fetch every chapter's active links and drop the
     foreign ones in Python -- a tenant leak one missing `continue` wide.
     """
-    sb = get_supabase_admin()
+    sb = get_db()
     now = datetime.now(timezone.utc)
     result = (
         sb.table("checkin_links")
@@ -272,7 +272,7 @@ async def deactivate_checkin_link(event_id: str, chapter_id: str):
     chapter_id is required and filtered on: without it, any officer could kill
     any chapter's live check-in link with a guessed event id.
     """
-    sb = get_supabase_admin()
+    sb = get_db()
     sb.table("checkin_links") \
         .update({"active": False}) \
         .eq("event_id", event_id) \

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from api.dependencies import get_current_user
 from api.rbac.auth import require_permission
-from api.db import get_supabase
+from api.platform.db import get_db
 
 ROLES_ASSIGN = "roles:assign"
 
@@ -17,7 +17,7 @@ router = APIRouter()
 @router.get("/")
 async def list_members(user=Depends(get_current_user)):
     """List the chapter roster: active members plus pending invitees."""
-    sb = get_supabase()
+    sb = get_db()
     result = (
         sb.table("members")
         .select("id, name, email, role, status")
@@ -44,7 +44,7 @@ async def update_role(
     hold comes back as a 400 rather than a database error; stackable roles are
     assigned through the rbac_assign_role RPC, not here.
     """
-    sb = get_supabase()
+    sb = get_db()
 
     known = (
         sb.table("roles").select("key").eq("key", role).maybe_single().execute()

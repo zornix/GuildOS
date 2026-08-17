@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from api.db import get_supabase_admin
+from api.platform.db import get_db
 
 
 def call_rpc(name: str, params: dict, *, sb=None):
-    client = sb or get_supabase_admin()
+    client = sb or get_db()
     return client.rpc(name, params).execute()

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 
-from api.db import get_supabase
+from api.platform.db import get_db
 from api.memberadmin.services.member_detail import load_member_event_breakdown
 from api.memberadmin.services.scoring import compute_engagement_scores
 from api.rbac.auth import require_permission
@@ -39,7 +39,7 @@ async def send_reminder(member_id: str, officer=Depends(require_permission(STAND
     today sends one message (`queued: false` on the second call), and an officer
     can remind again tomorrow.
     """
-    sb = get_supabase()
+    sb = get_db()
     member = (
         sb.table("members")
         .select("id, name, email")

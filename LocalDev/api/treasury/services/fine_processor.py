@@ -9,7 +9,7 @@ route. The V1 path is manual: GET /api/fines/missed/{event_id} +
 POST /api/fines/issue (flat $25, ≥24h gate, treasury:fines:issue).
 """
 
-from api.db import get_supabase_admin
+from api.platform.db import get_db
 from api.treasury.api.schemas import FineToInvoice
 from api.treasury.db.rpc import call_rpc
 
@@ -22,7 +22,7 @@ async def process_event_fines(event_id: str) -> list[dict]:
     3. Subtract those with approved excuses
     4. Issue fines to the rest
     """
-    sb = get_supabase_admin()
+    sb = get_db()
 
     event = (
         sb.table("events")

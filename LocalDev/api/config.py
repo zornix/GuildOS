@@ -3,9 +3,6 @@ from typing import Optional
 
 
 class Settings(BaseSettings):
-    SUPABASE_URL: str = ""
-    SUPABASE_ANON_KEY: str = ""
-    SUPABASE_SERVICE_ROLE_KEY: str = ""
     DATABASE_URL: Optional[str] = None
     JWT_SECRET: str = "local-dev-secret"
     FRONTEND_URL: str = "http://localhost:3000"
@@ -27,10 +24,6 @@ class Settings(BaseSettings):
     TWILIO_FROM_NUMBER: str = ""
     # Sentry error reporting. Empty disables Sentry entirely (local/dev default).
     SENTRY_DSN: str = ""
-
-    @property
-    def use_local_db(self) -> bool:
-        return bool(self.DATABASE_URL)
 
     @property
     def is_production(self) -> bool:
