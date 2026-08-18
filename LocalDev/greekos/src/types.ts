@@ -234,6 +234,8 @@ export interface Announcement {
   date: string;
   priority: 'Normal' | 'Urgent' | 'Mandatory';
   channels: ('Calendar' | 'SMS' | 'Push')[];
+  calendarDate?: string; // YYYY-MM-DD — the day it occupies on the calendar
+  calendarTime?: string; // HH:MM, only ever set alongside calendarDate
 }
 
 export interface OutboxNotification {

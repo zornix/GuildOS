@@ -109,6 +109,19 @@ export function useAppData() {
   }, []);
 
   // ----------------------------------------------------
+  // ANNOUNCEMENTS
+  // ----------------------------------------------------
+  const refetchAnnouncements = async () =>
+    setAnnouncements(adaptAnnouncements(await api.getAnnouncements(), members));
+
+  /** Officer-only: drops a draft, retires a sent one from the calendar. */
+  const handleDeleteAnnouncement = (announcementId: string) => {
+    setAnnouncements(prev => prev.filter(a => a.id !== announcementId));
+    syncApi(() => api.deleteAnnouncement(announcementId), refetchAnnouncements);
+    showToast('Announcement removed from calendar.');
+  };
+
+  // ----------------------------------------------------
   // NATURAL LANGUAGE COMMAND EXECUTION
   // ----------------------------------------------------
   const handleExecuteCommand = (cmdResult: {
@@ -132,8 +145,21 @@ export function useAppData() {
           recruitment.handleExtendBid(targetPnm.id);
         }
         break;
-      case 'ANNOUNCEMENT':
-        setAnnouncements(prev => [cmdResult.payload, ...prev]);
+      case 'ANNOUNCEMENT': {
+        // The backend keeps a calendar slot separate from the send time, so a
+        // dispatched blast is dated today and lands on today's calendar cell.
+        const calendarDate = new Date().toISOString().substring(0, 10);
+        // The command payload carries no id; the refetch swaps in the real row.
+        const localId = 'a_' + Math.random().toString(36).substring(2, 9);
+        setAnnouncements(prev => [{ ...cmdResult.payload, id: localId, calendarDate }, ...prev]);
+        syncApi(async () => {
+          const created = await api.createAnnouncement({
+            title: cmdResult.payload.title,
+            body: cmdResult.payload.content,
+            calendar_date: calendarDate
+          });
+          await api.sendAnnouncement(created.id);
+        }, refetchAnnouncements);
         enqueueOutbox({
           type: 'ANNOUNCEMENT_BLAST',
           recipient: 'All Brothers',
@@ -142,6 +168,7 @@ export function useAppData() {
         });
         showToast(`Dispatched broadcast announcement.`);
         break;
+      }
       case 'EXCUSE_APPROVE':
         const targetExcuse = attendance.excuses.find(e => e.memberName.toLowerCase().includes(cmdResult.payload.memberName.toLowerCase()) && e.status === 'Pending');
         if (targetExcuse) {
@@ -172,6 +199,7 @@ export function useAppData() {
     attendance,
     tasks,
     recruitment,
+    handleDeleteAnnouncement,
     handleExecuteCommand
   };
 }

@@ -15,7 +15,8 @@ import {
   TrendingUp,
   Megaphone,
   CreditCard,
-  QrCode
+  QrCode,
+  X
 } from 'lucide-react';
 import { ChapterEvent, Member, Task, Fine, Initiative, Announcement, LedgerEntry } from '../types';
 import Card from './ui/Card';
@@ -34,6 +35,7 @@ interface DashboardOverviewProps {
   onNavigateTab: (tab: string) => void;
   onVolunteerOrganizer: (eventId: string, memberName: string) => void;
   onPayDuesQuick: () => void;
+  onDeleteAnnouncement: (announcementId: string) => void;
 }
 
 export default function DashboardOverview({
@@ -48,7 +50,8 @@ export default function DashboardOverview({
   currentMemberName,
   onNavigateTab,
   onVolunteerOrganizer,
-  onPayDuesQuick
+  onPayDuesQuick,
+  onDeleteAnnouncement
 }: DashboardOverviewProps) {
   const safeMembers = members || [];
   const safeEvents = events || [];
@@ -334,9 +337,21 @@ export default function DashboardOverview({
                 <div key={a.id} className="p-3 bg-blue-50/50 rounded-xl border border-blue-100 space-y-1">
                   <div className="flex justify-between items-center">
                     <span className="font-bold text-xs text-blue-950">{a.title}</span>
-                    <span className="text-[9px] font-mono bg-blue-200 text-blue-900 px-1.5 rounded font-bold">
-                      {a.priority}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[9px] font-mono bg-blue-200 text-blue-900 px-1.5 rounded font-bold">
+                        {a.priority}
+                      </span>
+                      {isOfficer && (
+                        <button
+                          onClick={() => onDeleteAnnouncement(a.id)}
+                          title="Remove from calendar"
+                          aria-label={`Remove announcement "${a.title}" from calendar`}
+                          className="text-blue-400 hover:text-red-600 cursor-pointer"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <p className="text-xs text-blue-900 leading-relaxed">{a.content}</p>
                   <div className="text-[10px] text-blue-600 font-mono pt-1">

@@ -216,14 +216,18 @@ export function adaptTasks(rows: TaskDto[], members: Member[]): Task[] {
 // ANNOUNCEMENTS
 // ----------------------------------------------------
 export function adaptAnnouncements(rows: AnnouncementDto[], members: Member[]): Announcement[] {
-  return rows.map(row => ({
+  // A retired (deleted) announcement stays in the backend feed but is off the
+  // calendar — the prototype only surfaces announcements as calendar items.
+  return rows.filter(row => !row.hidden_from_calendar).map(row => ({
     id: row.id,
     title: row.title,
     content: row.body,
     author: row.created_by ? nameOf(members, row.created_by) : 'Chapter',
     date: day(row.sent_at || row.created_at),
     priority: 'Normal',
-    channels: ['Calendar']
+    channels: ['Calendar'],
+    calendarDate: day(row.calendar_date) || undefined,
+    calendarTime: hhmm(row.calendar_time) || undefined
   }));
 }
 

@@ -55,10 +55,14 @@ export default function CalendarModule({
   const safeInitiatives = initiatives || [];
   const safeAnnouncements = announcements || [];
 
+  // An announcement with a backend calendar slot sits on that day; one without
+  // falls back to the day it was posted.
+  const announcementDay = (a: Announcement) => a.calendarDate || a.date;
+
   // Items on selected day
   const dayEvents = safeEvents.filter(e => e.date === selectedDateStr);
   const dayInitiatives = safeInitiatives.filter(i => (i.startDate || '') <= selectedDateStr && (i.targetDate || '') >= selectedDateStr);
-  const dayAnnouncements = safeAnnouncements.filter(a => a.date === selectedDateStr);
+  const dayAnnouncements = safeAnnouncements.filter(a => announcementDay(a) === selectedDateStr);
 
   return (
     <div className="space-y-6">
@@ -126,7 +130,7 @@ export default function CalendarModule({
             {calendarCells.map((cell, idx) => {
               const isSelected = cell.dateStr === selectedDateStr;
               const cellEvents = cell.dateStr ? safeEvents.filter(e => e.date === cell.dateStr) : [];
-              const cellAnnouncements = cell.dateStr ? safeAnnouncements.filter(a => a.date === cell.dateStr) : [];
+              const cellAnnouncements = cell.dateStr ? safeAnnouncements.filter(a => announcementDay(a) === cell.dateStr) : [];
               const hasOrganizersNeeded = cellEvents.some(e => !e.organizers || e.organizers.length === 0);
 
               return (
