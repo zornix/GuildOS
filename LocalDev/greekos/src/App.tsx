@@ -78,6 +78,8 @@ export default function App() {
           onApproveJob={events.handleApproveJob}
           onRejectJob={events.handleRejectJob}
           onAddJobToEvent={events.handleAddJobToEvent}
+          onEditJob={events.handleEditJob}
+          onDeleteJob={events.handleDeleteJob}
           onSendEventNotifyBlast={events.handleSendEventNotifyBlast}
           onToggleCheckInLink={events.handleToggleCheckInLink}
           onAssignSecurity={events.handleAssignSecurity}

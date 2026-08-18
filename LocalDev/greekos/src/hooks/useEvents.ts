@@ -7,6 +7,23 @@ import { ShowToast } from './useToast';
 import { EnqueueOutbox } from './useOutbox';
 import { SyncApi } from './useBackend';
 
+/** 409 conflict tokens the jobs API raises, mapped to member-facing copy. */
+const JOB_409: Record<string, string> = {
+  job_not_editable: 'Job can no longer be edited',
+  job_not_cancellable: 'Only unclaimed To-Do jobs can be deleted',
+  job_capacity_below_claims: "Can't set spots below current claims",
+  security_no_edit: 'Security shifts are managed from the Security panel',
+  security_no_cancel: 'Security shifts are managed from the Security panel'
+};
+
+/** api.ts throws `Error('PATCH /path failed (409): <detail>')`, so the conflict
+ *  token is matched inside the message rather than read off a field. */
+const jobErrorToast = (err: unknown, fallback: string) => {
+  const msg = err instanceof Error ? err.message : '';
+  const hit = Object.keys(JOB_409).find(token => msg.includes(token));
+  return hit ? JOB_409[hit] : fallback;
+};
+
 interface Deps {
   members: Member[];
   syncApi: SyncApi;
@@ -248,6 +265,39 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
     showToast(`Added job to event.`);
   };
 
+  // Edit/delete are not applied optimistically: the backend can refuse either
+  // (claimed job, capacity below claims, security shift), so the refetch is the
+  // only source of truth and the 409 copy explains the refusal.
+  const handleEditJob = (
+    _eventId: string,
+    jobId: string,
+    patch: { title?: string; description?: string; peopleNeeded?: number }
+  ) => {
+    syncApi(async () => {
+      try {
+        await api.updateJob(jobId, {
+          title: patch.title,
+          description: patch.description,
+          people_needed: patch.peopleNeeded
+        });
+        showToast('Job updated.');
+      } catch (err) {
+        showToast(jobErrorToast(err, 'Could not update job'));
+      }
+    }, refetchJobs);
+  };
+
+  const handleDeleteJob = (_eventId: string, jobId: string) => {
+    syncApi(async () => {
+      try {
+        await api.deleteJob(jobId);
+        showToast('Job deleted.');
+      } catch (err) {
+        showToast(jobErrorToast(err, 'Could not delete job'));
+      }
+    }, refetchJobs);
+  };
+
   const handleSendEventNotifyBlast = (eventId: string) => {
     const ev = events.find(e => e.id === eventId);
     if (!ev) return;
@@ -403,6 +453,8 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
     handleApproveJob,
     handleRejectJob,
     handleAddJobToEvent,
+    handleEditJob,
+    handleDeleteJob,
     handleSendEventNotifyBlast,
     handleToggleCheckInLink,
     handleAssignSecurity,
