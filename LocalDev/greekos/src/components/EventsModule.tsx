@@ -813,6 +813,8 @@ export default function EventsModule({
                       selectedEvent.securityAssignments.map(sec => {
                         const isMyAssignment = currentMember && sec.memberId === currentMember.id;
                         const isTargetOfSwap = currentMember && sec.swapRequestedWithId === currentMember.id;
+                        // Assignee may be off the loaded roster (alumni, filtered), so standing can be missing.
+                        const standing = members.find(m => m.id === sec.memberId)?.standing;
 
                         return (
                           <tr key={sec.id} className="hover:bg-slate-50/60">
@@ -820,9 +822,15 @@ export default function EventsModule({
                               <span className="font-bold text-slate-800">{sec.memberName}</span>
                             </td>
                             <td className="py-3 px-3">
-                              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-semibold">
-                                Good Standing
-                              </span>
+                              {standing ? (
+                                <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-semibold ${
+                                  standing === 'Good Standing' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+                                }`}>
+                                  {standing}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-mono text-slate-400">&mdash;</span>
+                              )}
                             </td>
                             <td className="py-3 px-3">
                               {sec.swapStatus === 'Pending' ? (

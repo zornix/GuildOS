@@ -36,9 +36,15 @@ interface Deps {
 export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJobs }: Deps) {
   const [events, setEvents] = useState<ChapterEvent[]>(INITIAL_EVENTS);
 
-  // adaptEvents rebuilds rows with an empty jobs list, so restamp the boards after.
+  // adaptEvents rebuilds rows with empty jobs and security lists. refetchJobs
+  // restamps the boards below, but security only loads per event, so the shifts
+  // already in state are carried across rather than blanked.
   const refetchEvents = async () => {
-    setEvents(adaptEvents(await api.getEvents()));
+    const rows = adaptEvents(await api.getEvents());
+    setEvents(prev => {
+      const securityById = new Map(prev.map(e => [e.id, e.securityAssignments]));
+      return rows.map(e => ({ ...e, securityAssignments: securityById.get(e.id) ?? e.securityAssignments }));
+    });
     await refetchJobs();
   };
 

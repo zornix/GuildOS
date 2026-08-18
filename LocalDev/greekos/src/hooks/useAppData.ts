@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { INITIAL_ANNOUNCEMENTS, INITIAL_RULES } from '../data/mockData';
 import { Announcement, ChapterRule, Member, SecurityAssignment } from '../types';
-import { api, ensureLogin, TaskDto } from '../api';
+import { api, ensureLogin, EventDto, TaskDto } from '../api';
 import {
   adaptAnnouncements,
   adaptEvents,
@@ -68,14 +68,30 @@ export function useAppData() {
   const tasks = useTasks({ members, syncApi, showToast });
   const recruitment = useRecruitment({ syncApi, showToast, enqueueOutbox });
 
-  /** Stamp the job rows onto whichever event/initiative owns each one. */
-  const applyJobs = (taskRows: TaskDto[], rosterRows: Member[]) => {
+  /** Stamp the job rows onto whichever event/initiative owns each one. The chip
+   *  counts live on the event rows, so restamp those in the same update when
+   *  fresh ones are supplied (rows are patched, never re-adapted, to keep the
+   *  per-event security shifts already in state). */
+  const applyJobs = (taskRows: TaskDto[], rosterRows: Member[], eventRows?: EventDto[]) => {
     const membersById = new Map(rosterRows.map(m => [m.id, m]));
     const { byEvent, byInitiative } = groupJobsByParent(taskRows, membersById);
-    events.setEvents(evts => evts.map(e => ({ ...e, jobs: byEvent.get(e.id) ?? [] })));
+    const countsById = new Map((eventRows ?? []).map(row => [row.id, row]));
+    events.setEvents(evts => evts.map(e => {
+      const row = countsById.get(e.id);
+      return {
+        ...e,
+        jobs: byEvent.get(e.id) ?? [],
+        ...(row ? { jobCount: row.job_count || 0, openJobCount: row.open_job_count || 0 } : {})
+      };
+    }));
     initiatives.setInitiatives(inits => inits.map(i => ({ ...i, jobs: byInitiative.get(i.id) ?? [] })));
   };
-  refetchJobsRef.current = async () => applyJobs(await api.getTasks(), members);
+  // Jobs and the open-job chips come from different endpoints, so both are read
+  // here. refetchEvents already calls this, hence no call back into it.
+  refetchJobsRef.current = async () => {
+    const [taskRows, eventRows] = await Promise.all([api.getTasks(), api.getEvents()]);
+    applyJobs(taskRows, members, eventRows);
+  };
 
   // ----------------------------------------------------
   // BACKEND LOAD (one try/catch: any failure falls back to the mock data)
