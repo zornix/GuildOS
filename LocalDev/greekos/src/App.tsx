@@ -48,6 +48,7 @@ export default function App() {
           onNavigateTab={setActiveTab}
           onVolunteerOrganizer={events.handleVolunteerOrganizer}
           onPayDuesQuick={() => setActiveTab('finance')}
+          onDeleteAnnouncement={app.handleDeleteAnnouncement}
         />
       )}
 

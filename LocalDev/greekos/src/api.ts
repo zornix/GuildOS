@@ -161,6 +161,10 @@ export interface AnnouncementDto {
   created_by: string | null;
   sent_at: string | null;
   created_at: string;
+  // D15 calendar slot: a dated announcement also shows on the calendar.
+  calendar_date?: string | null;
+  calendar_time?: string | null;
+  hidden_from_calendar?: boolean;
 }
 
 export interface RecruitDto {
@@ -244,6 +248,16 @@ export const api = {
     request<void>('POST', `/api/tasks/${id}/reject`, { reason }),
 
   getAnnouncements: () => request<AnnouncementDto[]>('GET', '/api/announcements/'),
+  // calendar_time without calendar_date is a 422 — only send it with a date.
+  createAnnouncement: (body: {
+    title: string;
+    body: string;
+    calendar_date?: string;
+    calendar_time?: string;
+  }) => request<AnnouncementDto>('POST', '/api/announcements/', body),
+  sendAnnouncement: (id: string) => request<void>('POST', `/api/announcements/${id}/send`),
+  /** Draft -> deleted, sent -> hidden from the calendar. Idempotent. */
+  deleteAnnouncement: (id: string) => request<void>('DELETE', `/api/announcements/${id}`),
 
   getRecruits: () => request<RecruitDto[]>('GET', '/api/recruitment/recruits'),
   createRecruit: (body: Record<string, unknown>) =>
