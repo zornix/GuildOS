@@ -90,6 +90,26 @@ export interface ScoreDto {
   prior_security_shifts: number;
 }
 
+export interface SwapDto {
+  id: string;
+  task_id: string;
+  event_id: string;
+  requester_member_id: string;
+  target_member_id: string;
+  note: string | null;
+  status: string;
+  created_at: string | null;
+}
+
+export interface SecurityAssignmentDto {
+  task_id: string;
+  event_id: string;
+  member_id: string | null;
+  status: string;
+  rejection_reason: string | null;
+  pending_swap: SwapDto | null;
+}
+
 export interface ExcuseDto {
   id: string;
   event_id: string;
@@ -208,6 +228,24 @@ export const api = {
   createEvent: (body: Record<string, unknown>) => request<EventDto>('POST', '/api/events/', body),
   updateEvent: (id: string, body: Record<string, unknown>) =>
     request<EventDto>('PUT', `/api/events/${id}`, body),
+
+  listSecurity: (eventId: string) =>
+    request<SecurityAssignmentDto[]>('GET', `/api/events/${eventId}/security`),
+  assignSecurity: (eventId: string, memberId: string) =>
+    request<SecurityAssignmentDto>('POST', `/api/events/${eventId}/security`, { member_id: memberId }),
+  removeSecurity: (eventId: string, taskId: string) =>
+    request<void>('DELETE', `/api/events/${eventId}/security/${taskId}`),
+  requestSwap: (eventId: string, taskId: string, targetMemberId: string, note?: string) =>
+    request<SwapDto>('POST', `/api/events/${eventId}/security/${taskId}/swap-request`, {
+      target_member_id: targetMemberId,
+      note: note || null
+    }),
+  acceptSwap: (eventId: string, swapId: string) =>
+    request<SwapDto>('POST', `/api/events/${eventId}/security/swaps/${swapId}/accept`, {}),
+  declineSwap: (eventId: string, swapId: string) =>
+    request<SwapDto>('POST', `/api/events/${eventId}/security/swaps/${swapId}/decline`, {}),
+  cancelSwap: (eventId: string, swapId: string) =>
+    request<SwapDto>('POST', `/api/events/${eventId}/security/swaps/${swapId}/cancel`, {}),
 
   getExcuses: () => request<ExcuseDto[]>('GET', '/api/excuses/'),
   submitExcuse: (eventId: string, reason: string) =>

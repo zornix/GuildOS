@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { INITIAL_EVENTS } from '../data/mockData';
-import { ChapterEvent, EventJob, SecurityAssignment } from '../types';
+import { ChapterEvent, EventJob, Member, SecurityAssignment } from '../types';
 import { api } from '../api';
-import { adaptEvents, toEventBody } from '../adapters';
+import { adaptEvents, adaptSecurityAssignment, toEventBody } from '../adapters';
 import { ShowToast } from './useToast';
 import { EnqueueOutbox } from './useOutbox';
 import { SyncApi } from './useBackend';
 
 interface Deps {
+  members: Member[];
   syncApi: SyncApi;
   showToast: ShowToast;
   enqueueOutbox: EnqueueOutbox;
@@ -15,7 +16,7 @@ interface Deps {
 }
 
 /** Chapter events plus their claimable jobs and security shifts. */
-export function useEvents({ syncApi, showToast, enqueueOutbox, refetchJobs }: Deps) {
+export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJobs }: Deps) {
   const [events, setEvents] = useState<ChapterEvent[]>(INITIAL_EVENTS);
 
   // adaptEvents rebuilds rows with an empty jobs list, so restamp the boards after.
@@ -23,6 +24,38 @@ export function useEvents({ syncApi, showToast, enqueueOutbox, refetchJobs }: De
     setEvents(adaptEvents(await api.getEvents()));
     await refetchJobs();
   };
+
+  /** Reload one event's security roster from the backend. */
+  const refetchSecurity = async (eventId: string) => {
+    const membersById = new Map(members.map(m => [m.id, m]));
+    const rows = await api.listSecurity(eventId);
+    const securityAssignments = rows.map(row => adaptSecurityAssignment(row, membersById));
+    setEvents(prev => prev.map(e => e.id === eventId ? { ...e, securityAssignments } : e));
+  };
+
+  /** The swap id lives on the assignment row, so read it fresh before acting. */
+  const pendingSwapId = async (eventId: string, assignmentId: string) => {
+    const rows = await api.listSecurity(eventId);
+    const swap = rows.find(r => r.task_id === assignmentId)?.pending_swap;
+    if (!swap || swap.status !== 'pending') throw new Error('That swap request is no longer pending');
+    return swap.id;
+  };
+
+  /** Swap mutations share one 409 the UI can put in plain words. */
+  const syncSwap = (eventId: string, call: () => Promise<unknown>) =>
+    syncApi(async () => {
+      try {
+        await call();
+      } catch (err) {
+        // syncApi only refetches on success, so reconcile the optimistic row here.
+        await refetchSecurity(eventId).catch(() => { /* leave the optimistic row */ });
+        const message = (err as Error).message;
+        if (message.includes('swap_wrong_state')) {
+          throw new Error('That swap request is no longer pending');
+        }
+        throw err;
+      }
+    }, () => refetchSecurity(eventId));
 
   const handleAddEvent = (newEvent: Omit<ChapterEvent, 'id' | 'attendanceTaken' | 'checkedInCount'>) => {
     const ev: ChapterEvent = {
@@ -238,14 +271,14 @@ export function useEvents({ syncApi, showToast, enqueueOutbox, refetchJobs }: De
     }));
   };
 
-  const handleAssignSecurity = (eventId: string, memberId: string, memberName: string, station: string) => {
+  const handleAssignSecurity = (eventId: string, memberId: string, memberName: string, _station?: string) => {
     setEvents(prev => prev.map(e => {
       if (e.id === eventId) {
         const newAssignment: SecurityAssignment = {
           id: 'sec_' + Math.random().toString(36).substring(2, 9),
           memberId,
           memberName,
-          station,
+          station: '',
           status: 'Confirmed'
         };
         return {
@@ -255,10 +288,11 @@ export function useEvents({ syncApi, showToast, enqueueOutbox, refetchJobs }: De
       }
       return e;
     }));
+    syncApi(() => api.assignSecurity(eventId, memberId), () => refetchSecurity(eventId));
     enqueueOutbox({
       type: 'SECURITY_ASSIGNED',
       recipient: memberName,
-      message: `[GreekOS Security] You have been assigned to station: ${station}`,
+      message: `[GreekOS Security] You have been assigned to a security shift.`,
       channel: 'SMS'
     });
     showToast(`Assigned ${memberName} to security shift.`);
@@ -284,6 +318,7 @@ export function useEvents({ syncApi, showToast, enqueueOutbox, refetchJobs }: De
       }
       return e;
     }));
+    syncSwap(eventId, () => api.requestSwap(eventId, assignmentId, targetMemberId));
 
     enqueueOutbox({
       type: 'SECURITY_SWAP_REQUEST',
@@ -325,7 +360,34 @@ export function useEvents({ syncApi, showToast, enqueueOutbox, refetchJobs }: De
       }
       return e;
     }));
+    syncSwap(eventId, async () => {
+      const swapId = await pendingSwapId(eventId, assignmentId);
+      await (accept ? api.acceptSwap(eventId, swapId) : api.declineSwap(eventId, swapId));
+    });
     showToast(accept ? 'Accepted security shift swap.' : 'Declined shift swap.');
+  };
+
+  /** The requester withdraws their own pending swap request. */
+  const handleCancelSecuritySwap = (eventId: string, assignmentId: string) => {
+    setEvents(prev => prev.map(e => {
+      if (e.id === eventId && e.securityAssignments) {
+        return {
+          ...e,
+          securityAssignments: e.securityAssignments.map(s => s.id === assignmentId ? {
+            ...s,
+            swapRequestedWithId: undefined,
+            swapRequestedWithName: undefined,
+            swapStatus: 'None' as const
+          } : s)
+        };
+      }
+      return e;
+    }));
+    syncSwap(eventId, async () => {
+      const swapId = await pendingSwapId(eventId, assignmentId);
+      await api.cancelSwap(eventId, swapId);
+    });
+    showToast('Cancelled your shift swap request.');
   };
 
   return {
@@ -345,6 +407,7 @@ export function useEvents({ syncApi, showToast, enqueueOutbox, refetchJobs }: De
     handleToggleCheckInLink,
     handleAssignSecurity,
     handleRequestSecuritySwap,
-    handleRespondSecuritySwap
+    handleRespondSecuritySwap,
+    handleCancelSecuritySwap
   };
 }

@@ -83,6 +83,7 @@ export default function App() {
           onAssignSecurity={events.handleAssignSecurity}
           onRequestSecuritySwap={events.handleRequestSecuritySwap}
           onRespondSecuritySwap={events.handleRespondSecuritySwap}
+          onCancelSecuritySwap={events.handleCancelSecuritySwap}
         />
       )}
 

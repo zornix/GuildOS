@@ -37,9 +37,10 @@ interface EventsModuleProps {
   onAddJobToEvent: (eventId: string, job: Omit<EventJob, 'id' | 'claimants' | 'status'>) => void;
   onSendEventNotifyBlast: (eventId: string) => void;
   onToggleCheckInLink: (eventId: string) => void;
-  onAssignSecurity: (eventId: string, memberId: string, memberName: string, station: string) => void;
+  onAssignSecurity: (eventId: string, memberId: string, memberName: string) => void;
   onRequestSecuritySwap: (eventId: string, assignmentId: string, targetMemberId: string, targetMemberName: string) => void;
   onRespondSecuritySwap: (eventId: string, assignmentId: string, accept: boolean) => void;
+  onCancelSecuritySwap: (eventId: string, assignmentId: string) => void;
 }
 
 export default function EventsModule({
@@ -60,7 +61,8 @@ export default function EventsModule({
   onToggleCheckInLink,
   onAssignSecurity,
   onRequestSecuritySwap,
-  onRespondSecuritySwap
+  onRespondSecuritySwap,
+  onCancelSecuritySwap
 }: EventsModuleProps) {
   const [selectedEventId, setSelectedEventId] = useState<string>(events[0]?.id || '');
   const [filterType, setFilterType] = useState<string>('All');
@@ -92,7 +94,6 @@ export default function EventsModule({
 
   // Security Assign State
   const [selectedSecMemberId, setSelectedSecMemberId] = useState(members[0]?.id || '');
-  const [secStation, setSecStation] = useState('Front Porch / Main Entry Door');
 
   const currentMember = members.find(m => m.name === currentMemberName);
   const selectedEvent = events.find(e => e.id === selectedEventId) || events[0];
@@ -157,7 +158,7 @@ export default function EventsModule({
     if (!selectedEvent) return;
     const targetMem = members.find(m => m.id === selectedSecMemberId);
     if (targetMem) {
-      onAssignSecurity(selectedEvent.id, targetMem.id, targetMem.name, secStation);
+      onAssignSecurity(selectedEvent.id, targetMem.id, targetMem.name);
     }
     setShowSecurityAssignModal(false);
   };
@@ -736,7 +737,11 @@ export default function EventsModule({
 
                 {isOfficer && (
                   <button
-                    onClick={() => setShowSecurityAssignModal(true)}
+                    onClick={() => {
+                      // The mount-time default is a mock id once the real roster lands.
+                      setSelectedSecMemberId(members[0]?.id || '');
+                      setShowSecurityAssignModal(true);
+                    }}
                     className="text-xs bg-navy hover:bg-slate-800 text-gold font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />
@@ -750,7 +755,6 @@ export default function EventsModule({
                 <table className="w-full text-xs text-left">
                   <thead className="bg-slate-50 border-y border-slate-200 text-slate-600 font-mono uppercase text-[10px]">
                     <tr>
-                      <th className="py-2.5 px-3">Station</th>
                       <th className="py-2.5 px-3">Assigned Brother</th>
                       <th className="py-2.5 px-3">Standing</th>
                       <th className="py-2.5 px-3">Swap Status</th>
@@ -765,7 +769,6 @@ export default function EventsModule({
 
                         return (
                           <tr key={sec.id} className="hover:bg-slate-50/60">
-                            <td className="py-3 px-3 font-semibold text-slate-900">{sec.station}</td>
                             <td className="py-3 px-3">
                               <span className="font-bold text-slate-800">{sec.memberName}</span>
                             </td>
@@ -795,6 +798,16 @@ export default function EventsModule({
                                 </button>
                               )}
 
+                              {/* Withdraw my own pending request */}
+                              {isMyAssignment && sec.swapStatus === 'Pending' && (
+                                <button
+                                  onClick={() => onCancelSecuritySwap(selectedEvent.id, sec.id)}
+                                  className="text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold px-2.5 py-1 rounded transition-all cursor-pointer"
+                                >
+                                  Cancel request
+                                </button>
+                              )}
+
                               {/* Respond to swap if target brother */}
                               {isTargetOfSwap && sec.swapStatus === 'Pending' && (
                                 <div className="flex items-center justify-end gap-1.5">
@@ -818,8 +831,8 @@ export default function EventsModule({
                       })
                     ) : (
                       <tr>
-                        <td colSpan={5} className="py-6 text-center text-slate-400 italic">
-                          No security stations required for this event type.
+                        <td colSpan={4} className="py-6 text-center text-slate-400 italic">
+                          No security shifts assigned for this event yet.
                         </td>
                       </tr>
                     )}
@@ -1110,18 +1123,6 @@ export default function EventsModule({
                 <p className="text-[10px] text-slate-400 mt-1 font-mono">
                   Ordered by prior security shifts — fewest first.
                 </p>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">Assigned Security Post / Station</label>
-                <input
-                  type="text"
-                  value={secStation}
-                  onChange={e => setSecStation(e.target.value)}
-                  placeholder="e.g. Front Door Wristband Scan"
-                  className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-gold"
-                  required
-                />
               </div>
 
               <button
