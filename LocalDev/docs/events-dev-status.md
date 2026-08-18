@@ -1,8 +1,8 @@
 # Events Service V1 — Development Status & Roadmap
 
-**Last updated:** 2026-07-10
+**Last updated:** 2026-08-15
 **Spec:** `docs/events-v1-spec.md` (Events Service V1, saved verbatim)
-**Current phase:** Phase 4 **done** (migration 0145) — Phase 5 next
+**Current phase:** Phase 4 **done** (migration 0145) — **B4FEND** next (backend gaps that block Phase 5), then Phase 5
 
 This document is the entry point for anyone (human or agent session) continuing
 the Events V1 build. It records what exists, what's missing, the decisions that
@@ -179,6 +179,7 @@ baked into the phase plans. Revisit here if product overrules.
 | 2 | Notify gate: completeness computation (≥1 supervisor, ≥1 organizer, ≥3 jobs), `POST /{id}/notify` → outbox → SMS, events `notifications.py`, `ORGANIZER_SOFT_MIN` → 1, "last notified" timestamp | `docs/imp-ev-ph2.md` | **Done** (migration 0143) |
 | 3 | Initiatives: new entity (chair-created, assigned chairs, required start time), reuses job machinery with chair approval; calendar aggregator includes them | `docs/imp-ev-ph3.md` | **Done** (migration 0144) |
 | 4 | Security + swaps: persisted security assignments as a special job type (replace the memberadmin stub), swap requests (one pending per assignment, accept/decline, atomic swap), notifications | `docs/imp-ev-ph4.md` | **Done** (migration 0145) |
+| B4FEND | Backend unblocks for Phase 5: `open_job_count` on list/calendar, announcement calendar date + aggregator, job PATCH/DELETE, requester swap cancel, `prior_security_shifts` on scores | `docs/B4FEND-FIX.md` | Not started (migration 0152 — 0147–0151 were taken by the ops/auth/RBAC pass of 2026-08-16) |
 | 5 | Frontend: events/tasks contracts+adapters, member-picker primitive, JobCard, event-detail sections (People/Jobs/Security/Notify + checklist + T-36h countdown), calendar badges + week view + mixed chips, initiative/security/swap screens, announcement SMS counter + scheduled time + calendar posting | `docs/imp-ev-ph5.md` | Not started |
 
 Phases 1→2→3 are sequential (each builds on the previous schema). Phase 4
@@ -383,7 +384,15 @@ it can start (contracts, JobCard, detail sections) once Phase 1+2 are deployed.
      `ev_assign_security`/`ev_remove_security` + swap RPCs. The
      `POST /api/memberadmin/assign-security` stub was deleted (`/scores` +
      `/member/{id}` keep their legacy `require_officer` — separate debt).
+   - *B4FEND:* **not started** — `docs/B4FEND-FIX.md`. Closes the seven
+     backend gaps the Phase 5 inventory cannot wire to: `open_job_count` on
+     list/calendar, announcement `calendar_date`/`calendar_time` + aggregator
+     inclusion, `PATCH`/`DELETE /api/tasks/{id}`, `ev_cancel_security_swap`
+     (cut in Phase 4; `SECURITY_SWAP_CANCELLED` already seeded), and
+     `prior_security_shifts` on `GET /api/memberadmin/scores`. Do this before
+     writing `docs/imp-ev-ph5.md`.
    - *Phase 5:* create `lib/contracts/events.ts` + `lib/adapters/events.ts`
      (and tasks/jobs equivalents) *first*; build the member-picker primitive in
      `components/ui/`; the existing `components/countdown.tsx` is mm:ss and
-     legacy-themed — build a day/hour variant on design tokens instead.
+     legacy-themed — build a day/hour variant on design tokens instead. Assume
+     B4FEND has landed — do not re-plan those backend gaps in the Phase 5 doc.

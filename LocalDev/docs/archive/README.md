@@ -13,5 +13,7 @@ they are no longer live work. See the product dashboard in the root
 | `imp-hygiene.md` | Dead-code deletion + doc truth-up | commit `b6d4ffd` |
 | `imp-standing-fines.md` | Standing reads real unpaid fines (cents) | commit `effde78` |
 | `imp-e2e-and-tooling-repairs.md` | E2e suite repair, dev-script paths, officer password login | commits `1ec54fa`/`003a359`/`4dbd0bf` |
+| `imp-tenant-guards.md` | Attendance tenant guards + prod fail-fast | migration 0146 |
+| `imp-one-gate.md` | All authority folded into the permission catalog (incl. `/scores` off `require_officer`) | migration 0147, commit `f3856e3` |
 
 The Events phases are also summarized in [`../events-dev-status.md`](../events-dev-status.md).

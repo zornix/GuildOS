@@ -160,8 +160,9 @@ tracked in a `schema_migrations` table (idempotent — only pending files run).
   Q&A has no RAG), return an explicit `not_implemented` status — never fake an
   answer.
 
-See `docs/ARCHITECTURE.md`, `docs/TREASURY_ARCHITECTURE.md`, and
-`docs/services/README.md` for the authoritative deep dives.
+See `docs/ARCHITECTURE.md`, `docs/CODEMAP.md` (guided file order),
+`docs/TREASURY_ARCHITECTURE.md`, and `docs/services/README.md` for the
+authoritative deep dives.
 
 ## Frontend architecture
 

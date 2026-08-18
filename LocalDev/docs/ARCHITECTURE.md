@@ -5,6 +5,7 @@ Last updated: 2026-07-03
 **Purpose of this document:** everything a coding agent needs to work in this
 repo without re-exploring the codebase. Read this plus `LocalDev/CLAUDE.md`
 (auto-loaded) before writing code. Deep dives:
+[CODEMAP.md](CODEMAP.md) (guided file order),
 [TREASURY_ARCHITECTURE.md](TREASURY_ARCHITECTURE.md) (ledger/money internals),
 [services/README.md](services/README.md) (per-service docs),
 `../../FrontendConventions.md` (full frontend spec),

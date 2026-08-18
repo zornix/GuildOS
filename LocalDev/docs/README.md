@@ -5,6 +5,7 @@ Welcome to the GuildOS documentation! This folder contains all the reference mat
 ## 🧭 Navigation
 
 *   [Architecture Overview](ARCHITECTURE.md) - System architecture, tech stack, and network flows.
+*   [Code map](CODEMAP.md) - Guided file order for agents (which files to open first).
 *   [Treasury Architecture](TREASURY_ARCHITECTURE.md) - Deep dive into the ledger, invoicing, and balance engine.
 *   [Services Design](services/README.md) - The canonical domain-package pattern for all backend services.
 *   [Service Map](services/service-map.md) - How different domains (events, attendance, treasury) interact.
