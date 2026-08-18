@@ -218,6 +218,25 @@ def accept_swap(
     ).data
 
 
+def cancel_swap(
+    sb, *, actor: dict, swap_id: str, idempotency_key: str | None = None,
+) -> dict:
+    """The requester withdraws their own pending swap (RPC enforces identity).
+
+    Frees the one-pending-swap slot when the target simply never answered.
+    """
+    return call_rpc(
+        "ev_cancel_security_swap",
+        {
+            "p_chapter_id": actor["chapter_id"],
+            "p_swap_id": swap_id,
+            "p_actor_id": actor["id"],
+            "p_idempotency_key": idempotency_key,
+        },
+        sb=sb,
+    ).data
+
+
 def decline_swap(
     sb, *, actor: dict, swap_id: str, idempotency_key: str | None = None,
 ) -> dict:

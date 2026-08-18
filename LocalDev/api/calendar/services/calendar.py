@@ -50,6 +50,15 @@ def get_calendar(
                 "group_id": ev.get("group_id"),
                 "supervisor_member_id": ev.get("supervisor_member_id"),
                 "event_type": ev.get("event_type"),
+                # Screen 1 chips: the time/end pair renders the T-36h countdown,
+                # open_job_count is the claim lure, completeness the Incomplete
+                # badge. list_events already computed all of it.
+                "time": str(ev["time"]) if ev.get("time") else None,
+                "end_date": str(ev["end_date"]) if ev.get("end_date") else None,
+                "end_time": str(ev["end_time"]) if ev.get("end_time") else None,
+                "job_count": ev.get("job_count", 0),
+                "open_job_count": ev.get("open_job_count", 0),
+                "completeness": ev.get("completeness"),
             })
             if ev.get("group_id"):
                 groups.setdefault(ev["group_id"], []).append(ev["id"])
@@ -90,6 +99,34 @@ def get_calendar(
                     "end_time": str(ini["end_time"]) if ini.get("end_time") else None,
                     "chair_member_ids": chairs_by_initiative.get(ini["id"], []),
                 })
+
+    # --- 1c. Announcements (D15: a dated announcement is calendar presence) ---
+    # Only sent, dated, unhidden, chapter-audience rows: drafts are not news,
+    # the chapter calendar is not the officers-only / balance-targeted feed, and
+    # a hidden row is one someone retired from the calendar via DELETE.
+    announcements = (
+        sb.table("announcements")
+        .select("id, title, calendar_date, calendar_time, audience")
+        .eq("chapter_id", chapter_id)
+        .eq("status", "sent")
+        .eq("audience", "chapter")
+        .eq("hidden_from_calendar", False)
+        .gte("calendar_date", start)
+        .lte("calendar_date", end)
+        .execute()
+    ).data or []
+
+    for an in announcements:
+        if not an.get("calendar_date"):
+            continue
+        items.append({
+            "kind": "announcement",
+            "announcement_id": an["id"],
+            "title": an.get("title"),
+            "date": str(an["calendar_date"]),
+            "time": str(an["calendar_time"]) if an.get("calendar_time") else None,
+            "audience": an.get("audience"),
+        })
 
     # --- 2. Invoices ---
     granted = get_member_permissions(user, sb=sb)

@@ -310,6 +310,7 @@ def list_events(sb, *, user: dict, upcoming: bool = True) -> list[dict]:
     counts: dict[str, int] = {}
     sup_counts: dict[str, int] = {}
     job_counts: dict[str, int] = {}
+    open_job_counts: dict[str, int] = {}
     event_ids = [e["id"] for e in visible]
     if event_ids:
         organizer_rows = (
@@ -340,6 +341,10 @@ def list_events(sb, *, user: dict, upcoming: bool = True) -> list[dict]:
             if r.get("status") == "cancelled" or r.get("kind") == "security":
                 continue
             job_counts[r["event_id"]] = job_counts.get(r["event_id"], 0) + 1
+            # The "N open jobs" claim lure (spec Screen 1) — same filter as
+            # job_count, narrowed to the claimable statuses.
+            if r.get("status") in _OPEN_JOB_STATUSES:
+                open_job_counts[r["event_id"]] = open_job_counts.get(r["event_id"], 0) + 1
 
     decorated = []
     for e in visible:
@@ -347,6 +352,7 @@ def list_events(sb, *, user: dict, upcoming: bool = True) -> list[dict]:
         _decorate_counts(e, organizer_count)
         job_count = job_counts.get(e["id"], 0)
         e["job_count"] = job_count
+        e["open_job_count"] = open_job_counts.get(e["id"], 0)
         e["completeness"] = completeness(
             supervisor_count=sup_counts.get(e["id"], 0),
             organizer_count=organizer_count,

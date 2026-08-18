@@ -571,3 +571,73 @@ def test_swap_row_is_append_only(sb_client, cursor, chapter_id, user_factory, cr
     # Deletes are always blocked.
     with pytest.raises(psycopg2.DatabaseError, match="forbidden|append-only"):
         cursor.execute("DELETE FROM security_swap_requests WHERE id = %s", (swap["id"],))
+
+
+# ── 12. cancel — the requester withdraws (B4FEND §5.4) ───────────────────────
+
+def _cancel(sb, chapter_id, swap_id, actor_id, key=None):
+    return sb.rpc(
+        "ev_cancel_security_swap",
+        {"p_chapter_id": chapter_id, "p_swap_id": swap_id,
+         "p_actor_id": actor_id, "p_idempotency_key": key},
+    ).execute().data
+
+
+def test_requester_cancels_pending_swap(
+    sb_client, cursor, chapter_id, user_factory, create_event
+):
+    """Audit only (no outbox — withdrawing your own ask is not news), and the
+    one-pending-swap slot frees so a fresh request can go out."""
+    officer = user_factory(role="officer")
+    ev = create_event(officer)
+    holder, target, third = user_factory(), user_factory(), user_factory()
+    task_id = _assign(sb_client, chapter_id, ev["id"], holder["id"], officer["id"])["task"]["id"]
+    swap = _request(sb_client, chapter_id, task_id, target["id"], holder["id"])
+
+    cancelled = _cancel(sb_client, chapter_id, swap["id"], holder["id"])
+    assert cancelled["status"] == "cancelled"
+    assert cancelled["resolved_by"] == holder["id"]
+
+    cursor.execute(
+        "SELECT count(*) AS n FROM audit_logs WHERE chapter_id = %s "
+        "AND action = 'SECURITY_SWAP_CANCELLED' AND target_id = %s",
+        (chapter_id, swap["id"]),
+    )
+    assert cursor.fetchone()["n"] == 1
+
+    # The original SECURITY_SWAP_REQUESTED row stands; cancelling adds nothing.
+    cursor.execute(
+        "SELECT event_type FROM message_outbox WHERE chapter_id = %s AND target_id = %s",
+        (chapter_id, swap["id"]),
+    )
+    assert [r["event_type"] for r in cursor.fetchall()] == ["SECURITY_SWAP_REQUESTED"]
+
+    # The unique-partial pending slot is free again.
+    assert _request(sb_client, chapter_id, task_id, third["id"], holder["id"])["status"] == "pending"
+
+
+def test_only_the_requester_may_cancel(sb_client, chapter_id, user_factory, create_event):
+    officer = user_factory(role="officer")
+    ev = create_event(officer)
+    holder, target, bystander = user_factory(), user_factory(), user_factory()
+    task_id = _assign(sb_client, chapter_id, ev["id"], holder["id"], officer["id"])["task"]["id"]
+    swap = _request(sb_client, chapter_id, task_id, target["id"], holder["id"])
+
+    with pytest.raises(Exception, match="not_swap_requester"):
+        _cancel(sb_client, chapter_id, swap["id"], target["id"])
+    with pytest.raises(Exception, match="not_swap_requester"):
+        _cancel(sb_client, chapter_id, swap["id"], bystander["id"])
+
+
+def test_cancel_after_accept_is_wrong_state(
+    sb_client, chapter_id, user_factory, create_event
+):
+    officer = user_factory(role="officer")
+    ev = create_event(officer)
+    holder, target = user_factory(), user_factory()
+    task_id = _assign(sb_client, chapter_id, ev["id"], holder["id"], officer["id"])["task"]["id"]
+    swap = _request(sb_client, chapter_id, task_id, target["id"], holder["id"])
+    _accept(sb_client, chapter_id, swap["id"], target["id"])
+
+    with pytest.raises(Exception, match="swap_wrong_state"):
+        _cancel(sb_client, chapter_id, swap["id"], holder["id"])

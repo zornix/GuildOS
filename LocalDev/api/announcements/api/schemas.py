@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from datetime import date, time
+
+from pydantic import BaseModel, Field, model_validator
 
 
 class AnnouncementCreate(BaseModel):
@@ -12,6 +14,16 @@ class AnnouncementCreate(BaseModel):
     audience: str = Field(
         default="chapter", pattern="^(chapter|officers|members_with_balance)$"
     )
+    # D15: calendar presence, not a scheduled send. Twilio still fires on
+    # POST /{id}/send-sms; a dated announcement simply also shows on the calendar.
+    calendar_date: date | None = None
+    calendar_time: time | None = None
+
+    @model_validator(mode="after")
+    def _time_needs_a_date(self):
+        if self.calendar_time is not None and self.calendar_date is None:
+            raise ValueError("calendar_time requires calendar_date")
+        return self
 
 
 class SmsSendConfirm(BaseModel):

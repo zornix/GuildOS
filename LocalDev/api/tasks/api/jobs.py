@@ -21,6 +21,25 @@ from api.tasks.services.tasks import get_task
 router = APIRouter()
 
 
+# State/uniqueness conflicts every tk_* route maps to 409. Shared with tasks.py
+# (PATCH/DELETE) so the mapping lives in one place.
+_CONFLICT = (
+    "already_reported",
+    "job_full",
+    "unclaim_locked",
+    "security_preassigned",
+    "security_no_unclaim",
+    "security_no_edit",
+    "security_no_cancel",
+    "job_not_editable",
+    "job_not_cancellable",
+    "job_capacity_below_claims",
+    "cannot be reported",
+    "cannot be approved",
+    "cannot be rejected",
+)
+
+
 def _rpc_http_error(exc: Exception) -> HTTPException:
     """Map tk_* job-lifecycle RPC exceptions onto HTTP statuses."""
     msg = str(exc)
@@ -28,18 +47,11 @@ def _rpc_http_error(exc: Exception) -> HTTPException:
         return HTTPException(404, msg)
     if "rejection_reason_required" in msg:
         return HTTPException(422, "A rejection reason is required")
+    if "job_title_required" in msg or "job_people_needed_invalid" in msg:
+        return HTTPException(422, msg)
     if "no active commitment" in msg:
         return HTTPException(403, "Only a claimant of this job can report it done")
-    if (
-        "already_reported" in msg
-        or "job_full" in msg
-        or "unclaim_locked" in msg
-        or "security_preassigned" in msg
-        or "security_no_unclaim" in msg
-        or "cannot be reported" in msg
-        or "cannot be approved" in msg
-        or "cannot be rejected" in msg
-    ):
+    if any(tok in msg for tok in _CONFLICT):
         return HTTPException(409, msg)
     return HTTPException(400, msg)
 

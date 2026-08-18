@@ -18,6 +18,10 @@ AUDIENCE_MEMBERS_WITH_BALANCE = "members_with_balance"
 _NON_OFFICER_ROLE_KEYS = {"member"}
 
 
+class AnnouncementNotFound(Exception):
+    """No such announcement in this chapter (404, no cross-tenant existence leak)."""
+
+
 def create_draft(
     sb,
     *,
@@ -26,6 +30,8 @@ def create_draft(
     body: str,
     audience: str,
     actor_id: str,
+    calendar_date: str | None = None,
+    calendar_time: str | None = None,
 ) -> dict:
     # Single-row, chapter-scoped insert. The trust-boundary mutation is `send`
     # (RPC, atomic outbox enqueue + audit); draft creation stays a plain write.
@@ -39,11 +45,54 @@ def create_draft(
                 "audience": audience,
                 "status": "draft",
                 "created_by": actor_id,
+                # D15: calendar slot, not a send time. Both stay NULL for the
+                # plain feed post every existing caller creates.
+                "calendar_date": calendar_date,
+                "calendar_time": calendar_time,
             }
         )
         .execute()
     )
     return unwrap_row(result)
+
+
+def hide_from_calendar(sb, *, chapter_id: str, announcement_id: str) -> dict:
+    """DELETE semantics for an announcement.
+
+    A draft was never news — the row is removed outright. A *sent* one already
+    reached the feed and possibly SMS, so it is only retired from the calendar
+    (hidden_from_calendar=TRUE); the sms log and the feed post are untouched.
+    Idempotent: hiding an already-hidden row is a no-op 200.
+    """
+    row = (
+        sb.table("announcements")
+        .select("id, status, hidden_from_calendar")
+        .eq("id", announcement_id)
+        .eq("chapter_id", chapter_id)
+        .maybe_single()
+        .execute()
+    ).data
+    if not row:
+        raise AnnouncementNotFound(f"Announcement {announcement_id} not found")
+
+    if row["status"] == "draft":
+        (
+            sb.table("announcements")
+            .delete()
+            .eq("id", announcement_id)
+            .eq("chapter_id", chapter_id)
+            .execute()
+        )
+        return {"id": announcement_id, "deleted": True, "hidden_from_calendar": False}
+
+    (
+        sb.table("announcements")
+        .update({"hidden_from_calendar": True})
+        .eq("id", announcement_id)
+        .eq("chapter_id", chapter_id)
+        .execute()
+    )
+    return {"id": announcement_id, "deleted": False, "hidden_from_calendar": True}
 
 
 def send_announcement(

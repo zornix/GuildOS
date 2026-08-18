@@ -10,6 +10,9 @@ Who may create a job attached to an event (spec §5):
 
 Who may create a job attached to an initiative (spec §5):
   - an assigned chair of that initiative, or a holder of tasks:assign.
+
+Who may edit/cancel an existing job (spec Screen 5): whoever may attach one to
+its parent; standalone jobs fall back to tasks:assign or tasks:review.
 """
 
 from __future__ import annotations
@@ -81,3 +84,21 @@ def can_create_initiative_job(sb, *, user: dict, initiative_id: str) -> bool:
     if _is_initiative_chair(sb, initiative_id=initiative_id, member_id=user["id"]):
         return True
     return has_permission(user, TASKS_ASSIGN, sb=sb)
+
+
+def can_manage_job(sb, *, user: dict, task: dict) -> bool:
+    """True when `user` may edit or cancel an existing job (spec Screen 5).
+
+    Same people who may attach the job to its parent may maintain it; a
+    standalone job has no parent to run, so it falls back to the assign/review
+    permissions.
+    """
+    event_id = task.get("event_id")
+    if event_id:
+        return can_create_event_job(sb, user=user, event_id=event_id)
+    initiative_id = task.get("initiative_id")
+    if initiative_id:
+        return can_create_initiative_job(sb, user=user, initiative_id=initiative_id)
+    return has_permission(user, TASKS_ASSIGN, sb=sb) or has_permission(
+        user, TASKS_REVIEW, sb=sb
+    )

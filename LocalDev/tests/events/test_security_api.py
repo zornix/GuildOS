@@ -157,3 +157,53 @@ def test_event_detail_job_counts_exclude_security(
     detail = as_member(officer["id"]).get(f"/api/events/{ev['id']}").json()
     assert detail["job_count"] == 2       # security excluded
     assert detail["open_job_count"] == 2  # security excluded
+
+
+# ── 18. the LIST endpoint carries open_job_count too (B4FEND §5.1) ───────────
+
+def test_event_list_carries_open_job_count(
+    as_member, create_event, create_job, user_factory
+):
+    """Screen 1's "N open jobs" lure was event-detail-only; the list feeds it now."""
+    officer = user_factory(role="officer")
+    ev = create_event(officer)
+    create_job(event_id=ev["id"])                        # open
+    create_job(event_id=ev["id"], status="in_progress")  # open-ish
+    create_job(event_id=ev["id"], status="approved")     # counted, not open
+    _assign_http(as_member(officer["id"]), ev["id"], user_factory()["id"])  # security
+
+    rows = as_member(officer["id"]).get("/api/events/").json()
+    row = next(e for e in rows if e["id"] == ev["id"])
+    assert row["job_count"] == 3       # security excluded
+    assert row["open_job_count"] == 2  # approved and security excluded
+
+
+# ── 19. requester cancels their own pending swap (B4FEND §5.4) ───────────────
+
+def test_swap_cancel_http(as_member, create_event, user_factory):
+    officer = user_factory(role="officer")
+    ev = create_event(officer)
+    holder, target = user_factory(), user_factory()
+    assigned = _assign_http(as_member(officer["id"]), ev["id"], holder["id"])
+    task_id = assigned.json()["task_id"]
+
+    swap = as_member(holder["id"]).post(
+        f"/api/events/{ev['id']}/security/{task_id}/swap-request",
+        json={"target_member_id": target["id"]},
+    )
+    assert swap.status_code == 200, swap.text
+    swap_id = swap.json()["id"]
+    cancel_url = f"/api/events/{ev['id']}/security/swaps/{swap_id}/cancel"
+
+    # The target is not the requester — 403, and the swap survives.
+    denied = as_member(target["id"]).post(cancel_url)
+    assert denied.status_code == 403, denied.text
+    assert "not_swap_requester" in denied.text
+
+    ok = as_member(holder["id"]).post(cancel_url)
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["status"] == "cancelled"
+
+    # It leaves both swap inboxes (the listing is pending-only).
+    assert as_member(holder["id"]).get("/api/events/security-swaps/mine").json()["outgoing"] == []
+    assert as_member(target["id"]).get("/api/events/security-swaps/mine").json()["incoming"] == []

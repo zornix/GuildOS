@@ -6,12 +6,17 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 
 from api.dependencies import get_current_user
 from api.rbac.services.permissions import has_permission
-from api.tasks.api.schemas import TaskCreate, TaskStatusUpdate
+from api.tasks.api.jobs import _rpc_http_error
+from api.tasks.api.schemas import TaskCreate, TaskStatusUpdate, TaskUpdate
 from api.tasks.auth import TASKS_COMPLETE, TASKS_CREATE
 from api.rbac.auth import require_permission
 from api.platform.db import get_db
 from api.tasks.services import tasks as svc
-from api.tasks.services.approvals import can_create_event_job, can_create_initiative_job
+from api.tasks.services.approvals import (
+    can_create_event_job,
+    can_create_initiative_job,
+    can_manage_job,
+)
 
 router = APIRouter()
 
@@ -92,3 +97,60 @@ async def update_task_status(
         actor_id=user["id"],
         idempotency_key=idempotency_key,
     )
+
+
+def _manageable_task_or_error(sb, *, user: dict, task_id: str) -> dict:
+    """404 the job, or 403 the caller — the manage gate for edit/cancel (D16)."""
+    task = svc.get_task(sb, chapter_id=user["chapter_id"], task_id=task_id)
+    if not task:
+        raise HTTPException(404, "Task not found")
+    if not can_manage_job(sb, user=user, task=task):
+        raise HTTPException(403, "You are not authorized to manage this job")
+    return task
+
+
+@router.patch("/{task_id}")
+async def update_task(
+    task_id: str,
+    body: TaskUpdate,
+    user=Depends(get_current_user),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
+    """Edit a job's own fields (spec Screen 5). Parent/kind/status are immutable."""
+    sb = get_db()
+    _manageable_task_or_error(sb, user=user, task_id=task_id)
+    try:
+        return svc.update_task(
+            sb,
+            chapter_id=user["chapter_id"],
+            task_id=task_id,
+            actor_id=user["id"],
+            title=body.title,
+            description=body.description,
+            people_needed=body.people_needed,
+            due_at=body.due_at.isoformat() if body.due_at else None,
+            idempotency_key=idempotency_key,
+        )
+    except Exception as exc:
+        raise _rpc_http_error(exc) from exc
+
+
+@router.delete("/{task_id}")
+async def cancel_task(
+    task_id: str,
+    user=Depends(get_current_user),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
+    """Delete a job = cancel it (D16). Only while it is still in the To-do column."""
+    sb = get_db()
+    _manageable_task_or_error(sb, user=user, task_id=task_id)
+    try:
+        return svc.cancel_task(
+            sb,
+            chapter_id=user["chapter_id"],
+            task_id=task_id,
+            actor_id=user["id"],
+            idempotency_key=idempotency_key,
+        )
+    except Exception as exc:
+        raise _rpc_http_error(exc) from exc

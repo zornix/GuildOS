@@ -36,7 +36,7 @@ _CONFLICT = (
     "security_already_approved",
 )
 # 403-mapped RPC identity failures.
-_FORBIDDEN = ("not_assigned", "not_swap_target")
+_FORBIDDEN = ("not_assigned", "not_swap_target", "not_swap_requester")
 
 
 def _rpc_http_error(exc: Exception) -> HTTPException:
@@ -167,5 +167,19 @@ async def decline_swap(
     """The swap target declines (RPC enforces target identity)."""
     with _map_security_errors():
         return svc.decline_swap(
+            get_db(), actor=user, swap_id=swap_id, idempotency_key=idempotency_key
+        )
+
+
+@router.post("/{event_id}/security/swaps/{swap_id}/cancel", response_model=SwapOut)
+async def cancel_swap(
+    event_id: str,
+    swap_id: str,
+    user=Depends(get_current_user),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
+    """The requester withdraws their pending swap (RPC enforces requester identity)."""
+    with _map_security_errors():
+        return svc.cancel_swap(
             get_db(), actor=user, swap_id=swap_id, idempotency_key=idempotency_key
         )

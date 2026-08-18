@@ -1,8 +1,10 @@
 # Events Service V1 — Development Status & Roadmap
 
-**Last updated:** 2026-08-15
+**Last updated:** 2026-08-18
 **Spec:** `docs/events-v1-spec.md` (Events Service V1, saved verbatim)
-**Current phase:** Phase 4 **done** (migration 0145) — **B4FEND** next (backend gaps that block Phase 5), then Phase 5
+**Current phase:** B4FEND **done** (migration 0152) — the Events V1 backend
+surface is complete; **Phase 5 (frontend)** is next and nothing in it is
+blocked on backend work
 
 This document is the entry point for anyone (human or agent session) continuing
 the Events V1 build. It records what exists, what's missing, the decisions that
@@ -168,6 +170,30 @@ baked into the phase plans. Revisit here if product overrules.
   gated by **identity** (assignment holder / swap target), checked in the RPCs
   — not permission keys (the membership-not-permission pattern of D5/D9). No
   RBAC seed migration.
+- **D15 — An announcement's date/time is calendar presence, not a scheduled
+  SMS.** `announcements.calendar_date` / `calendar_time` (0152) put a sent
+  announcement on the chapter calendar; `sent_at` still means "when Send was
+  pressed" and Twilio still fires on `POST /{id}/send-sms`. There is no
+  delayed-send worker. Only `status='sent'`, `audience='chapter'`, dated,
+  `hidden_from_calendar=FALSE` rows are aggregated. `DELETE
+  /api/announcements/{id}` drops a draft outright and merely sets
+  `hidden_from_calendar` on a sent row — the feed post and SMS log survive.
+- **D16 — Job delete is cancel, never a hard `DELETE FROM tasks`.**
+  `tk_cancel_task` (0152) sets `status='cancelled'` and is allowed only while
+  `status='open'` — the last unclaim already reverts a job to `open`, so
+  "open" and "no claimants" are one rule stated once. `tk_update_task` edits
+  `title`/`description`/`people_needed`/`due_at` on `open`/`in_progress` only;
+  parent (`event_id`/`initiative_id`), `kind`, `status` and
+  `assigned_member_id` are immutable, and capacity may not drop below the
+  active claim count (`job_capacity_below_claims`). Security jobs are refused
+  by both (`security_no_edit` / `security_no_cancel`) — roster changes stay on
+  the `ev_*` security RPCs (D12). The manage gate is `can_manage_job`
+  (`api/tasks/services/approvals.py`): whoever may attach a job to that parent
+  may maintain it; standalone jobs fall back to `tasks:assign`/`tasks:review`.
+- **D17 — `prior_security_shifts` is a count of approved security jobs the
+  member held.** Decorated onto every `GET /api/memberadmin/scores` row
+  (commitment `active` or `completed`). It is not a new endpoint, not a
+  standing input, and never feeds the 0–100 score.
 
 ---
 
@@ -179,7 +205,7 @@ baked into the phase plans. Revisit here if product overrules.
 | 2 | Notify gate: completeness computation (≥1 supervisor, ≥1 organizer, ≥3 jobs), `POST /{id}/notify` → outbox → SMS, events `notifications.py`, `ORGANIZER_SOFT_MIN` → 1, "last notified" timestamp | `docs/imp-ev-ph2.md` | **Done** (migration 0143) |
 | 3 | Initiatives: new entity (chair-created, assigned chairs, required start time), reuses job machinery with chair approval; calendar aggregator includes them | `docs/imp-ev-ph3.md` | **Done** (migration 0144) |
 | 4 | Security + swaps: persisted security assignments as a special job type (replace the memberadmin stub), swap requests (one pending per assignment, accept/decline, atomic swap), notifications | `docs/imp-ev-ph4.md` | **Done** (migration 0145) |
-| B4FEND | Backend unblocks for Phase 5: `open_job_count` on list/calendar, announcement calendar date + aggregator, job PATCH/DELETE, requester swap cancel, `prior_security_shifts` on scores | `docs/B4FEND-FIX.md` | Not started (migration 0152 — 0147–0151 were taken by the ops/auth/RBAC pass of 2026-08-16) |
+| B4FEND | Backend unblocks for Phase 5: `open_job_count` on list/calendar, announcement calendar date + aggregator, job PATCH/DELETE, requester swap cancel, `prior_security_shifts` on scores | `docs/B4FEND-FIX.md` | **Done** (migration 0152) |
 | 5 | Frontend: events/tasks contracts+adapters, member-picker primitive, JobCard, event-detail sections (People/Jobs/Security/Notify + checklist + T-36h countdown), calendar badges + week view + mixed chips, initiative/security/swap screens, announcement SMS counter + scheduled time + calendar posting | `docs/imp-ev-ph5.md` | Not started |
 
 Phases 1→2→3 are sequential (each builds on the previous schema). Phase 4
@@ -342,6 +368,58 @@ it can start (contracts, JobCard, detail sections) once Phase 1+2 are deployed.
   inline with a small `_future(hours)` helper. `app_on_test_db` in the events
   conftest gained a `security_api.get_events_db` monkeypatch.
 
+**B4FEND landed (migration 0152) — notes & minor drift from the plan:**
+- Migration numbered **0152**, not the plan's original 0147: 0147–0151 were
+  taken by the ops/auth/RBAC pass of 2026-08-16.
+- `_rpc_http_error` is **shared, not copied**: `api/tasks/api/jobs.py` grew a
+  module-level `_CONFLICT` tuple (now also holding `security_no_edit`,
+  `security_no_cancel`, `job_not_editable`, `job_not_cancellable`,
+  `job_capacity_below_claims`) and `api/tasks/api/tasks.py` imports the mapper
+  rather than keeping a twin. `job_title_required` /
+  `job_people_needed_invalid` map to 422.
+- The plan's §4.5 note about `get_supabase_admin()` / `use_admin` is stale —
+  ADR-0002 deleted the supabase-py path, so `_prior_security_shifts` uses the
+  single `get_db()` like every other reader.
+- `hide_from_calendar` returns `{"id", "deleted", "hidden_from_calendar"}`.
+  `DELETE /api/announcements/{id}` is method-distinct from `GET /sms-log`, so
+  route order needed no change.
+- `tk_update_task` treats a NULL param as "leave that column alone" (PATCH
+  semantics), so clearing a description is out of reach — no screen asks for
+  it. `TaskUpdate` rejects an empty body (422) and simply has no parent/kind/
+  status fields, so those are dropped rather than 422'd.
+- Test layout: calendar chips + announcement items went into a new
+  `tests/calendar_view/test_calendar_chips.py` (the existing
+  `test_calendar_view.py` stays focused on aggregation); the list-endpoint
+  `open_job_count` assertion sits next to the existing detail-count test in
+  `tests/events/test_security_api.py`; announcement columns/DELETE in
+  `tests/announcements/test_calendar_fields.py`; job edit/cancel in
+  `tests/tasks/test_job_update.py`; swap cancel appended to
+  `tests/events/test_security.py` + `test_security_api.py`; prior shifts in
+  `tests/memberadmin/test_prior_security_shifts.py`.
+- **Pre-existing red on the shared demo DB (11 tests), none caused by 0152.**
+  Verified by running the same set against the `main` checkout (identical
+  failures) and by inspecting 0152, which only adds `announcements` columns +
+  a partial index, rebuilds the `audit_logs` CHECK additively (all 42 actions
+  any migration writes are still allowed), and creates three function names
+  that existed nowhere before. Causes found:
+  - `tests/events/test_notify_api.py::test_preview_no_phone_exclusion` — sets a
+    whitespace-only phone, which 0149's `members_phone_e164` CHECK now rejects.
+  - `tests/cron/test_drain_outbox.py` (4) — the drain records `simulated`
+    where the tests expect `failed`/`delivered`; a delivery-mode config seam,
+    not a schema one.
+  - `tests/treasury/test_v1_fines.py` (3) + `test_v1_allocation.py` (1) —
+    permission gates return 200 where 403 is expected; RBAC seed state on the
+    shared demo DB after 0147's one-gate pass.
+  - `tests/auth/test_invite_setup_codes.py` (2) — a redeemed token
+    authenticates as the wrong member (auth-domain fixture/session issue).
+- **Shared-DB repair (not a code change):** `big_ledger`'s two append-only
+  triggers and `fines_frozen` were sitting `DISABLED` on the demo DB — the
+  signature of an interrupted `scripts/seed.py`, which disables USER triggers
+  on exactly those two tables (lines 187-193) before re-enabling them. Five
+  treasury append-only tests were failing on that alone. Re-enabled with
+  `ALTER TABLE {big_ledger,fines} ENABLE TRIGGER USER`; those five are green
+  again. Worth hardening seed.py to re-enable in a `finally`.
+
 ---
 
 ## 4. How to continue implementation (instructions for the next session)
@@ -384,13 +462,16 @@ it can start (contracts, JobCard, detail sections) once Phase 1+2 are deployed.
      `ev_assign_security`/`ev_remove_security` + swap RPCs. The
      `POST /api/memberadmin/assign-security` stub was deleted (`/scores` +
      `/member/{id}` keep their legacy `require_officer` — separate debt).
-   - *B4FEND:* **not started** — `docs/B4FEND-FIX.md`. Closes the seven
-     backend gaps the Phase 5 inventory cannot wire to: `open_job_count` on
-     list/calendar, announcement `calendar_date`/`calendar_time` + aggregator
-     inclusion, `PATCH`/`DELETE /api/tasks/{id}`, `ev_cancel_security_swap`
-     (cut in Phase 4; `SECURITY_SWAP_CANCELLED` already seeded), and
-     `prior_security_shifts` on `GET /api/memberadmin/scores`. Do this before
-     writing `docs/imp-ev-ph5.md`.
+   - *B4FEND:* **done** (migration 0152) — `docs/B4FEND-FIX.md`. All seven
+     backend gaps are closed: `open_job_count` on `GET /api/events/` **and**
+     the calendar aggregator (whose event items now also carry `time`,
+     `end_date`, `end_time`, `job_count`, `completeness`), announcement
+     `calendar_date`/`calendar_time` + a `kind='announcement'` calendar item +
+     `DELETE /api/announcements/{id}`, `PATCH`/`DELETE /api/tasks/{id}`
+     (`tk_update_task`/`tk_cancel_task`),
+     `POST /api/events/{event_id}/security/swaps/{swap_id}/cancel`
+     (`ev_cancel_security_swap`), and `prior_security_shifts` on
+     `GET /api/memberadmin/scores`. Decisions D15–D17 above.
    - *Phase 5:* create `lib/contracts/events.ts` + `lib/adapters/events.ts`
      (and tasks/jobs equivalents) *first*; build the member-picker primitive in
      `components/ui/`; the existing `components/countdown.tsx` is mm:ss and

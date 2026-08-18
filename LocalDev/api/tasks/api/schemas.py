@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class TaskCreate(BaseModel):
@@ -20,6 +20,28 @@ class TaskCreate(BaseModel):
     people_needed: int = Field(default=1, ge=1)
     required: bool = False
     due_at: datetime | None = None
+
+
+class TaskUpdate(BaseModel):
+    """PATCH /api/tasks/{id} — a job's own fields only (D16).
+
+    Parent (event_id/initiative_id), kind and status are immutable here and are
+    simply not part of the model; the RPC never writes them either.
+    """
+
+    title: str | None = Field(default=None, min_length=1)
+    description: str | None = None
+    people_needed: int | None = Field(default=None, ge=1)
+    due_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def _at_least_one_field(self):
+        if not any(
+            getattr(self, f) is not None
+            for f in ("title", "description", "people_needed", "due_at")
+        ):
+            raise ValueError("at least one field must be provided")
+        return self
 
 
 class TaskStatusUpdate(BaseModel):

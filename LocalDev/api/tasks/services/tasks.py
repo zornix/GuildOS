@@ -76,6 +76,62 @@ def update_task_status(
     return result.data
 
 
+def update_task(
+    sb,
+    *,
+    chapter_id: str,
+    task_id: str,
+    actor_id: str,
+    title: str | None = None,
+    description: str | None = None,
+    people_needed: int | None = None,
+    due_at: str | None = None,
+    idempotency_key: str | None = None,
+) -> dict:
+    """Edit a job's own fields (D16). NULL = leave that column alone.
+
+    people_needed IS a param here (unlike tk_create_task, which still needs the
+    Phase-1 follow-up UPDATE), so there is no second write after this call.
+    """
+    result = call_rpc(
+        "tk_update_task",
+        {
+            "p_chapter_id": chapter_id,
+            "p_task_id": task_id,
+            "p_title": title,
+            "p_description": description,
+            "p_people_needed": people_needed,
+            "p_due_at": due_at,
+            "p_actor_id": actor_id,
+            "p_idempotency_key": idempotency_key,
+        },
+        sb=sb,
+    )
+    return result.data
+
+
+def cancel_task(
+    sb,
+    *,
+    chapter_id: str,
+    task_id: str,
+    actor_id: str,
+    idempotency_key: str | None = None,
+) -> dict:
+    """Job delete IS cancel (D16) — status='cancelled', row kept, open-only."""
+    result = call_rpc(
+        "tk_cancel_task",
+        {
+            "p_chapter_id": chapter_id,
+            "p_task_id": task_id,
+            "p_actor_id": actor_id,
+            "p_idempotency_key": idempotency_key,
+        },
+        sb=sb,
+    )
+    return result.data
+
+
 def get_task(sb, *, chapter_id: str, task_id: str) -> dict | None:
     result = (
         sb.table("tasks")

@@ -51,7 +51,29 @@ async def create_announcement(
         body=body.body,
         audience=body.audience,
         actor_id=user["id"],
+        calendar_date=body.calendar_date.isoformat() if body.calendar_date else None,
+        calendar_time=body.calendar_time.isoformat() if body.calendar_time else None,
     )
+
+
+@router.delete("/{announcement_id}")
+async def delete_announcement(
+    announcement_id: str,
+    user=Depends(require_permission(ANNOUNCEMENTS_CREATE)),
+):
+    """Drop a draft, or retire a sent announcement from the calendar (D15).
+
+    DELETE-only, so it cannot shadow GET /sms-log; the /{id}/sms-preview |
+    send-sms | send paths are longer and cannot collide with it either.
+    """
+    try:
+        return svc.hide_from_calendar(
+            get_db(),
+            chapter_id=user["chapter_id"],
+            announcement_id=announcement_id,
+        )
+    except svc.AnnouncementNotFound:
+        raise HTTPException(404, "Announcement not found")
 
 
 @router.get("/sms-log")
