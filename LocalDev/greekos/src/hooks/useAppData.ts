@@ -147,8 +147,9 @@ export function useAppData() {
         break;
       case 'ANNOUNCEMENT': {
         // The backend keeps a calendar slot separate from the send time, so a
-        // dispatched blast is dated today and lands on today's calendar cell.
-        const calendarDate = new Date().toISOString().substring(0, 10);
+        // dispatched blast takes the date the command carried (today if none)
+        // and lands on that calendar cell.
+        const calendarDate = cmdResult.payload.date || new Date().toISOString().substring(0, 10);
         // The command payload carries no id; the refetch swaps in the real row.
         const localId = 'a_' + Math.random().toString(36).substring(2, 9);
         setAnnouncements(prev => [{ ...cmdResult.payload, id: localId, calendarDate }, ...prev]);
