@@ -189,6 +189,10 @@ export default function EventsModule({
   const safeEvents = events || [];
   const safeMembers = members || [];
   const filteredEvents = safeEvents.filter(e => filterType === 'All' || e.type === filterType);
+  // Security picker order (D17): fewest prior shifts first — that's who to pick.
+  const securityPickerMembers = [...safeMembers].sort(
+    (a, b) => (a.priorSecurityShifts || 0) - (b.priorSecurityShifts || 0)
+  );
 
   return (
     <div className="space-y-6">
@@ -253,8 +257,8 @@ export default function EventsModule({
             {filteredEvents.map(e => {
               const isSelected = e.id === selectedEventId;
               const hasNoOrganizers = (!e.organizers || e.organizers.length === 0);
-              const eventJobs = e.jobs || [];
-              const openJobs = eventJobs.filter(j => (j.claimants || []).length < (j.peopleNeeded || 1)).length;
+              // Backend-decorated count (spec Screen 1) — the claim lure.
+              const openJobCount = e.openJobCount || 0;
 
               return (
                 <div
@@ -306,9 +310,9 @@ export default function EventsModule({
                       </span>
                     )}
 
-                    {openJobs > 0 && (
-                      <span className="text-[10px] font-mono text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                        {openJobs} Open Job{openJobs > 1 ? 's' : ''}
+                    {openJobCount > 0 && (
+                      <span className="text-[10px] font-mono font-bold bg-gold/20 text-gold-muted px-2 py-0.5 rounded">
+                        {openJobCount} open jobs
                       </span>
                     )}
 
@@ -1097,12 +1101,15 @@ export default function EventsModule({
                   onChange={e => setSelectedSecMemberId(e.target.value)}
                   className="w-full text-xs border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-gold"
                 >
-                  {members.map(m => (
+                  {securityPickerMembers.map(m => (
                     <option key={m.id} value={m.id}>
-                      {m.name} &bull; GPA: {m.gpa} &bull; Att: {m.attendanceRate}% &bull; Standing: {m.standing} &bull; Sec Hrs: {m.securityHoursServed || 0}h
+                      {m.name} &bull; Prior shifts: {m.priorSecurityShifts || 0} &bull; GPA: {m.gpa} &bull; Att: {m.attendanceRate}% &bull; Standing: {m.standing} &bull; Sec Hrs: {m.securityHoursServed || 0}h
                     </option>
                   ))}
                 </select>
+                <p className="text-[10px] text-slate-400 mt-1 font-mono">
+                  Ordered by prior security shifts — fewest first.
+                </p>
               </div>
 
               <div>

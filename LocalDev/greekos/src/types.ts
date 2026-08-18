@@ -39,6 +39,8 @@ export interface Member {
   pledgeClass: string; // e.g. "Fall '22"
   roomNumber?: string;
   securityHoursServed?: number;
+  /** Approved security jobs already held (D17) — picker decoration only. */
+  priorSecurityShifts?: number;
 }
 
 export type EventType = 
@@ -97,6 +99,8 @@ export interface ChapterEvent {
   supervisors: string[]; // member names / IDs (Officers)
   organizers: string[]; // member names / IDs (Chairs/members)
   jobs: EventJob[];
+  jobCount?: number;
+  openJobCount?: number;
   securityAssignments?: SecurityAssignment[];
   notifiedAt?: string; // set when notify gate passes and blast is sent
   checkInLinkActive?: boolean;

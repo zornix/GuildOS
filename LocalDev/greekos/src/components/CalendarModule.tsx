@@ -156,16 +156,23 @@ export default function CalendarModule({
                       {/* Content dots & small pills */}
                       <div className="space-y-1 mt-auto">
                         {cellEvents.map(e => (
-                          <div 
-                            key={e.id}
-                            className={`text-[9px] truncate rounded px-1 py-0.5 font-semibold ${
-                              isSelected 
-                                ? 'bg-slate-800 text-gold' 
-                                : 'bg-amber-50 text-amber-900 border border-amber-200/60'
-                            }`}
-                          >
-                            {e.title}
-                          </div>
+                          <React.Fragment key={e.id}>
+                            <div
+                              className={`text-[9px] truncate rounded px-1 py-0.5 font-semibold ${
+                                isSelected
+                                  ? 'bg-slate-800 text-gold'
+                                  : 'bg-amber-50 text-amber-900 border border-amber-200/60'
+                              }`}
+                            >
+                              {e.title}
+                            </div>
+
+                            {!!e.openJobCount && (
+                              <div className="text-[9px] truncate rounded px-1 py-0.5 font-semibold bg-gold/20 text-gold-muted">
+                                {e.openJobCount} open jobs
+                              </div>
+                            )}
+                          </React.Fragment>
                         ))}
 
                         {cellAnnouncements.map(a => (
