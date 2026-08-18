@@ -11,13 +11,18 @@ interface Deps {
   syncApi: SyncApi;
   showToast: ShowToast;
   enqueueOutbox: EnqueueOutbox;
+  refetchJobs: () => Promise<void>;
 }
 
 /** Chapter events plus their claimable jobs and security shifts. */
-export function useEvents({ syncApi, showToast, enqueueOutbox }: Deps) {
+export function useEvents({ syncApi, showToast, enqueueOutbox, refetchJobs }: Deps) {
   const [events, setEvents] = useState<ChapterEvent[]>(INITIAL_EVENTS);
 
-  const refetchEvents = async () => setEvents(adaptEvents(await api.getEvents()));
+  // adaptEvents rebuilds rows with an empty jobs list, so restamp the boards after.
+  const refetchEvents = async () => {
+    setEvents(adaptEvents(await api.getEvents()));
+    await refetchJobs();
+  };
 
   const handleAddEvent = (newEvent: Omit<ChapterEvent, 'id' | 'attendanceTaken' | 'checkedInCount'>) => {
     const ev: ChapterEvent = {
@@ -74,6 +79,8 @@ export function useEvents({ syncApi, showToast, enqueueOutbox }: Deps) {
       }
       return e;
     }));
+    // The backend commits the signed-in member; it has no impersonation concept.
+    syncApi(() => api.commitTask(jobId), refetchJobs);
     showToast(`Claimed job successfully!`);
   };
 
@@ -97,6 +104,7 @@ export function useEvents({ syncApi, showToast, enqueueOutbox }: Deps) {
       }
       return e;
     }));
+    syncApi(() => api.uncommitTask(jobId), refetchJobs);
     showToast(`Unclaimed job.`);
   };
 
@@ -120,6 +128,7 @@ export function useEvents({ syncApi, showToast, enqueueOutbox }: Deps) {
       }
       return e;
     }));
+    syncApi(() => api.reportJobDone(jobId), refetchJobs);
     showToast(`Reported job complete! Awaiting supervisor sign-off.`);
   };
 
@@ -143,6 +152,7 @@ export function useEvents({ syncApi, showToast, enqueueOutbox }: Deps) {
       }
       return e;
     }));
+    syncApi(() => api.approveJob(jobId), refetchJobs);
     showToast(`Job approved and verified by supervisor.`);
   };
 
@@ -175,6 +185,7 @@ export function useEvents({ syncApi, showToast, enqueueOutbox }: Deps) {
       }
       return e;
     }));
+    syncApi(() => api.rejectJob(jobId, reason), refetchJobs);
     showToast(`Job rejected with feedback sent to brother outbox.`);
   };
 
@@ -191,6 +202,16 @@ export function useEvents({ syncApi, showToast, enqueueOutbox }: Deps) {
       }
       return e;
     }));
+    syncApi(
+      () =>
+        api.createJob({
+          title: jobData.title,
+          description: jobData.description,
+          people_needed: jobData.peopleNeeded,
+          event_id: eventId
+        }),
+      refetchJobs
+    );
     showToast(`Added job to event.`);
   };
 

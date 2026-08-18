@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { INITIAL_ANNOUNCEMENTS, INITIAL_RULES } from '../data/mockData';
-import { Announcement, ChapterRule } from '../types';
-import { api, ensureLogin } from '../api';
+import { Announcement, ChapterRule, Member } from '../types';
+import { api, ensureLogin, TaskDto } from '../api';
 import {
   adaptAnnouncements,
   adaptEvents,
@@ -11,7 +11,8 @@ import {
   adaptMembers,
   adaptPayments,
   adaptRecruits,
-  adaptTasks
+  adaptTasks,
+  groupJobsByParent
 } from '../adapters';
 import { usePersistentState } from './usePersistentState';
 import { useToast } from './useToast';
@@ -45,8 +46,14 @@ export function useAppData() {
   const roster = useRoster(showToast);
   const { members, setMembers } = roster;
 
-  const events = useEvents({ syncApi, showToast, enqueueOutbox });
-  const initiatives = useInitiatives({ members, syncApi, showToast });
+  // Jobs live on the same `tasks` table for both parents, so one refetch restamps
+  // both boards. The ref breaks the cycle: the domain hooks call refetchJobs, but
+  // it can only be built from the setters those same hooks return.
+  const refetchJobsRef = useRef<() => Promise<void>>(async () => {});
+  const refetchJobs = () => refetchJobsRef.current();
+
+  const events = useEvents({ syncApi, showToast, enqueueOutbox, refetchJobs });
+  const initiatives = useInitiatives({ members, syncApi, showToast, refetchJobs });
   const finance = useFinance({ members, setMembers, currentMemberName, isOfficer, syncApi, showToast, enqueueOutbox });
   const attendance = useAttendance({
     members,
@@ -59,6 +66,15 @@ export function useAppData() {
   });
   const tasks = useTasks({ members, syncApi, showToast });
   const recruitment = useRecruitment({ syncApi, showToast, enqueueOutbox });
+
+  /** Stamp the job rows onto whichever event/initiative owns each one. */
+  const applyJobs = (taskRows: TaskDto[], rosterRows: Member[]) => {
+    const membersById = new Map(rosterRows.map(m => [m.id, m]));
+    const { byEvent, byInitiative } = groupJobsByParent(taskRows, membersById);
+    events.setEvents(evts => evts.map(e => ({ ...e, jobs: byEvent.get(e.id) ?? [] })));
+    initiatives.setInitiatives(inits => inits.map(i => ({ ...i, jobs: byInitiative.get(i.id) ?? [] })));
+  };
+  refetchJobsRef.current = async () => applyJobs(await api.getTasks(), members);
 
   // ----------------------------------------------------
   // BACKEND LOAD (one try/catch: any failure falls back to the mock data)
@@ -99,6 +115,8 @@ export function useAppData() {
         setAnnouncements(adaptAnnouncements(annRows, rosterRows));
         recruitment.setPnms(adaptRecruits(recruitRows));
         initiatives.setInitiatives(adaptInitiatives(initRows, rosterRows));
+        // Queued after both setters above, so it restamps the freshly adapted rows.
+        applyJobs(taskRows, rosterRows);
       } catch (err) {
         console.error('Backend load failed', err);
         setBackendDown(true);

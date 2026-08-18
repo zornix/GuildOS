@@ -10,14 +10,18 @@ interface Deps {
   members: Member[];
   syncApi: SyncApi;
   showToast: ShowToast;
+  refetchJobs: () => Promise<void>;
 }
 
 /** Chair-led initiatives and their claimable tasks. */
-export function useInitiatives({ members, syncApi, showToast }: Deps) {
+export function useInitiatives({ members, syncApi, showToast, refetchJobs }: Deps) {
   const [initiatives, setInitiatives] = useState<Initiative[]>(INITIAL_INITIATIVES);
 
-  const refetchInitiatives = async () =>
+  // adaptInitiatives rebuilds rows with an empty jobs list, so restamp the boards after.
+  const refetchInitiatives = async () => {
     setInitiatives(adaptInitiatives(await api.getInitiatives(), members));
+    await refetchJobs();
+  };
 
   const handleAddInitiative = (newInit: Omit<Initiative, 'id'>) => {
     const init: Initiative = {
@@ -53,6 +57,16 @@ export function useInitiatives({ members, syncApi, showToast }: Deps) {
       }
       return i;
     }));
+    syncApi(
+      () =>
+        api.createJob({
+          title: jobData.title,
+          description: jobData.description,
+          people_needed: jobData.peopleNeeded,
+          initiative_id: initId
+        }),
+      refetchJobs
+    );
     showToast(`Added task to initiative.`);
   };
 
@@ -75,6 +89,8 @@ export function useInitiatives({ members, syncApi, showToast }: Deps) {
       }
       return i;
     }));
+    // The backend commits the signed-in member; it has no impersonation concept.
+    syncApi(() => api.commitTask(jobId), refetchJobs);
   };
 
   const handleUnclaimInitiativeJob = (initId: string, jobId: string, memberId: string) => {
@@ -97,6 +113,7 @@ export function useInitiatives({ members, syncApi, showToast }: Deps) {
       }
       return i;
     }));
+    syncApi(() => api.uncommitTask(jobId), refetchJobs);
   };
 
   const handleReportInitiativeJobDone = (initId: string, jobId: string, memberName: string) => {
@@ -114,6 +131,7 @@ export function useInitiatives({ members, syncApi, showToast }: Deps) {
       }
       return i;
     }));
+    syncApi(() => api.reportJobDone(jobId), refetchJobs);
     showToast(`Reported initiative task complete!`);
   };
 
@@ -132,6 +150,7 @@ export function useInitiatives({ members, syncApi, showToast }: Deps) {
       }
       return i;
     }));
+    syncApi(() => api.approveJob(jobId), refetchJobs);
     showToast(`Chair sign-off confirmed.`);
   };
 
