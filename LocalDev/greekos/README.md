@@ -1,20 +1,55 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# GreekOS prototype
 
-# Run and deploy your AI Studio app
+A single-page React/Vite prototype of the GuildOS member-facing shell. It runs
+against the **real** FastAPI backend in `LocalDev/api` — Vite proxies `/api` to
+`http://localhost:8001` (see `vite.config.ts`), and `src/api.ts` is the only
+place that talks to it.
 
-This contains everything you need to run your app locally.
+## Prerequisites
 
-View your app in AI Studio: https://ai.studio/apps/f485a37f-d04d-4e45-bdcf-81c1df5dc9c4
+- Node.js and Python (the same toolchain the rest of `LocalDev/` uses).
+- The backend running on **:8001** against the **seeded demo database**
+  (`DATABASE_URL` in `LocalDev/.env`). Swagger: <http://localhost:8001/api/docs>.
+- **`DEV_AUTH_BYPASS=1` in `LocalDev/.env`** — the prototype has no login
+  screen; it calls `POST /api/auth/dev-login`, which 404s unless the bypass is
+  on. (The repo default is `0`.)
 
-## Run Locally
+## Run
 
-**Prerequisites:**  Node.js
+Two terminals:
 
+```bash
+cd LocalDev && npm run dev        # migrations + FastAPI on :8001 (also starts fratos on :3000)
+cd LocalDev/greekos && npm run dev # this prototype on :3000
+```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+`LocalDev/npm run dev` also starts the `fratos` Next.js app on :3000, so either
+stop that one or start the prototype with a free port (`npm run dev -- --port
+3002`). Only the backend is required.
+
+## Demo login
+
+There is no login UI. On first load `src/api.ts` dev-logs-in as the seeded
+officer **Jake Martinez — `jake@tke.org`** and caches the token in
+`localStorage` under `g_token`. Everything you do in the app is written to the
+demo database as Jake. Clear that key to force a fresh token.
+
+## Checks
+
+```bash
+npm run lint          # tsc --noEmit
+npm run build         # vite build
+npx tsx src/selfcheck.ts   # adapter/contract self-check
+```
+
+## Demo-gated tabs
+
+Three tabs are marked `DEMO` in the sidebar because no backend surface exists
+for them yet — they run on client-local mock data and never write anything:
+
+- **Bylaws & Conduct** (`rules`) — no bylaws Q&A backend.
+- **Command Console** (`command`) — command *parsing* is frontend-local; the
+  announcement branch is the one action that reaches the real API.
+- **SMS / Push Outbox** (`outbox`) — the backend outbox has no read surface.
+
+Every other tab reads and writes the live backend.
