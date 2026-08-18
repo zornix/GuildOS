@@ -186,11 +186,15 @@ def _clear_demo_seed(cur) -> None:
     cur.execute('DELETE FROM checkin_links WHERE event_id IN %s', (demo_event_ids,))
     cur.execute('ALTER TABLE fines DISABLE TRIGGER USER')
     cur.execute('ALTER TABLE big_ledger DISABLE TRIGGER USER')
-    cur.execute('DELETE FROM big_ledger WHERE chapter_id = %s', (CHAPTER_ID,))
-    cur.execute('DELETE FROM events WHERE chapter_id = %s', (CHAPTER_ID,))
-    cur.execute('DELETE FROM members WHERE id IN %s', (demo_member_ids,))
-    cur.execute('ALTER TABLE big_ledger ENABLE TRIGGER USER')
-    cur.execute('ALTER TABLE fines ENABLE TRIGGER USER')
+    try:
+        cur.execute('DELETE FROM big_ledger WHERE chapter_id = %s', (CHAPTER_ID,))
+        cur.execute('DELETE FROM events WHERE chapter_id = %s', (CHAPTER_ID,))
+        cur.execute('DELETE FROM members WHERE id IN %s', (demo_member_ids,))
+    finally:
+        # autocommit connection: an interrupted run must not leave the
+        # append-only guard triggers disabled on the shared demo DB
+        cur.execute('ALTER TABLE big_ledger ENABLE TRIGGER USER')
+        cur.execute('ALTER TABLE fines ENABLE TRIGGER USER')
     cur.execute('DELETE FROM chapters WHERE id = %s', (CHAPTER_ID,))
 
 
