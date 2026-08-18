@@ -78,6 +78,16 @@ export interface EventDto {
   event_type?: string | null;
   visibility?: string | null;
   attendance_count?: number;
+  job_count?: number;
+  open_job_count?: number;
+}
+
+export interface ScoreDto {
+  member_id: string;
+  name: string;
+  email: string;
+  score: number;
+  prior_security_shifts: number;
 }
 
 export interface ExcuseDto {
@@ -187,6 +197,8 @@ export const api = {
 
   getMembers: () => request<MemberDto[]>('GET', '/api/members/'),
   getStandings: () => request<StandingDto[]>('GET', '/api/standing/'),
+  // Officer-gated (STANDING_VIEW_ALL): callers must tolerate a 403.
+  getScores: () => request<ScoreDto[]>('GET', '/api/memberadmin/scores'),
 
   getEvents: () => request<EventDto[]>('GET', '/api/events/'),
   createEvent: (body: Record<string, unknown>) => request<EventDto>('POST', '/api/events/', body),

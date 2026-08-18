@@ -83,12 +83,15 @@ export function useAppData() {
     (async () => {
       try {
         await ensureLogin();
-        const [me, memberRows, standingRows] = await Promise.all([
+        const [me, memberRows, standingRows, scoreRows] = await Promise.all([
           api.getMe(),
           api.getMembers(),
-          api.getStandings()
+          api.getStandings(),
+          // Officer-only endpoint: a member session 403s, which just means no
+          // prior-shift counts rather than a failed load.
+          api.getScores().catch(() => [])
         ]);
-        const rosterRows = adaptMembers(memberRows, standingRows);
+        const rosterRows = adaptMembers(memberRows, standingRows, scoreRows);
 
         const [eventRows, excuseRows, fineRows, treasury, taskRows, annRows, recruitRows, initRows] =
           await Promise.all([

@@ -9,6 +9,7 @@ import {
   InitiativeDto,
   MemberDto,
   RecruitDto,
+  ScoreDto,
   StandingDto,
   TaskDto,
   VerifiedPaymentDto
@@ -45,8 +46,15 @@ const STANDINGS: Record<string, MemberStanding> = {
   delinquent: 'Financial Hold'
 };
 
-export function adaptMembers(rows: MemberDto[], standings: StandingDto[]): Member[] {
+/** `scores` is officer-only; it arrives empty for a member session, which just
+ *  leaves every prior-shift count at 0. */
+export function adaptMembers(
+  rows: MemberDto[],
+  standings: StandingDto[],
+  scores: ScoreDto[] = []
+): Member[] {
   const byId = new Map(standings.map(s => [s.member_id, s]));
+  const shiftsById = new Map(scores.map(s => [s.member_id, s.prior_security_shifts]));
   return rows.map(row => {
     const s = byId.get(row.id);
     const balanceCents = s ? s.unpaid_amount_cents : 0;
@@ -64,7 +72,8 @@ export function adaptMembers(rows: MemberDto[], standings: StandingDto[]): Membe
       duesBalance: balanceCents / 100,
       attendanceRate: s && s.total_required ? Math.round((s.attended / s.total_required) * 100) : 0,
       pledgeClass: '',
-      securityHoursServed: 0
+      securityHoursServed: 0,
+      priorSecurityShifts: shiftsById.get(row.id) || 0
     };
   });
 }
@@ -104,6 +113,8 @@ export function adaptEvents(rows: EventDto[]): ChapterEvent[] {
       required: !!row.required,
       attendanceTaken: false,
       checkedInCount: row.attendance_count || 0,
+      jobCount: row.job_count || 0,
+      openJobCount: row.open_job_count || 0,
       supervisors: [],
       organizers: [],
       jobs: [],
