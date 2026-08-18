@@ -211,7 +211,8 @@ baked into the phase plans. Revisit here if product overrules.
 
 Phases 1→2→3 are sequential (each builds on the previous schema). Phase 4
 depends on Phase 1 only. Phase 5 tracks whatever backend phases have landed —
-it can start (contracts, JobCard, detail sections) once Phase 1+2 are deployed.
+with Phases 1–4 and B4FEND deployed it is wired end to end in
+`LocalDev/greekos` (jobs, security + swaps, announcements, open-job chips).
 
 **Phase 1 landed (migrations 0141/0142) — notes & minor drift from the plan:**
 - Audit actions named `ADD_EVENT_SUPERVISOR` / `REMOVE_EVENT_SUPERVISOR` (verb-first,

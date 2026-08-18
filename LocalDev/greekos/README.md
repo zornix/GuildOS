@@ -19,8 +19,9 @@ place that talks to it.
 Two terminals:
 
 ```bash
-cd LocalDev && npm run dev        # migrations + FastAPI on :8001 (also starts fratos on :3000)
-cd LocalDev/greekos && npm run dev # this prototype on :3000
+cd LocalDev && npm run dev          # migrations + FastAPI on :8001 (also starts fratos on :3000)
+cd LocalDev/greekos && npm install  # once per clone — the dev runner only installs fratos deps
+cd LocalDev/greekos && npm run dev  # this prototype on :3000
 ```
 
 `LocalDev/npm run dev` also starts the `fratos` Next.js app on :3000, so either
