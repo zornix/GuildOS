@@ -733,7 +733,11 @@ export default function EventsModule({
 
                 {isOfficer && (
                   <button
-                    onClick={() => setShowSecurityAssignModal(true)}
+                    onClick={() => {
+                      // The mount-time default is a mock id once the real roster lands.
+                      setSelectedSecMemberId(members[0]?.id || '');
+                      setShowSecurityAssignModal(true);
+                    }}
                     className="text-xs bg-navy hover:bg-slate-800 text-gold font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />

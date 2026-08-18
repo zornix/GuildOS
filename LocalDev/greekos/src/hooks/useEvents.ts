@@ -42,6 +42,8 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox }: Deps) 
       try {
         await call();
       } catch (err) {
+        // syncApi only refetches on success, so reconcile the optimistic row here.
+        await refetchSecurity(eventId).catch(() => { /* leave the optimistic row */ });
         const message = (err as Error).message;
         if (message.includes('swap_wrong_state')) {
           throw new Error('That swap request is no longer pending');
