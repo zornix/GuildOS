@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { INITIAL_ANNOUNCEMENTS, INITIAL_RULES } from '../data/mockData';
-import { Announcement, ChapterRule } from '../types';
+import { Announcement, ChapterRule, SecurityAssignment } from '../types';
 import { api, ensureLogin } from '../api';
 import {
   adaptAnnouncements,
@@ -11,6 +11,7 @@ import {
   adaptMembers,
   adaptPayments,
   adaptRecruits,
+  adaptSecurityAssignment,
   adaptTasks
 } from '../adapters';
 import { usePersistentState } from './usePersistentState';
@@ -45,7 +46,7 @@ export function useAppData() {
   const roster = useRoster(showToast);
   const { members, setMembers } = roster;
 
-  const events = useEvents({ syncApi, showToast, enqueueOutbox });
+  const events = useEvents({ members, syncApi, showToast, enqueueOutbox });
   const initiatives = useInitiatives({ members, syncApi, showToast });
   const finance = useFinance({ members, setMembers, currentMemberName, isOfficer, syncApi, showToast, enqueueOutbox });
   const attendance = useAttendance({
@@ -86,9 +87,29 @@ export function useAppData() {
             api.getInitiatives()
           ]);
 
+        // Security rosters are per event, so only upcoming events are worth a
+        // request; a failing one just leaves that event's shift list empty.
+        const adaptedEvents = adaptEvents(eventRows);
+        const membersById = new Map(rosterRows.map(m => [m.id, m]));
+        const today = new Date().toISOString().substring(0, 10);
+        const securityByEvent = new Map<string, SecurityAssignment[]>();
+        await Promise.all(
+          adaptedEvents.filter(e => e.date >= today).map(async e => {
+            try {
+              const rows = await api.listSecurity(e.id);
+              securityByEvent.set(e.id, rows.map(row => adaptSecurityAssignment(row, membersById)));
+            } catch (err) {
+              console.error(`Security load failed for event ${e.id}`, err);
+            }
+          })
+        );
+
         setMembers(rosterRows);
         setCurrentMemberName(me.name);
-        events.setEvents(adaptEvents(eventRows));
+        events.setEvents(adaptedEvents.map(e => ({
+          ...e,
+          securityAssignments: securityByEvent.get(e.id) || e.securityAssignments
+        })));
         attendance.setExcuses(adaptExcuses(excuseRows, rosterRows));
         finance.setFines(adaptFines(fineRows, rosterRows));
         finance.setPayments(adaptPayments(treasury.recent_payments || [], rosterRows));

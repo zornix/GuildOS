@@ -9,6 +9,7 @@ import {
   InitiativeDto,
   MemberDto,
   RecruitDto,
+  SecurityAssignmentDto,
   StandingDto,
   TaskDto,
   VerifiedPaymentDto
@@ -25,6 +26,7 @@ import {
   MemberStanding,
   Payment,
   PNM,
+  SecurityAssignment,
   Task
 } from './types';
 
@@ -109,6 +111,28 @@ export function adaptEvents(rows: EventDto[]): ChapterEvent[] {
       securityAssignments: []
     };
   });
+}
+
+/** Security assignment row -> shift card. The backend models a shift as a task
+ *  commitment (`task_id`) with at most one pending swap; it has no station. */
+export function adaptSecurityAssignment(
+  dto: SecurityAssignmentDto,
+  membersById: Map<string, Member>
+): SecurityAssignment {
+  const swap = dto.pending_swap && dto.pending_swap.status === 'pending' ? dto.pending_swap : null;
+  const memberId = dto.member_id || '';
+  return {
+    id: dto.task_id,
+    memberId,
+    memberName: membersById.get(memberId)?.name || 'Unknown Member',
+    station: '',
+    status: 'Confirmed',
+    swapRequestedWithId: swap ? swap.target_member_id : undefined,
+    swapRequestedWithName: swap
+      ? membersById.get(swap.target_member_id)?.name || 'Unknown Member'
+      : undefined,
+    swapStatus: swap ? 'Pending' : undefined
+  };
 }
 
 /** ChapterEvent -> EventCreate/EventUpdate body. */
