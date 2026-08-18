@@ -17,6 +17,7 @@ import {
   Announcement,
   ChapterEvent,
   Excuse,
+  EventJob,
   EventType,
   Fine,
   Initiative,
@@ -210,6 +211,53 @@ export function adaptTasks(rows: TaskDto[], members: Member[]): Task[] {
     priority: row.required ? 'High' : 'Medium',
     status: TASK_STATUS[row.status] || 'To Do'
   }));
+}
+
+// ----------------------------------------------------
+// JOBS (the same tasks rows, viewed as event/initiative jobs)
+// ----------------------------------------------------
+const JOB_STATUS: Record<string, EventJob['status']> = {
+  open: 'To Do',
+  in_progress: 'In Progress',
+  done_reported: 'Done Reported',
+  approved: 'Approved'
+};
+
+export function adaptTaskToJob(t: TaskDto, membersById: Map<string, Member>): EventJob {
+  return {
+    id: t.id,
+    title: t.title,
+    description: t.description ?? '',
+    peopleNeeded: t.people_needed ?? 1,
+    // The commitment summary carries ids only — no claim timestamp is exposed.
+    claimants: (t.claimants ?? []).map(id => ({
+      memberId: id,
+      memberName: membersById.get(id)?.name ?? 'Unknown',
+      claimedAt: ''
+    })),
+    status: JOB_STATUS[t.status] ?? 'To Do',
+    rejectionReason: t.rejection_reason ?? undefined,
+    isSecurity: t.kind === 'security'
+  };
+}
+
+/** Split job rows by parent. Cancelled jobs and security jobs never show on a
+ *  jobs board (security has its own screen), so both are dropped here. */
+export function groupJobsByParent(tasks: TaskDto[], membersById: Map<string, Member>) {
+  const byEvent = new Map<string, EventJob[]>();
+  const byInitiative = new Map<string, EventJob[]>();
+  const push = (map: Map<string, EventJob[]>, key: string, job: EventJob) => {
+    const list = map.get(key);
+    if (list) list.push(job);
+    else map.set(key, [job]);
+  };
+  for (const t of tasks) {
+    if (t.status === 'cancelled' || t.kind === 'security') continue;
+    const job = adaptTaskToJob(t, membersById);
+    if (t.event_id) push(byEvent, t.event_id, job);
+    else if (t.initiative_id) push(byInitiative, t.initiative_id, job);
+  }
+  return { byEvent, byInitiative };
 }
 
 // ----------------------------------------------------

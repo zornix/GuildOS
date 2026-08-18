@@ -132,6 +132,14 @@ export interface TaskDto {
   required: boolean;
   due_at: string | null;
   created_at: string;
+  // Job fields (V1): a task is a job on an event OR an initiative, never both.
+  event_id: string | null;
+  initiative_id: string | null;
+  kind: string; // 'standard' | 'security'
+  people_needed: number;
+  claimants: string[]; // member ids with an active commitment
+  claimed_count: number;
+  rejection_reason?: string | null;
 }
 
 export interface AnnouncementDto {
@@ -205,7 +213,23 @@ export const api = {
   setTaskStatus: (id: string, status: string) =>
     request<TaskDto>('POST', `/api/tasks/${id}/status`, { status }),
   commitTask: (id: string, memberId?: string) =>
-    request<unknown>('POST', `/api/tasks/${id}/commit`, { member_id: memberId }),
+    request<void>('POST', `/api/tasks/${id}/commit`, { member_id: memberId }),
+  uncommitTask: (id: string) => request<void>('POST', `/api/tasks/${id}/uncommit`, {}),
+
+  createJob: (body: {
+    title: string;
+    description?: string;
+    people_needed: number;
+    event_id?: string;
+    initiative_id?: string;
+  }) => request<TaskDto>('POST', '/api/tasks/', body),
+  updateJob: (id: string, body: { title?: string; description?: string; people_needed?: number }) =>
+    request<void>('PATCH', `/api/tasks/${id}`, body),
+  deleteJob: (id: string) => request<void>('DELETE', `/api/tasks/${id}`),
+  reportJobDone: (id: string) => request<void>('POST', `/api/tasks/${id}/report-done`, {}),
+  approveJob: (id: string) => request<void>('POST', `/api/tasks/${id}/approve`, {}),
+  rejectJob: (id: string, reason: string) =>
+    request<void>('POST', `/api/tasks/${id}/reject`, { reason }),
 
   getAnnouncements: () => request<AnnouncementDto[]>('GET', '/api/announcements/'),
 
