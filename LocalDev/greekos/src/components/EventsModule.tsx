@@ -15,7 +15,9 @@ import {
   Lock, 
   Info,
   XCircle,
-  Sparkles
+  Sparkles,
+  Pencil,
+  Trash2
 } from 'lucide-react';
 import { ChapterEvent, EventJob, Member, SecurityAssignment, EventType } from '../types';
 import Modal from './ui/Modal';
@@ -35,6 +37,8 @@ interface EventsModuleProps {
   onApproveJob: (eventId: string, jobId: string, officerName: string) => void;
   onRejectJob: (eventId: string, jobId: string, officerName: string, reason: string) => void;
   onAddJobToEvent: (eventId: string, job: Omit<EventJob, 'id' | 'claimants' | 'status'>) => void;
+  onEditJob: (eventId: string, jobId: string, patch: { title?: string; description?: string; peopleNeeded?: number }) => void;
+  onDeleteJob: (eventId: string, jobId: string) => void;
   onSendEventNotifyBlast: (eventId: string) => void;
   onToggleCheckInLink: (eventId: string) => void;
   onAssignSecurity: (eventId: string, memberId: string, memberName: string, station: string) => void;
@@ -56,6 +60,8 @@ export default function EventsModule({
   onApproveJob,
   onRejectJob,
   onAddJobToEvent,
+  onEditJob,
+  onDeleteJob,
   onSendEventNotifyBlast,
   onToggleCheckInLink,
   onAssignSecurity,
@@ -66,6 +72,7 @@ export default function EventsModule({
   const [filterType, setFilterType] = useState<string>('All');
   const [showAddForm, setShowAddForm] = useState(false);
   const [showAddJobModal, setShowAddJobModal] = useState(false);
+  const [editJobId, setEditJobId] = useState<string | null>(null);
   const [showRejectModal, setShowRejectModal] = useState<{ eventId: string; jobId: string } | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [showSecurityAssignModal, setShowSecurityAssignModal] = useState(false);
@@ -131,18 +138,36 @@ export default function EventsModule({
     setShowAddForm(false);
   };
 
-  const handleAddJobSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedEvent) return;
-    onAddJobToEvent(selectedEvent.id, {
-      title: jobTitle,
-      description: jobDesc,
-      peopleNeeded: Number(jobPeopleNeeded) || 1
-    });
+  // One form serves both "add job" and "edit job" — editJobId picks the target.
+  const closeJobForm = () => {
     setJobTitle('');
     setJobDesc('');
     setJobPeopleNeeded(2);
     setShowAddJobModal(false);
+    setEditJobId(null);
+  };
+
+  const openEditJob = (job: EventJob) => {
+    setJobTitle(job.title);
+    setJobDesc(job.description || '');
+    setJobPeopleNeeded(job.peopleNeeded || 1);
+    setEditJobId(job.id);
+  };
+
+  const handleAddJobSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEvent) return;
+    const jobFields = {
+      title: jobTitle,
+      description: jobDesc,
+      peopleNeeded: Number(jobPeopleNeeded) || 1
+    };
+    if (editJobId) {
+      onEditJob(selectedEvent.id, editJobId, jobFields);
+    } else {
+      onAddJobToEvent(selectedEvent.id, jobFields);
+    }
+    closeJobForm();
   };
 
   const handleConfirmReject = () => {
@@ -687,6 +712,28 @@ export default function EventsModule({
                                 Report Completed
                               </button>
                             )}
+
+                            {/* Officer job management: edit always, delete only while
+                                unclaimed and To-Do (mirrors the job_not_cancellable rule) */}
+                            {isOfficer && (
+                              <button
+                                onClick={() => openEditJob(job)}
+                                className="text-xs font-semibold px-3 py-1.5 rounded-lg border bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 transition-all cursor-pointer flex items-center gap-1"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                                Edit
+                              </button>
+                            )}
+
+                            {isOfficer && job.status === 'To Do' && claimants.length === 0 && (
+                              <button
+                                onClick={() => onDeleteJob(selectedEvent.id, job.id)}
+                                className="text-xs font-semibold px-3 py-1.5 rounded-lg border bg-red-50 text-red-700 border-red-200 hover:bg-red-100 transition-all cursor-pointer flex items-center gap-1"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                Delete
+                              </button>
+                            )}
                           </div>
 
                           {/* Supervisor Sign-Off Controls */}
@@ -981,15 +1028,15 @@ export default function EventsModule({
         </Modal>
       )}
 
-      {/* MODAL: Add Job to Event */}
-      {showAddJobModal && selectedEvent && (
+      {/* MODAL: Add / Edit Job on Event */}
+      {(showAddJobModal || editJobId) && selectedEvent && (
         <Modal>
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-display font-bold text-base text-slate-900 flex items-center gap-2">
-                <Plus className="w-5 h-5 text-gold" />
-                Add Claimable Job / Shift
+                {editJobId ? <Pencil className="w-5 h-5 text-gold" /> : <Plus className="w-5 h-5 text-gold" />}
+                {editJobId ? 'Edit Claimable Job / Shift' : 'Add Claimable Job / Shift'}
               </h3>
-              <button onClick={() => setShowAddJobModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+              <button onClick={closeJobForm} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
             </div>
             
             <form onSubmit={handleAddJobSubmit} className="space-y-4">
@@ -1034,7 +1081,7 @@ export default function EventsModule({
                 type="submit" 
                 className="w-full bg-gold hover:bg-[#c5a02b] text-navy font-bold py-3 rounded-lg text-xs uppercase tracking-wider transition-all cursor-pointer"
               >
-                Publish Job to Event
+                {editJobId ? 'Save Job Changes' : 'Publish Job to Event'}
               </button>
             </form>
         </Modal>
