@@ -58,7 +58,6 @@ export function useAppData() {
   const finance = useFinance({ members, setMembers, currentMemberName, isOfficer, syncApi, showToast, enqueueOutbox });
   const attendance = useAttendance({
     members,
-    events: events.events,
     setEvents: events.setEvents,
     refetchEvents: events.refetchEvents,
     syncApi,

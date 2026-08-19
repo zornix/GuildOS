@@ -1,6 +1,7 @@
 // src/selfcheck.ts — run: npx tsx src/selfcheck.ts   (exits non-zero on failure)
 import assert from 'node:assert';
 import { adaptTaskToJob, groupJobsByParent } from './adapters';
+import { isoDay, isWithin36Hours, monthCells } from './formatters';
 import type { TaskDto } from './api';
 import type { Member } from './types';
 
@@ -31,4 +32,20 @@ const grouped = groupJobsByParent([
 ], membersById);
 assert.deepEqual(grouped.byEvent.get('e1')!.map(j => j.id), ['t1']);
 assert.deepEqual(grouped.byInitiative.get('i1')!.map(j => j.id), ['t4']);
+
+// date rules: local day, month grid, T-36h unclaim lock
+assert.equal(isoDay(new Date(2026, 6, 4)), '2026-07-04');
+const july2026 = monthCells(2026, 6); // July 1 2026 is a Wednesday -> 3 blanks
+assert.equal(july2026.length, 3 + 31);
+assert.equal(july2026[0], null);
+assert.equal(july2026[3], '2026-07-01');
+assert.equal(july2026[33], '2026-07-31');
+assert.equal(monthCells(2024, 1).filter(Boolean).length, 29); // leap February
+
+const start = new Date('2026-07-13T18:00').getTime();
+const hours = (n: number) => n * 60 * 60 * 1000;
+assert.equal(isWithin36Hours('2026-07-13', '18:00', start - hours(40)), false);
+assert.equal(isWithin36Hours('2026-07-13', '18:00', start - hours(10)), true);
+assert.equal(isWithin36Hours('2026-07-13', '18:00', start + hours(2)), true); // started: stays locked
+
 console.log('selfcheck OK');

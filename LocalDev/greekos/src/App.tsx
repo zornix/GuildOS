@@ -69,6 +69,7 @@ export default function App() {
           members={roster.members}
           isOfficer={isOfficer}
           currentMemberName={currentMemberName}
+          onSelectEvent={events.handleSelectEvent}
           onAddEvent={events.handleAddEvent}
           onUpdateEvent={events.handleUpdateEvent}
           onVolunteerOrganizer={events.handleVolunteerOrganizer}
@@ -114,7 +115,7 @@ export default function App() {
           onRecordAttendance={attendance.handleRecordAttendance}
           onSubmitExcuse={attendance.handleSubmitExcuse}
           onReviewExcuse={attendance.handleReviewExcuse}
-          onSelfCheckInPin={attendance.handleSelfCheckInPin}
+          onSelfCheckIn={attendance.handleSelfCheckIn}
         />
       )}
 

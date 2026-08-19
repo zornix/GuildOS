@@ -26,7 +26,8 @@ interface AttendanceModuleProps {
   onRecordAttendance: (eventId: string, records: { memberId: string; status: 'Present' | 'Absent' | 'Excused' | 'Late' }[]) => void;
   onSubmitExcuse: (excuse: Omit<Excuse, 'id' | 'status' | 'submittedDate'>) => void;
   onReviewExcuse: (excuseId: string, status: 'Approved' | 'Rejected', reviewedBy: string) => void;
-  onSelfCheckInPin: (eventId: string, memberId: string, memberName: string, pinEntered: string) => boolean;
+  /** The door code identifies the event; the backend checks in the signed-in member. */
+  onSelfCheckIn: (code: string) => Promise<{ ok: boolean; message: string }>;
 }
 
 export default function AttendanceModule({
@@ -38,7 +39,7 @@ export default function AttendanceModule({
   onRecordAttendance,
   onSubmitExcuse,
   onReviewExcuse,
-  onSelfCheckInPin
+  onSelfCheckIn
 }: AttendanceModuleProps) {
   const safeEvents = events || [];
   const safeMembers = members || [];
@@ -48,9 +49,10 @@ export default function AttendanceModule({
   const [activeTab, setActiveTab] = useState<'roster_check' | 'excuses' | 'self_pin'>('roster_check');
   const [showExcuseModal, setShowExcuseModal] = useState(false);
 
-  // Self PIN Check-in state
-  const [enteredPin, setEnteredPin] = useState('');
-  const [pinFeedback, setPinFeedback] = useState<{ success?: boolean; msg?: string } | null>(null);
+  // Door-code check-in state
+  const [enteredCode, setEnteredCode] = useState('');
+  const [codeFeedback, setCodeFeedback] = useState<{ success?: boolean; msg?: string } | null>(null);
+  const [checkingIn, setCheckingIn] = useState(false);
 
   // Excuse Form State
   const [excuseEventId, setExcuseEventId] = useState(safeEvents[0]?.id || '');
@@ -100,17 +102,13 @@ export default function AttendanceModule({
     setShowExcuseModal(false);
   };
 
-  const handlePinCheckInSubmit = (e: React.FormEvent) => {
+  const handleCodeCheckInSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedEvent || !currentMember) return;
-
-    const success = onSelfCheckInPin(selectedEvent.id, currentMember.id, currentMember.name, enteredPin.trim());
-    if (success) {
-      setPinFeedback({ success: true, msg: `Verified! You are checked in for ${selectedEvent.title}.` });
-      setEnteredPin('');
-    } else {
-      setPinFeedback({ success: false, msg: 'Invalid 4-digit PIN code or check-in door link is currently inactive.' });
-    }
+    setCheckingIn(true);
+    const result = await onSelfCheckIn(enteredCode);
+    setCheckingIn(false);
+    setCodeFeedback({ success: result.ok, msg: result.message });
+    if (result.ok) setEnteredCode('');
   };
 
   return (
@@ -124,11 +122,11 @@ export default function AttendanceModule({
               Attendance & Excuses
             </h2>
             <span className="text-xs font-mono font-bold bg-navy text-gold px-2 py-0.5 rounded-full">
-              Roll Call & PIN Door
+              Roll Call & Door Code
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Conduct formal chapter roll call, verify live PIN door check-ins, and process member excuse requests.
+            Conduct formal chapter roll call, verify live door-code check-ins, and process member excuse requests.
           </p>
         </div>
 
@@ -166,7 +164,7 @@ export default function AttendanceModule({
           }`}
         >
           <KeyRound className="w-4 h-4" />
-          Live Door PIN Check-in
+          Live Door Check-In
         </button>
 
         <button
@@ -276,7 +274,7 @@ export default function AttendanceModule({
         </Card>
       )}
 
-      {/* TAB 2: Live Door PIN Check-in */}
+      {/* TAB 2: Live Door Check-In */}
       {activeTab === 'self_pin' && (
         <Card className="p-6 max-w-lg mx-auto text-center space-y-6">
           <div className="space-y-1">
@@ -284,48 +282,44 @@ export default function AttendanceModule({
               <KeyRound className="w-6 h-6" />
             </div>
             <h3 className="font-display font-extrabold text-slate-900 text-lg">
-              Live Door PIN Check-In
+              Live Door Check-In
             </h3>
             <p className="text-xs text-slate-500">
-              Enter the 4-digit numeric code displayed at the door or announced by the Marshal.
+              Enter the door code an officer is showing in Live Door Mode. The code decides
+              which event you are checked into, so no event picker here.
             </p>
           </div>
 
-          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-left text-xs space-y-1">
-            <span className="text-[10px] font-mono uppercase text-slate-400 font-bold block">Current Target Event</span>
-            <div className="font-bold text-slate-900">{selectedEvent.title}</div>
-            <div className="text-slate-500">{selectedEvent.date} &bull; {selectedEvent.time} &bull; {selectedEvent.location}</div>
-          </div>
-
-          <form onSubmit={handlePinCheckInSubmit} className="space-y-4">
+          <form onSubmit={handleCodeCheckInSubmit} className="space-y-4">
             <div>
               <label className="text-xs font-mono font-bold text-slate-700 block mb-2">
-                ENTER 4-DIGIT DOOR PIN
+                ENTER DOOR CODE
               </label>
               <input
                 type="text"
-                maxLength={4}
-                value={enteredPin}
-                onChange={e => setEnteredPin(e.target.value)}
-                placeholder="••••"
+                maxLength={6}
+                value={enteredCode}
+                onChange={e => setEnteredCode(e.target.value)}
+                placeholder="A7x9Kp"
                 className="w-48 mx-auto text-center text-3xl font-mono font-black tracking-widest py-3 border-2 border-slate-300 rounded-xl focus:outline-none focus:border-gold"
                 required
               />
             </div>
 
-            {pinFeedback && (
+            {codeFeedback && (
               <div className={`p-3 rounded-lg text-xs font-semibold ${
-                pinFeedback.success ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'
+                codeFeedback.success ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'
               }`}>
-                {pinFeedback.msg}
+                {codeFeedback.msg}
               </div>
             )}
 
             <button
               type="submit"
-              className="w-full bg-navy text-gold hover:bg-slate-800 font-bold py-3 rounded-lg text-xs uppercase tracking-wider transition-all cursor-pointer"
+              disabled={checkingIn || !enteredCode.trim()}
+              className="w-full bg-navy text-gold hover:bg-slate-800 font-bold py-3 rounded-lg text-xs uppercase tracking-wider transition-all cursor-pointer disabled:opacity-50"
             >
-              Verify Attendance Check-In
+              {checkingIn ? 'Checking in…' : 'Verify Attendance Check-In'}
             </button>
           </form>
         </Card>

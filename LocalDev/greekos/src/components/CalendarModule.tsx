@@ -13,6 +13,7 @@ import {
   Users
 } from 'lucide-react';
 import { ChapterEvent, Initiative, Announcement } from '../types';
+import { isoDay, monthCells } from '../formatters';
 import Card from './ui/Card';
 
 interface CalendarModuleProps {
@@ -32,24 +33,21 @@ export default function CalendarModule({
   onVolunteerOrganizer,
   onNavigateToEvent
 }: CalendarModuleProps) {
-  const [selectedDateStr, setSelectedDateStr] = useState<string>('2026-07-13');
-  const [filterType, setFilterType] = useState<string>('All');
+  const today = isoDay();
+  const [selectedDateStr, setSelectedDateStr] = useState<string>(today);
+  // The month on screen: the 1st of it, so prev/next is plain Date arithmetic.
+  const [month, setMonth] = useState<Date>(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
 
-  // July 2026 calendar matrix (31 days, starts Wednesday July 1)
-  const DAYS_IN_MONTH = 31;
-  const START_PADDING = 3; // Wednesday start
-  const calendarCells = [];
-  
-  for (let i = 0; i < START_PADDING; i++) {
-    calendarCells.push({ day: null, dateStr: null });
-  }
-  for (let d = 1; d <= DAYS_IN_MONTH; d++) {
-    const dayStr = d < 10 ? `0${d}` : `${d}`;
-    calendarCells.push({
-      day: d,
-      dateStr: `2026-07-${dayStr}`
-    });
-  }
+  const shiftMonth = (delta: number) =>
+    setMonth(m => new Date(m.getFullYear(), m.getMonth() + delta, 1));
+
+  const calendarCells = monthCells(month.getFullYear(), month.getMonth()).map(dateStr => ({
+    day: dateStr ? Number(dateStr.substring(8)) : null,
+    dateStr
+  }));
 
   const safeEvents = events || [];
   const safeInitiatives = initiatives || [];
@@ -103,14 +101,33 @@ export default function CalendarModule({
         <Card className="lg:col-span-2 p-5 space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div>
-              <h3 className="font-display font-extrabold text-slate-900 text-lg">July 2026</h3>
+              <h3 className="font-display font-extrabold text-slate-900 text-lg">
+                {month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              </h3>
               <p className="text-xs text-slate-400">Click any date to inspect scheduled chapter operations.</p>
             </div>
-            
+
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs font-mono font-bold text-slate-600">
-              <span className="px-2 py-1 text-slate-400">‹</span>
-              <span className="px-2.5 py-1 bg-white text-slate-900 rounded shadow-2xs">July</span>
-              <span className="px-2 py-1 text-slate-400">›</span>
+              <button
+                onClick={() => shiftMonth(-1)}
+                aria-label="Previous month"
+                className="px-2 py-1 rounded hover:bg-white hover:text-slate-900 transition-all cursor-pointer"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setMonth(new Date(new Date().getFullYear(), new Date().getMonth(), 1))}
+                className="px-2.5 py-1 bg-white text-slate-900 rounded shadow-2xs cursor-pointer"
+              >
+                {month.toLocaleDateString('en-US', { month: 'short' })}
+              </button>
+              <button
+                onClick={() => shiftMonth(1)}
+                aria-label="Next month"
+                className="px-2 py-1 rounded hover:bg-white hover:text-slate-900 transition-all cursor-pointer"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
 
@@ -129,9 +146,10 @@ export default function CalendarModule({
           <div className="grid grid-cols-7 gap-1.5">
             {calendarCells.map((cell, idx) => {
               const isSelected = cell.dateStr === selectedDateStr;
+              const isToday = cell.dateStr === today;
               const cellEvents = cell.dateStr ? safeEvents.filter(e => e.date === cell.dateStr) : [];
               const cellAnnouncements = cell.dateStr ? safeAnnouncements.filter(a => announcementDay(a) === cell.dateStr) : [];
-              const hasOrganizersNeeded = cellEvents.some(e => !e.organizers || e.organizers.length === 0);
+              const hasOrganizersNeeded = cellEvents.some(e => (e.organizerCount ?? (e.organizers || []).length) === 0);
 
               return (
                 <div
@@ -142,13 +160,17 @@ export default function CalendarModule({
                       ? 'bg-slate-50/40 border-dashed border-slate-100 cursor-default'
                       : isSelected
                       ? 'bg-slate-900 text-white border-slate-900 shadow-md ring-2 ring-gold/30 cursor-pointer'
+                      : isToday
+                      ? 'bg-amber-50/60 border-gold hover:border-gold cursor-pointer'
                       : 'bg-white border-slate-200 hover:border-gold cursor-pointer'
                   }`}
                 >
                   {cell.day && (
                     <>
                       <div className="flex justify-between items-start">
-                        <span className={`text-xs font-mono font-bold ${isSelected ? 'text-gold' : 'text-slate-700'}`}>
+                        <span className={`text-xs font-mono font-bold ${
+                          isSelected ? 'text-gold' : isToday ? 'text-gold-muted' : 'text-slate-700'
+                        }`}>
                           {cell.day}
                         </span>
 
@@ -220,7 +242,7 @@ export default function CalendarModule({
                 <p className="text-xs text-slate-400 italic">No chapter events scheduled on this day.</p>
               ) : (
                 dayEvents.map(e => {
-                  const hasNoOrganizers = (!e.organizers || e.organizers.length === 0);
+                  const hasNoOrganizers = (e.organizerCount ?? (e.organizers || []).length) === 0;
 
                   return (
                     <div key={e.id} className="p-3 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2">

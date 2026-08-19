@@ -78,8 +78,32 @@ export interface EventDto {
   event_type?: string | null;
   visibility?: string | null;
   attendance_count?: number;
+  organizer_count?: number;
   job_count?: number;
   open_job_count?: number;
+}
+
+/** GET /api/events/{id} — the list row plus the rows only the detail endpoint
+ *  carries: supervisors (the creator is auto-added), organizers, the live
+ *  attendance count and the last notify blast. */
+export interface EventDetailDto extends EventDto {
+  supervisors: { member_id: string; is_creator: boolean; name?: string | null }[];
+  organizers: { id: string; member_id: string; source: string; created_at: string }[];
+  last_notified_at?: string | null;
+}
+
+/** Check-in link. GET answers `{}` when no link is live. */
+export interface CheckInLinkDto {
+  short_code?: string;
+  url?: string;
+  expires_at?: string;
+}
+
+export interface NotifyPreviewDto {
+  recipient_count: number;
+  no_phone_count: number;
+  body_preview: string;
+  last_notified_at: string | null;
 }
 
 export interface ScoreDto {
@@ -225,9 +249,32 @@ export const api = {
   getScores: () => request<ScoreDto[]>('GET', '/api/memberadmin/scores'),
 
   getEvents: () => request<EventDto[]>('GET', '/api/events/'),
+  getEvent: (id: string) => request<EventDetailDto>('GET', `/api/events/${id}`),
   createEvent: (body: Record<string, unknown>) => request<EventDto>('POST', '/api/events/', body),
   updateEvent: (id: string, body: Record<string, unknown>) =>
     request<EventDto>('PUT', `/api/events/${id}`, body),
+
+  /** Self-volunteer: an omitted member_id means the signed-in member. */
+  addOrganizer: (eventId: string) =>
+    request<unknown>('POST', `/api/events/${eventId}/organizers`, {}),
+
+  notifyPreview: (eventId: string) =>
+    request<NotifyPreviewDto>('GET', `/api/events/${eventId}/notify-preview`),
+  /** Two-phase confirm: the count must still match what the preview resolved. */
+  notifyEvent: (eventId: string, confirmedRecipientCount: number) =>
+    request<unknown>('POST', `/api/events/${eventId}/notify`, {
+      confirmed_recipient_count: confirmedRecipientCount
+    }),
+
+  getCheckInLink: (eventId: string) =>
+    request<CheckInLinkDto>('GET', `/api/events/${eventId}/checkin-link`),
+  openCheckInLink: (eventId: string) =>
+    request<CheckInLinkDto>('POST', `/api/events/${eventId}/checkin-link`),
+  closeCheckInLink: (eventId: string) =>
+    request<void>('DELETE', `/api/events/${eventId}/checkin-link`),
+  /** Door-code check-in; the backend checks in the signed-in member. */
+  checkInWithCode: (shortCode: string) =>
+    request<{ status: string; event_title: string }>('POST', `/api/attendance/checkin/${shortCode}`),
 
   listSecurity: (eventId: string) =>
     request<SecurityAssignmentDto[]>('GET', `/api/events/${eventId}/security`),

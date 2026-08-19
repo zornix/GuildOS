@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { INITIAL_EVENTS } from '../data/mockData';
 import { ChapterEvent, EventJob, Member, SecurityAssignment } from '../types';
 import { api } from '../api';
-import { adaptEvents, adaptSecurityAssignment, toEventBody } from '../adapters';
+import { adaptEventDetail, adaptEvents, adaptSecurityAssignment, toEventBody } from '../adapters';
 import { ShowToast } from './useToast';
 import { EnqueueOutbox } from './useOutbox';
 import { SyncApi } from './useBackend';
@@ -16,12 +16,20 @@ const JOB_409: Record<string, string> = {
   security_no_cancel: 'Security shifts are managed from the Security panel'
 };
 
+/** Refusals from the notify gate (409 completeness / recipients, 429 cooldown). */
+const NOTIFY_409: Record<string, string> = {
+  'not complete enough': 'Add a supervisor, an organizer and 3 jobs before notifying',
+  'No SMS-reachable': 'No brother has a phone number on file to text',
+  'count changed': 'The member list just changed — send the blast again',
+  'within the last hour': 'This event was already notified in the last hour'
+};
+
 /** api.ts throws `Error('PATCH /path failed (409): <detail>')`, so the conflict
  *  token is matched inside the message rather than read off a field. */
-const jobErrorToast = (err: unknown, fallback: string) => {
+const errorToast = (err: unknown, tokens: Record<string, string>, fallback: string) => {
   const msg = err instanceof Error ? err.message : '';
-  const hit = Object.keys(JOB_409).find(token => msg.includes(token));
-  return hit ? JOB_409[hit] : fallback;
+  const hit = Object.keys(tokens).find(token => msg.includes(token));
+  return hit ? tokens[hit] : fallback;
 };
 
 interface Deps {
@@ -36,16 +44,47 @@ interface Deps {
 export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJobs }: Deps) {
   const [events, setEvents] = useState<ChapterEvent[]>(INITIAL_EVENTS);
 
-  // adaptEvents rebuilds rows with empty jobs and security lists. refetchJobs
-  // restamps the boards below, but security only loads per event, so the shifts
-  // already in state are carried across rather than blanked.
+  // adaptEvents rebuilds rows with empty jobs, security and leader lists.
+  // refetchJobs restamps the boards below; security shifts and everything that
+  // only the detail endpoint carries (supervisors, organizers, notify stamp,
+  // door link) load per event, so those are carried across rather than blanked.
   const refetchEvents = async () => {
     const rows = adaptEvents(await api.getEvents());
     setEvents(prev => {
-      const securityById = new Map(prev.map(e => [e.id, e.securityAssignments]));
-      return rows.map(e => ({ ...e, securityAssignments: securityById.get(e.id) ?? e.securityAssignments }));
+      const byId = new Map<string, ChapterEvent>(prev.map(e => [e.id, e]));
+      return rows.map(e => {
+        const old = byId.get(e.id);
+        return old ? {
+          ...e,
+          securityAssignments: old.securityAssignments,
+          supervisors: old.supervisors,
+          organizers: old.organizers,
+          checkedInCount: old.checkedInCount,
+          notifiedAt: old.notifiedAt,
+          checkInToken: old.checkInToken,
+          checkInLinkActive: old.checkInLinkActive
+        } : e;
+      });
     });
     await refetchJobs();
+  };
+
+  /** Supervisors, organizers, the notify stamp and the live door link exist only
+   *  on the per-event endpoints, so the selected event's row is patched here. */
+  const refetchEventDetail = async (eventId: string) => {
+    const [detail, link] = await Promise.all([api.getEvent(eventId), api.getCheckInLink(eventId)]);
+    setEvents(prev => prev.map(e => e.id === eventId ? {
+      ...e,
+      ...adaptEventDetail(detail, members),
+      checkInToken: link.short_code,
+      checkInLinkActive: !!link.short_code
+    } : e));
+  };
+
+  /** The events screen calls this whenever its selection lands on an event; a
+   *  failure just leaves that row showing what it already had. */
+  const handleSelectEvent = (eventId: string) => {
+    refetchEventDetail(eventId).catch(err => console.error(`Event detail load failed for ${eventId}`, err));
   };
 
   /** Reload one event's security roster from the backend. */
@@ -86,8 +125,8 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
       id: 'e_' + Math.random().toString(36).substring(2, 9),
       attendanceTaken: false,
       checkedInCount: 0,
-      checkInPin: Math.floor(1000 + Math.random() * 9000).toString(),
-      checkInLinkActive: true,
+      // A fresh event has no check-in link until an officer opens the door.
+      checkInLinkActive: false,
       securityAssignments: []
     };
     setEvents(prev => [ev, ...prev]);
@@ -105,11 +144,17 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
       if (e.id === eventId) {
         const currentOrgs = e.organizers || [];
         if (!currentOrgs.includes(memberName)) {
-          return { ...e, organizers: [...currentOrgs, memberName] };
+          return {
+            ...e,
+            organizers: [...currentOrgs, memberName],
+            organizerCount: (e.organizerCount || currentOrgs.length) + 1
+          };
         }
       }
       return e;
     }));
+    // The backend signs up the signed-in member; it has no impersonation concept.
+    syncApi(() => api.addOrganizer(eventId), () => refetchEventDetail(eventId));
     showToast(`Volunteered as Organizer for event!`);
   };
 
@@ -288,7 +333,7 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
         });
         showToast('Job updated.');
       } catch (err) {
-        showToast(jobErrorToast(err, 'Could not update job'));
+        showToast(errorToast(err, JOB_409, 'Could not update job'));
       }
     }, refetchJobs);
   };
@@ -299,7 +344,7 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
         await api.deleteJob(jobId);
         showToast('Job deleted.');
       } catch (err) {
-        showToast(jobErrorToast(err, 'Could not delete job'));
+        showToast(errorToast(err, JOB_409, 'Could not delete job'));
       }
     }, refetchJobs);
   };
@@ -309,22 +354,34 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
     if (!ev) return;
 
     setEvents(prev => prev.map(e => e.id === eventId ? { ...e, notifiedAt: new Date().toISOString() } : e));
+    // The outbox tab stays a demo surface; the real send is the API call below,
+    // and the refetch replaces the optimistic stamp with last_notified_at.
     enqueueOutbox({
       type: 'EVENT_NOTIFY',
       recipient: 'All Active Chapter Brothers (10)',
       message: `[GreekOS Broadcast] ${ev.title} on ${ev.date} at ${ev.time} (${ev.location}). Open jobs are ready for sign-up!`,
       channel: 'SMS'
     });
-    showToast(`Notification blast dispatched to Chapter outbox!`);
+    syncApi(async () => {
+      try {
+        // Two-phase confirm: send back the count the preview just resolved.
+        const preview = await api.notifyPreview(eventId);
+        await api.notifyEvent(eventId, preview.recipient_count);
+        showToast('Notification blast sent to the chapter.');
+      } catch (err) {
+        showToast(errorToast(err, NOTIFY_409, 'Could not send the notification blast'));
+      }
+    }, () => refetchEventDetail(eventId));
   };
 
+  /** Opening the door creates a short-lived check-in link; closing it kills it. */
   const handleToggleCheckInLink = (eventId: string) => {
-    setEvents(prev => prev.map(e => {
-      if (e.id === eventId) {
-        return { ...e, checkInLinkActive: !e.checkInLinkActive };
-      }
-      return e;
-    }));
+    const wasActive = !!events.find(e => e.id === eventId)?.checkInLinkActive;
+    setEvents(prev => prev.map(e => e.id === eventId ? { ...e, checkInLinkActive: !wasActive } : e));
+    syncApi(
+      () => wasActive ? api.closeCheckInLink(eventId) : api.openCheckInLink(eventId),
+      () => refetchEventDetail(eventId)
+    );
   };
 
   const handleAssignSecurity = (eventId: string, memberId: string, memberName: string, _station?: string) => {
@@ -450,6 +507,7 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
     events,
     setEvents,
     refetchEvents,
+    handleSelectEvent,
     handleAddEvent,
     handleUpdateEvent,
     handleVolunteerOrganizer,

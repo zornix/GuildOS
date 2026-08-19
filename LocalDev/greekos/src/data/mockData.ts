@@ -193,8 +193,7 @@ export const INITIAL_EVENTS: ChapterEvent[] = [
     supervisors: ['Alexander Mercer', 'John Callahan'],
     organizers: ['John Callahan'],
     checkInLinkActive: true,
-    checkInToken: 'live_chk_7829',
-    checkInPin: '4892',
+    checkInToken: 'A7x9Kp',
     notifiedAt: '2026-07-10 14:00',
     jobs: [
       {
@@ -245,7 +244,6 @@ export const INITIAL_EVENTS: ChapterEvent[] = [
     supervisors: ['Alexander Mercer'],
     organizers: [], // Flagged: Organizers Needed!
     checkInLinkActive: false,
-    checkInPin: '3104',
     jobs: [
       {
         id: 'job4',

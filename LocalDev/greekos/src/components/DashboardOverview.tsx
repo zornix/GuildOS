@@ -221,7 +221,7 @@ export default function DashboardOverview({
             <div className="space-y-3">
               {upcomingEvents.map(event => {
                 const orgs = event.organizers || [];
-                const hasNoOrganizers = orgs.length === 0;
+                const hasNoOrganizers = (event.organizerCount ?? orgs.length) === 0;
                 const eventJobs = event.jobs || [];
                 const openJobs = eventJobs.filter(j => (j.claimants || []).length < (j.peopleNeeded || 1)).length;
 

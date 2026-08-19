@@ -1,8 +1,9 @@
 // Backend DTO -> prototype type mapping. Everything the backend does not send
 // gets an empty default here — nothing is invented. Client-local demo features
-// (event jobs, security assignments, check-in PINs, points) stay defaulted.
+// (points, GPA, pledge class) stay defaulted.
 import {
   AnnouncementDto,
+  EventDetailDto,
   EventDto,
   ExcuseDto,
   FineDto,
@@ -117,12 +118,28 @@ export function adaptEvents(rows: EventDto[]): ChapterEvent[] {
       checkedInCount: row.attendance_count || 0,
       jobCount: row.job_count || 0,
       openJobCount: row.open_job_count || 0,
+      // The list carries the organizer count but no names; names arrive with
+      // the per-event detail (adaptEventDetail).
+      organizerCount: row.organizer_count || 0,
       supervisors: [],
       organizers: [],
       jobs: [],
       securityAssignments: []
     };
   });
+}
+
+/** The fields only GET /api/events/{id} carries, as a patch onto the list row.
+ *  Supervisor rows ship a name; organizer rows carry ids only, so those are
+ *  resolved off the roster the way adaptSecurityAssignment does. */
+export function adaptEventDetail(dto: EventDetailDto, members: Member[]): Partial<ChapterEvent> {
+  return {
+    supervisors: (dto.supervisors || []).map(s => s.name || nameOf(members, s.member_id)),
+    organizers: (dto.organizers || []).map(o => nameOf(members, o.member_id)),
+    organizerCount: (dto.organizers || []).length,
+    checkedInCount: dto.attendance_count || 0,
+    notifiedAt: dto.last_notified_at || undefined
+  };
 }
 
 /** Security assignment row -> shift card. The backend models a shift as a task

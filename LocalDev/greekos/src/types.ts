@@ -96,16 +96,17 @@ export interface ChapterEvent {
   required: boolean;
   attendanceTaken: boolean;
   checkedInCount?: number;
-  supervisors: string[]; // member names / IDs (Officers)
-  organizers: string[]; // member names / IDs (Chairs/members)
+  supervisors: string[]; // member names (loaded with the event detail)
+  organizers: string[]; // member names (loaded with the event detail)
+  /** Backend count from the events list — names only arrive with the detail. */
+  organizerCount?: number;
   jobs: EventJob[];
   jobCount?: number;
   openJobCount?: number;
   securityAssignments?: SecurityAssignment[];
-  notifiedAt?: string; // set when notify gate passes and blast is sent
+  notifiedAt?: string; // last notify blast (backend last_notified_at)
   checkInLinkActive?: boolean;
-  checkInToken?: string;
-  checkInPin?: string;
+  checkInToken?: string; // live door code (backend check-in link short_code)
 }
 
 export interface Initiative {

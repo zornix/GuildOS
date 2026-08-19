@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Calendar, 
   MapPin, 
@@ -19,7 +19,8 @@ import {
   Pencil,
   Trash2
 } from 'lucide-react';
-import { ChapterEvent, EventJob, Member, SecurityAssignment, EventType } from '../types';
+import { ChapterEvent, EventJob, Member, EventType } from '../types';
+import { isoDay, isWithin36Hours } from '../formatters';
 import Modal from './ui/Modal';
 import Card from './ui/Card';
 
@@ -28,6 +29,8 @@ interface EventsModuleProps {
   members: Member[];
   isOfficer: boolean;
   currentMemberName: string;
+  /** Loads the selected event's supervisors, organizers and door link. */
+  onSelectEvent: (eventId: string) => void;
   onAddEvent: (event: Omit<ChapterEvent, 'id' | 'attendanceTaken' | 'checkedInCount'>) => void;
   onUpdateEvent: (event: ChapterEvent) => void;
   onVolunteerOrganizer: (eventId: string, memberName: string) => void;
@@ -52,6 +55,7 @@ export default function EventsModule({
   members,
   isOfficer,
   currentMemberName,
+  onSelectEvent,
   onAddEvent,
   onUpdateEvent,
   onVolunteerOrganizer,
@@ -85,7 +89,7 @@ export default function EventsModule({
   // New Event Form State
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [date, setDate] = useState('2026-07-16');
+  const [date, setDate] = useState(isoDay());
   const [startTime, setStartTime] = useState('18:00');
   const [endTime, setEndTime] = useState('20:00');
   const [location, setLocation] = useState('');
@@ -104,6 +108,12 @@ export default function EventsModule({
 
   const currentMember = members.find(m => m.name === currentMemberName);
   const selectedEvent = events.find(e => e.id === selectedEventId) || events[0];
+
+  // Keyed on the resolved event, so the fallback selection (and the swap from
+  // mock rows to backend rows) loads its detail too.
+  useEffect(() => {
+    if (selectedEvent) onSelectEvent(selectedEvent.id);
+  }, [selectedEvent?.id]);
 
   const handleCreateEvent = (e: React.FormEvent) => {
     e.preventDefault();
@@ -198,19 +208,16 @@ export default function EventsModule({
     setTargetSwapMemberId('');
   };
 
-  // Helper check: Notify Gate criteria
+  // Helper check: Notify Gate criteria (the backend gate, spec §2.7)
   // ≥1 supervisor, ≥1 organizer, ≥3 jobs
   const supervisorCount = selectedEvent?.supervisors?.length || 0;
-  const organizerCount = selectedEvent?.organizers?.length || 0;
+  const organizerCount = selectedEvent?.organizerCount ?? (selectedEvent?.organizers?.length || 0);
   const jobsCount = selectedEvent?.jobs?.length || 0;
   const isNotifyGateReady = supervisorCount >= 1 && organizerCount >= 1 && jobsCount >= 3;
 
-  // 36-hour lock simulation check
-  const isWithin36Hours = (eventDateStr: string) => {
-    // July 11, 2026 is current simulated date
-    // Event on July 11 or July 12 is within 36 hours
-    return eventDateStr <= '2026-07-13';
-  };
+  const unclaimLocked = selectedEvent
+    ? isWithin36Hours(selectedEvent.date, selectedEvent.startTime)
+    : false;
 
   const safeEvents = events || [];
   const safeMembers = members || [];
@@ -282,7 +289,8 @@ export default function EventsModule({
           <div className="space-y-3 max-h-[75vh] overflow-y-auto pr-1">
             {filteredEvents.map(e => {
               const isSelected = e.id === selectedEventId;
-              const hasNoOrganizers = (!e.organizers || e.organizers.length === 0);
+              // The list endpoint carries the count; names only load per event.
+              const orgCount = e.organizerCount ?? (e.organizers || []).length;
               // Backend-decorated count (spec Screen 1) — the claim lure.
               const openJobCount = e.openJobCount || 0;
 
@@ -324,7 +332,7 @@ export default function EventsModule({
 
                   {/* Badges / Operational Flags */}
                   <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100">
-                    {hasNoOrganizers ? (
+                    {orgCount === 0 ? (
                       <span className="text-[10px] font-bold font-mono bg-red-100 text-red-800 px-2 py-0.5 rounded flex items-center gap-1 animate-pulse">
                         <AlertTriangle className="w-3 h-3 text-red-600" />
                         Organizers Needed!
@@ -332,7 +340,7 @@ export default function EventsModule({
                     ) : (
                       <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
                         <UserCheck className="w-3 h-3" />
-                        {e.organizers.length} Chair{e.organizers.length > 1 ? 's' : ''}
+                        {orgCount} Chair{orgCount > 1 ? 's' : ''}
                       </span>
                     )}
 
@@ -456,7 +464,7 @@ export default function EventsModule({
 
                 {/* Organizers (Chairs on the Ground) */}
                 <div className={`p-3 rounded-xl border space-y-1.5 ${
-                  !selectedEvent.organizers || selectedEvent.organizers.length === 0
+                  organizerCount === 0
                     ? 'bg-red-50/70 border-red-200 text-red-900'
                     : 'bg-slate-50 border-slate-200/70 text-slate-800'
                 }`}>
@@ -465,7 +473,7 @@ export default function EventsModule({
                       <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
                       Organizers (Chairs)
                     </span>
-                    {(!selectedEvent.organizers || selectedEvent.organizers.length === 0) && (
+                    {organizerCount === 0 && (
                       <span className="text-[10px] font-bold font-mono bg-red-200 text-red-800 px-1.5 py-0.5 rounded">
                         Needed
                       </span>
@@ -592,7 +600,7 @@ export default function EventsModule({
               </div>
 
               {/* 36-Hour Lock Warning Banner */}
-              {isWithin36Hours(selectedEvent.date) && (
+              {unclaimLocked && (
                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 flex items-center gap-2">
                   <Lock className="w-4 h-4 text-amber-700 shrink-0" />
                   <span>
@@ -611,7 +619,7 @@ export default function EventsModule({
                     const isClaimedByMe = currentMember && claimants.some(c => c.memberId === currentMember.id);
                     const isFull = claimants.length >= (job.peopleNeeded || 1);
                     const isSupervisor = (selectedEvent.supervisors || []).includes(currentMemberName) || isOfficer;
-                    const lockUnclaim = isWithin36Hours(selectedEvent.date);
+                    const lockUnclaim = unclaimLocked;
 
                     return (
                       <div 
@@ -1248,16 +1256,25 @@ export default function EventsModule({
               <div className="w-36 h-36 bg-navy text-gold rounded-xl flex items-center justify-center p-3 shadow-inner">
                 <QrCode className="w-28 h-28" />
               </div>
-              <span className="text-[10px] font-mono text-slate-400">Scan via GreekOS Mobile</span>
+              <span className="text-[10px] font-mono text-slate-400">QR rendering is demo art — read out the code below</span>
             </div>
 
-            {/* PIN Code Box */}
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1">
-              <span className="text-[10px] font-mono uppercase text-amber-800 font-bold">4-Digit Door PIN Gate</span>
-              <div className="text-2xl font-mono font-extrabold tracking-widest text-slate-900">
-                {selectedEvent.checkInPin || '4892'}
+            {/* Live door code (backend check-in link) */}
+            {selectedEvent.checkInToken ? (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1">
+                <span className="text-[10px] font-mono uppercase text-amber-800 font-bold">Live Door Code</span>
+                <div className="text-2xl font-mono font-extrabold tracking-widest text-slate-900">
+                  {selectedEvent.checkInToken}
+                </div>
+                <p className="text-[10px] text-amber-800">
+                  Brothers enter it under Attendance &rarr; Door Check-In. Expires shortly.
+                </p>
               </div>
-            </div>
+            ) : (
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500">
+                No door link is open. Use <strong>Enable Door Link</strong> on the event to open one.
+              </div>
+            )}
 
             <button
               onClick={() => setShowLiveQRModal(false)}
