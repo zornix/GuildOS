@@ -9,7 +9,8 @@ export function useBackend(showToast: ShowToast) {
   const [backendDown, setBackendDown] = useState<boolean>(false);
 
   /** Fire a mutation at the API and refetch its domain. Local state was already
-   *  updated optimistically, so a backend error only surfaces as a toast. */
+   *  updated optimistically, so a failure refetches too — otherwise the screen
+   *  keeps showing a change the server never accepted. */
   const syncApi: SyncApi = (call, refetch) => {
     if (backendDown) return;
     (async () => {
@@ -17,7 +18,9 @@ export function useBackend(showToast: ShowToast) {
         await call();
         await refetch();
       } catch (err) {
-        showToast(`Server rejected that: ${(err as Error).message}`);
+        console.error('Mutation failed', err);
+        await refetch().catch(() => { /* leave the optimistic row */ });
+        showToast("Couldn't save that — the server refused the change.");
       }
     })();
   };

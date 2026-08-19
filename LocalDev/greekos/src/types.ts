@@ -92,7 +92,6 @@ export interface ChapterEvent {
   location: string;
   type: EventType;
   audience: 'All Members' | 'Officers Only' | 'Actives Only' | 'Pledges Only';
-  points: number;
   required: boolean;
   attendanceTaken: boolean;
   checkedInCount?: number;

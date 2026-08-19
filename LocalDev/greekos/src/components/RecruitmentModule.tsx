@@ -1,16 +1,11 @@
 import React, { useState } from 'react';
-import { 
-  UserPlus, 
-  Search, 
-  ThumbsUp, 
-  Award, 
-  Plus, 
-  GraduationCap, 
-  Phone, 
-  Mail, 
-  CheckCircle2, 
-  Clock, 
-  Send 
+import {
+  UserPlus,
+  Search,
+  ThumbsUp,
+  Plus,
+  Phone,
+  Send
 } from 'lucide-react';
 import { PNM } from '../types';
 import Modal from './ui/Modal';
@@ -88,20 +83,20 @@ export default function RecruitmentModule({
           <div className="flex items-center gap-2">
             <UserPlus className="w-6 h-6 text-gold" />
             <h2 className="text-2xl font-display font-extrabold text-slate-900 tracking-tight">
-              Rush & PNM Recruitment Pipeline
+              Recruitment
             </h2>
-            <span className="text-xs font-mono font-bold bg-navy text-gold px-2 py-0.5 rounded-full">
-              {pnms.length} Prospects Tracked
+            <span className="text-xs font-semibold bg-navy text-gold px-2 py-0.5 rounded-full">
+              {pnms.length} tracked
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Track potential new members, log rush event attendance, conduct chapter bid voting, and issue formal invitations.
+            Track potential new members, vote on bids, and send invitations.
           </p>
         </div>
 
         <button
           onClick={() => setShowAddModal(true)}
-          className="bg-gold hover:bg-[#c5a02b] text-navy font-bold text-xs px-4 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer w-full sm:w-auto justify-center"
+          className="bg-gold hover:bg-[#c5a02b] text-navy font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer w-full sm:w-auto justify-center"
         >
           <Plus className="w-4 h-4" />
           Add Prospect (PNM)
@@ -110,7 +105,7 @@ export default function RecruitmentModule({
 
       {/* Filter and Search Bar */}
       <Card className="p-4 flex flex-col sm:flex-row gap-3 items-center justify-between">
-        <div className="flex flex-wrap items-center gap-1.5 text-xs font-mono">
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
           {['ALL', 'Prospect', 'Rush Active', 'Bid Extended', 'Bid Accepted'].map(s => (
             <button
               key={s}
@@ -125,7 +120,7 @@ export default function RecruitmentModule({
         </div>
 
         <div className="relative w-full sm:w-64">
-          <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+          <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
           <input
             type="text"
             placeholder="Search prospect..."
@@ -150,7 +145,7 @@ export default function RecruitmentModule({
                   <p className="text-xs text-slate-500">{pnm.major} &bull; {pnm.year}</p>
                 </div>
 
-                <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
+                <span className={`text-xs font-bold px-2 py-0.5 rounded ${
                   pnm.status === 'Bid Accepted' ? 'bg-emerald-100 text-emerald-800' :
                   pnm.status === 'Bid Extended' ? 'bg-gold/20 text-[#917215] border border-gold/40' :
                   'bg-blue-100 text-blue-800'
@@ -160,16 +155,16 @@ export default function RecruitmentModule({
               </div>
 
               <div className="text-xs text-slate-600 space-y-1 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-                <div className="flex justify-between font-mono">
-                  <span className="text-slate-400">Hometown:</span>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Hometown:</span>
                   <span className="font-semibold text-slate-800">{pnm.hometown}</span>
                 </div>
-                <div className="flex justify-between font-mono">
-                  <span className="text-slate-400">High School / Col GPA:</span>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">High School / Col GPA:</span>
                   <span className="font-semibold text-slate-800">{pnm.gpa}</span>
                 </div>
-                <div className="flex justify-between font-mono">
-                  <span className="text-slate-400">Rush Events Attended:</span>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Rush Events Attended:</span>
                   <span className="font-semibold text-slate-800">{pnm.eventsAttended} events</span>
                 </div>
               </div>
@@ -182,7 +177,7 @@ export default function RecruitmentModule({
 
               {/* Voting Bar */}
               <div className="space-y-1.5 pt-2 border-t border-slate-100">
-                <div className="flex justify-between text-xs font-mono">
+                <div className="flex justify-between text-xs">
                   <span className="text-slate-500">Brotherhood Votes:</span>
                   <span className="font-bold text-slate-800">{pnm.votesFor} For / {pnm.votesAgainst} Against ({approvalPct}%)</span>
                 </div>
@@ -190,7 +185,7 @@ export default function RecruitmentModule({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => onVotePNM(pnm.id, 'up')}
-                    className="flex-1 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 text-xs font-bold font-mono transition-all flex items-center justify-center gap-1 cursor-pointer"
+                    className="flex-1 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer"
                   >
                     <ThumbsUp className="w-3.5 h-3.5" /> +1 Vote For
                   </button>
@@ -225,7 +220,7 @@ export default function RecruitmentModule({
                 <UserPlus className="w-5 h-5 text-gold" />
                 Log Potential New Member (PNM)
               </h3>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+              <button onClick={() => setShowAddModal(false)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
             </div>
 
             <form onSubmit={handleAddSubmit} className="space-y-4">
@@ -328,7 +323,7 @@ export default function RecruitmentModule({
 
               <button
                 type="submit"
-                className="w-full bg-navy text-gold hover:bg-slate-800 font-bold py-3 rounded-lg text-xs uppercase tracking-wider transition-all"
+                className="w-full bg-navy text-gold hover:bg-slate-800 font-bold py-3 min-h-11 rounded-lg text-xs transition-all"
               >
                 Add to Rush Pipeline
               </button>

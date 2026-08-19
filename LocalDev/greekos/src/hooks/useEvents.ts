@@ -109,11 +109,11 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
       try {
         await call();
       } catch (err) {
-        // syncApi only refetches on success, so reconcile the optimistic row here.
         await refetchSecurity(eventId).catch(() => { /* leave the optimistic row */ });
         const message = (err as Error).message;
-        if (message.includes('swap_wrong_state')) {
-          throw new Error('That swap request is no longer pending');
+        if (message.includes('swap_wrong_state') || message.includes('no longer pending')) {
+          showToast('That swap request is no longer pending');
+          return;
         }
         throw err;
       }
@@ -269,7 +269,7 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
                 enqueueOutbox({
                   type: 'JOB_REJECTED',
                   recipient: c.memberName,
-                  message: `[GreekOS Task Notice] Your job "${j.title}" on event "${e.title}" was returned with feedback: ${reason}`,
+                  message: `[GreekOS Job Notice] Your job "${j.title}" on event "${e.title}" was returned with feedback: ${reason}`,
                   channel: 'SMS'
                 });
               });

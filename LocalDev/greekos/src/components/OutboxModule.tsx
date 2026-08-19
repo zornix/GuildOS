@@ -56,13 +56,13 @@ export default function OutboxModule({
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'Delivered':
-        return <span className="bg-emerald-100 text-emerald-800 text-[10px] font-mono font-bold px-2 py-0.5 rounded flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Delivered</span>;
+        return <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-2 py-0.5 rounded flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Delivered</span>;
       case 'Sent':
-        return <span className="bg-blue-100 text-blue-800 text-[10px] font-mono font-bold px-2 py-0.5 rounded flex items-center gap-1"><Send className="w-3 h-3" /> Sent</span>;
+        return <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-0.5 rounded flex items-center gap-1"><Send className="w-3 h-3" /> Sent</span>;
       case 'Queued':
-        return <span className="bg-amber-100 text-amber-800 text-[10px] font-mono font-bold px-2 py-0.5 rounded flex items-center gap-1"><Clock className="w-3 h-3" /> Queued</span>;
+        return <span className="bg-amber-100 text-amber-800 text-xs font-bold px-2 py-0.5 rounded flex items-center gap-1"><Clock className="w-3 h-3" /> Queued</span>;
       case 'Failed':
-        return <span className="bg-red-100 text-red-800 text-[10px] font-mono font-bold px-2 py-0.5 rounded flex items-center gap-1"><AlertCircle className="w-3 h-3" /> Failed</span>;
+        return <span className="bg-red-100 text-red-800 text-xs font-bold px-2 py-0.5 rounded flex items-center gap-1"><AlertCircle className="w-3 h-3" /> Failed</span>;
       default:
         return null;
     }
@@ -78,7 +78,7 @@ export default function OutboxModule({
             <h2 className="text-2xl font-display font-extrabold text-slate-900 tracking-tight">
               Transactional Outbox & SMS Log
             </h2>
-            <span className="text-xs font-mono font-bold bg-navy text-gold px-2 py-0.5 rounded-full">
+            <span className="text-xs font-bold bg-navy text-gold px-2 py-0.5 rounded-full">
               Real-time Queue
             </span>
           </div>
@@ -100,26 +100,26 @@ export default function OutboxModule({
       {/* Stats ribbon */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card className="p-4 space-y-1">
-          <span className="text-[10px] font-mono uppercase text-slate-400 font-bold">Total Dispatched</span>
+          <span className="text-xs text-slate-500 font-bold">Total Dispatched</span>
           <div className="text-xl font-display font-black text-slate-900">{notifications.length}</div>
         </Card>
 
         <Card className="p-4 space-y-1">
-          <span className="text-[10px] font-mono uppercase text-emerald-700 font-bold">Delivered</span>
+          <span className="text-xs text-emerald-700 font-bold">Delivered</span>
           <div className="text-xl font-display font-black text-emerald-600">
             {notifications.filter(n => n.status === 'Delivered').length}
           </div>
         </Card>
 
         <Card className="p-4 space-y-1">
-          <span className="text-[10px] font-mono uppercase text-blue-700 font-bold">In Flight / Sent</span>
+          <span className="text-xs text-blue-700 font-bold">In Flight / Sent</span>
           <div className="text-xl font-display font-black text-blue-600">
             {notifications.filter(n => n.status === 'Sent' || n.status === 'Queued').length}
           </div>
         </Card>
 
         <Card className="p-4 space-y-1">
-          <span className="text-[10px] font-mono uppercase text-red-700 font-bold">Delivery Failures</span>
+          <span className="text-xs text-red-700 font-bold">Delivery Failures</span>
           <div className="text-xl font-display font-black text-red-600">
             {notifications.filter(n => n.status === 'Failed').length}
           </div>
@@ -128,8 +128,8 @@ export default function OutboxModule({
 
       {/* Filter and Search Bar */}
       <Card className="p-4 flex flex-col sm:flex-row gap-3 items-center justify-between">
-        <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
-          <span className="text-slate-400 text-[11px] uppercase font-bold">Channel:</span>
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-slate-500 text-xs font-bold">Channel:</span>
           {['ALL', 'SMS', 'Push', 'Email'].map(ch => (
             <button
               key={ch}
@@ -144,7 +144,7 @@ export default function OutboxModule({
         </div>
 
         <div className="relative w-full sm:w-64">
-          <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+          <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
           <input
             type="text"
             placeholder="Search recipient or message..."
@@ -159,7 +159,7 @@ export default function OutboxModule({
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-mono uppercase text-[10px]">
+            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs">
               <tr>
                 <th className="py-3 px-4">Channel & Time</th>
                 <th className="py-3 px-4">Recipient</th>
@@ -171,7 +171,7 @@ export default function OutboxModule({
             <tbody className="divide-y divide-slate-100">
               {filteredNotifs.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-slate-400 italic">
+                  <td colSpan={5} className="py-8 text-center text-slate-500 italic">
                     Outbox is clear. No notification messages match filter.
                   </td>
                 </tr>
@@ -179,11 +179,11 @@ export default function OutboxModule({
                 filteredNotifs.map(n => (
                   <tr key={n.id} className="hover:bg-slate-50/60">
                     <td className="py-3 px-4 whitespace-nowrap">
-                      <div className="flex items-center gap-1.5 font-mono font-bold text-slate-800">
+                      <div className="flex items-center gap-1.5 font-bold text-slate-800">
                         {getChannelIcon(n.channel)}
                         <span>{n.channel}</span>
                       </div>
-                      <div className="text-[10px] text-slate-400 font-mono">{n.timestamp || n.createdAt}</div>
+                      <div className="text-xs text-slate-500">{n.timestamp || n.createdAt}</div>
                     </td>
 
                     <td className="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">
@@ -202,7 +202,7 @@ export default function OutboxModule({
                       {n.status === 'Failed' && (
                         <button
                           onClick={() => onRetryNotification(n.id)}
-                          className="text-[10px] bg-red-50 hover:bg-red-100 text-red-700 font-bold px-2 py-1 rounded transition-all cursor-pointer flex items-center gap-1 ml-auto"
+                          className="text-xs bg-red-50 hover:bg-red-100 text-red-700 font-bold px-2 py-1 rounded transition-all cursor-pointer flex items-center gap-1 ml-auto"
                         >
                           <RotateCw className="w-3 h-3" /> Retry
                         </button>

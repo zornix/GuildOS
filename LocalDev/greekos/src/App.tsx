@@ -16,6 +16,8 @@ import OutboxModule from './components/OutboxModule';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
+  // The events screen shows the same data as a list or on the calendar.
+  const [eventsView, setEventsView] = useState<'list' | 'calendar'>('list');
   const app = useAppData();
   const { roster, events, initiatives, finance, attendance, tasks, recruitment, outbox } = app;
   const { isOfficer, currentMemberName } = app;
@@ -29,7 +31,6 @@ export default function App() {
       currentMemberName={currentMemberName}
       setCurrentMemberName={app.setCurrentMemberName}
       members={roster.members}
-      outboxCount={outbox.outbox.length}
       toastMessage={app.toastMessage}
       loading={app.loading}
       backendDown={app.backendDown}
@@ -52,18 +53,33 @@ export default function App() {
         />
       )}
 
-      {activeTab === 'calendar' && (
+      {activeTab === 'events' && (
+        <div className="flex items-center gap-1 p-0.5 bg-slate-100 rounded-lg w-fit">
+          {(['list', 'calendar'] as const).map(view => (
+            <button
+              key={view}
+              onClick={() => setEventsView(view)}
+              className={`px-3 py-2 rounded-md text-xs font-medium capitalize transition-all cursor-pointer ${
+                eventsView === view ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              {view}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {activeTab === 'events' && eventsView === 'calendar' && (
         <CalendarModule
           events={events.events}
           initiatives={initiatives.initiatives}
           announcements={app.announcements}
           currentMemberName={currentMemberName}
           onVolunteerOrganizer={events.handleVolunteerOrganizer}
-          onNavigateToEvent={() => setActiveTab('events')}
         />
       )}
 
-      {activeTab === 'events' && (
+      {activeTab === 'events' && eventsView === 'list' && (
         <EventsModule
           events={events.events}
           members={roster.members}

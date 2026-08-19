@@ -1,6 +1,6 @@
 // Backend DTO -> prototype type mapping. Everything the backend does not send
 // gets an empty default here — nothing is invented. Client-local demo features
-// (points, GPA, pledge class) stay defaulted.
+// (GPA, pledge class) stay defaulted.
 import {
   AnnouncementDto,
   EventDetailDto,
@@ -112,7 +112,6 @@ export function adaptEvents(rows: EventDto[]): ChapterEvent[] {
       location: row.location || '',
       type: toEventType(row.event_type),
       audience: row.visibility === 'officer' ? 'Officers Only' : 'All Members',
-      points: 0,
       required: !!row.required,
       attendanceTaken: false,
       checkedInCount: row.attendance_count || 0,

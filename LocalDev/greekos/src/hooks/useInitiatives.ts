@@ -67,7 +67,7 @@ export function useInitiatives({ members, syncApi, showToast, refetchJobs }: Dep
         }),
       refetchJobs
     );
-    showToast(`Added task to initiative.`);
+    showToast(`Added job to initiative.`);
   };
 
   const handleClaimInitiativeJob = (initId: string, jobId: string, memberId: string, memberName: string) => {
@@ -132,7 +132,7 @@ export function useInitiatives({ members, syncApi, showToast, refetchJobs }: Dep
       return i;
     }));
     syncApi(() => api.reportJobDone(jobId), refetchJobs);
-    showToast(`Reported initiative task complete!`);
+    showToast(`Reported initiative job complete!`);
   };
 
   const handleApproveInitiativeJob = (initId: string, jobId: string, approverName: string) => {

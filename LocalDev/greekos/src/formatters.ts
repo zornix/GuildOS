@@ -13,11 +13,20 @@ export function monthCells(year: number, month: number): (string | null)[] {
   ];
 }
 
+/** Event start as epoch ms — the only place date + startTime are parsed together. */
+export function eventStart(date: string, startTime: string): number {
+  return new Date(`${date}T${(startTime || '00:00').substring(0, 5)}`).getTime();
+}
+
 /** Unclaiming is locked inside T-36h of the event start, and stays locked once
  *  the event has begun — the same rule tk_uncommit_task enforces (0142). */
 export function isWithin36Hours(date: string, startTime: string, now: number = Date.now()): boolean {
-  const start = new Date(`${date}T${(startTime || '00:00').substring(0, 5)}`).getTime();
-  return start - now < 36 * 60 * 60 * 1000;
+  return eventStart(date, startTime) - now < 36 * 60 * 60 * 1000;
+}
+
+/** Already begun: same lock as above, but the copy has to say so. */
+export function hasStarted(date: string, startTime: string, now: number = Date.now()): boolean {
+  return eventStart(date, startTime) <= now;
 }
 
 /** Money is integer cents end to end; this is the only place it becomes a string. */

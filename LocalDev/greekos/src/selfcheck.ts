@@ -1,7 +1,7 @@
 // src/selfcheck.ts — run: npx tsx src/selfcheck.ts   (exits non-zero on failure)
 import assert from 'node:assert';
 import { adaptTaskToJob, groupJobsByParent } from './adapters';
-import { isoDay, isWithin36Hours, monthCells } from './formatters';
+import { hasStarted, isoDay, isWithin36Hours, monthCells } from './formatters';
 import type { TaskDto } from './api';
 import type { Member } from './types';
 
@@ -47,5 +47,7 @@ const hours = (n: number) => n * 60 * 60 * 1000;
 assert.equal(isWithin36Hours('2026-07-13', '18:00', start - hours(40)), false);
 assert.equal(isWithin36Hours('2026-07-13', '18:00', start - hours(10)), true);
 assert.equal(isWithin36Hours('2026-07-13', '18:00', start + hours(2)), true); // started: stays locked
+assert.equal(hasStarted('2026-07-13', '18:00', start - hours(10)), false);
+assert.equal(hasStarted('2026-07-13', '18:00', start + hours(2)), true);
 
 console.log('selfcheck OK');

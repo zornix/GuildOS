@@ -1,13 +1,8 @@
 import React, { useState } from 'react';
-import { 
-  BookOpen, 
-  Shield, 
-  AlertTriangle, 
-  DollarSign, 
-  Award, 
-  FileText, 
-  ChevronDown, 
-  ChevronRight 
+import {
+  BookOpen,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 import { ChapterRule } from '../types';
 
@@ -37,7 +32,7 @@ export default function RulesModule({ rules }: RulesModuleProps) {
             <h2 className="text-2xl font-display font-extrabold text-slate-900 tracking-tight">
               Chapter Bylaws, Rules & Policies
             </h2>
-            <span className="text-xs font-mono font-bold bg-navy text-gold px-2 py-0.5 rounded-full">
+            <span className="text-xs font-bold bg-navy text-gold px-2 py-0.5 rounded-full">
               Official Constitution
             </span>
           </div>
@@ -48,7 +43,7 @@ export default function RulesModule({ rules }: RulesModuleProps) {
       </div>
 
       {/* Category selector */}
-      <div className="flex flex-wrap gap-2 text-xs font-mono">
+      <div className="flex flex-wrap gap-2 text-xs">
         {categories.map(cat => (
           <button
             key={cat}
@@ -79,7 +74,7 @@ export default function RulesModule({ rules }: RulesModuleProps) {
                 className="p-4 flex items-center justify-between cursor-pointer bg-slate-50/50 hover:bg-slate-50"
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-xs font-mono font-bold text-gold-muted bg-amber-50 px-2 py-1 rounded border border-amber-200/60">
+                  <span className="text-xs font-bold text-amber-900 bg-amber-50 px-2 py-1 rounded border border-amber-200/60">
                     {rule.category}
                   </span>
                   <h3 className="font-bold text-sm text-slate-900">{rule.title}</h3>
@@ -87,18 +82,18 @@ export default function RulesModule({ rules }: RulesModuleProps) {
 
                 <div className="flex items-center gap-3">
                   {rule.fineAmount && (
-                    <span className="text-xs font-mono font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-200">
+                    <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-200">
                       Fine: ${rule.fineAmount}
                     </span>
                   )}
-                  {isExpanded ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+                  {isExpanded ? <ChevronDown className="w-4 h-4 text-slate-500" /> : <ChevronRight className="w-4 h-4 text-slate-500" />}
                 </div>
               </div>
 
               {isExpanded && (
                 <div className="p-5 border-t border-slate-100 bg-white space-y-3 text-xs text-slate-700 leading-relaxed">
                   <p>{rule.description || rule.content}</p>
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] font-mono text-slate-400">
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
                     <span>Alpha Chapter Constitution &bull; Article II &bull; Ratified 2026</span>
                     <span>Executive Board Enforced</span>
                   </div>

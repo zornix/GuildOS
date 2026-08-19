@@ -1,16 +1,12 @@
 import React, { useState } from 'react';
-import { 
-  Terminal, 
-  Send, 
-  Sparkles, 
-  CheckCircle2, 
-  AlertCircle, 
-  Shield, 
-  History, 
-  Zap,
-  HelpCircle
+import {
+  Terminal,
+  CheckCircle2,
+  AlertCircle,
+  History,
+  Zap
 } from 'lucide-react';
-import { Member, ChapterEvent, Fine, Task, PNM, Announcement, Excuse } from '../types';
+import { Member, ChapterEvent, Task, PNM } from '../types';
 import Card from './ui/Card';
 import { formatMoney } from '../formatters';
 
@@ -167,7 +163,6 @@ export default function CommandModule({
             location: 'Fraternity House',
             type: 'Brotherhood',
             audience: 'All Members',
-            points: 5,
             required: false,
             supervisors: [currentMemberName],
             organizers: [],
@@ -294,7 +289,7 @@ export default function CommandModule({
             <h2 className="text-2xl font-display font-extrabold text-slate-900 tracking-tight">
               Natural Language Command Console
             </h2>
-            <span className="text-xs font-mono font-bold bg-navy text-gold px-2 py-0.5 rounded-full">
+            <span className="text-xs font-bold bg-navy text-gold px-2 py-0.5 rounded-full">
               GreekOS NLP Engine
             </span>
           </div>
@@ -306,7 +301,7 @@ export default function CommandModule({
 
       {/* Main Terminal Input Card */}
       <div className="bg-navy text-white rounded-2xl p-6 shadow-xl border border-[#1e2d42] space-y-4">
-        <div className="flex items-center justify-between border-b border-[#1e2d42] pb-3 text-xs font-mono text-slate-400">
+        <div className="flex items-center justify-between border-b border-[#1e2d42] pb-3 text-xs text-slate-400">
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-red-500 inline-block"></span>
             <span className="w-3 h-3 rounded-full bg-yellow-500 inline-block"></span>
@@ -340,7 +335,7 @@ export default function CommandModule({
 
         {/* Quick Suggestion Chips */}
         <div className="space-y-1.5 pt-2">
-          <span className="text-[10px] font-mono uppercase text-slate-400 font-bold block">Quick Command Templates:</span>
+          <span className="text-xs text-slate-400 font-bold block">Quick Command Templates:</span>
           <div className="flex flex-wrap gap-2">
             {quickTemplates.map((t, idx) => (
               <button
@@ -349,7 +344,7 @@ export default function CommandModule({
                   setCommandInput(t);
                   handleRunCommand(t);
                 }}
-                className="text-[11px] font-mono bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white px-2.5 py-1 rounded-md border border-slate-700 transition-all cursor-pointer text-left"
+                className="text-xs font-mono bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white px-2.5 py-1 rounded-md border border-slate-700 transition-all cursor-pointer text-left"
               >
                 {t}
               </button>
@@ -375,10 +370,10 @@ export default function CommandModule({
             <div key={idx} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 font-mono text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-slate-400 text-[10px]">{item.timestamp}</span>
+                  <span className="text-slate-500 text-xs">{item.timestamp}</span>
                   <span className="font-bold text-slate-900 font-mono text-xs">&gt; {item.input}</span>
                 </div>
-                <p className="text-slate-600 text-[11px] font-sans flex items-center gap-1.5">
+                <p className="text-slate-600 text-xs font-sans flex items-center gap-1.5">
                   {item.status === 'Executed' ? (
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                   ) : (
@@ -388,7 +383,7 @@ export default function CommandModule({
                 </p>
               </div>
 
-              <span className={`text-[10px] px-2 py-0.5 rounded font-bold self-start sm:self-center ${
+              <span className={`text-xs px-2 py-0.5 rounded font-bold self-start sm:self-center ${
                 item.status === 'Executed' 
                   ? 'bg-emerald-100 text-emerald-800' 
                   : 'bg-red-100 text-red-800'
