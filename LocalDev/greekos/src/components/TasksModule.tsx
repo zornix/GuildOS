@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
-import { 
-  CheckSquare, 
-  Plus, 
-  Clock, 
-  User, 
-  CheckCircle2, 
-  AlertCircle, 
-  Calendar 
+import {
+  CheckSquare,
+  Plus,
+  Clock,
+  User,
+  CheckCircle2
 } from 'lucide-react';
 import { Task, Member } from '../types';
 import Modal from './ui/Modal';
@@ -75,31 +73,31 @@ export default function TasksModule({
           <div className="flex items-center gap-2">
             <CheckSquare className="w-6 h-6 text-gold" />
             <h2 className="text-2xl font-display font-extrabold text-slate-900 tracking-tight">
-              House Duties & Officer Chores
+              Jobs
             </h2>
-            <span className="text-xs font-mono font-bold bg-navy text-gold px-2 py-0.5 rounded-full">
-              {tasks.filter(t => t.status === 'Pending').length} Pending
+            <span className="text-xs font-semibold bg-navy text-gold px-2 py-0.5 rounded-full">
+              {tasks.filter(t => t.status === 'Pending').length} pending
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Weekly chore assignments, house manager work orders, and committee task boards.
+            House and officer jobs, who owns each one, and when it is due.
           </p>
         </div>
 
         {isOfficer && (
           <button
             onClick={() => setShowAddModal(true)}
-            className="bg-gold hover:bg-[#c5a02b] text-navy font-bold text-xs px-4 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer"
+            className="bg-gold hover:bg-[#c5a02b] text-navy font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            Assign House Task
+            Add job
           </button>
         )}
       </div>
 
       {/* Filter Ribbon */}
-      <div className="flex items-center gap-2 text-xs font-mono">
-        <span className="text-slate-400 font-bold uppercase">Priority:</span>
+      <div className="flex items-center gap-2 text-xs">
+        <span className="text-slate-500 font-bold">Priority:</span>
         {['ALL', 'Urgent', 'High', 'Medium', 'Low'].map(p => (
           <button
             key={p}
@@ -129,19 +127,19 @@ export default function TasksModule({
               }`}
             >
               <div className="flex items-start justify-between gap-2">
-                <span className={`text-[9px] font-mono font-bold uppercase px-2 py-0.5 rounded ${
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
                   task.priority === 'Urgent' 
                     ? 'bg-red-100 text-red-800' 
                     : task.priority === 'High' 
                     ? 'bg-amber-100 text-amber-800' 
                     : 'bg-blue-100 text-blue-800'
                 }`}>
-                  {task.priority} Priority
+                  {task.priority} priority
                 </span>
 
                 <button
                   onClick={() => onToggleTaskStatus(task.id)}
-                  className={`text-xs font-mono font-bold px-2 py-0.5 rounded flex items-center gap-1 cursor-pointer transition-all ${
+                  className={`text-xs font-bold px-2 py-0.5 rounded flex items-center gap-1 cursor-pointer transition-all ${
                     isDone 
                       ? 'bg-emerald-100 text-emerald-800' 
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -159,14 +157,14 @@ export default function TasksModule({
                 <p className="text-xs text-slate-600 mt-1">{task.description}</p>
               </div>
 
-              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs font-mono text-slate-500">
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
                 <span className="flex items-center gap-1">
-                  <User className="w-3 h-3 text-slate-400" />
+                  <User className="w-3 h-3 text-slate-500" />
                   <strong className={isMyTask ? 'text-gold-muted' : 'text-slate-700'}>{task.assignedTo}</strong>
                 </span>
 
                 <span className="flex items-center gap-1">
-                  <Clock className="w-3 h-3 text-slate-400" />
+                  <Clock className="w-3 h-3 text-slate-500" />
                   {task.dueDate}
                 </span>
               </div>
@@ -181,19 +179,19 @@ export default function TasksModule({
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-display font-bold text-base text-slate-900 flex items-center gap-2">
                 <CheckSquare className="w-5 h-5 text-gold" />
-                Assign House Duty or Chore
+                Add job
               </h3>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+              <button onClick={() => setShowAddModal(false)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
             </div>
 
             <form onSubmit={handleAddSubmit} className="space-y-4">
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">Task Title</label>
+                <label className="text-xs font-semibold text-slate-700 block mb-1">Job title</label>
                 <input
                   type="text"
                   value={title}
                   onChange={e => setTitle(e.target.value)}
-                  placeholder="e.g. Kitchen Trash & Recycling Empty"
+                  placeholder="e.g. Empty the kitchen bins"
                   className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-gold"
                   required
                 />
@@ -212,7 +210,7 @@ export default function TasksModule({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1">Assign Brother</label>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">Assign to</label>
                   <select
                     value={assignedToId}
                     onChange={e => setAssignedToId(e.target.value)}
@@ -252,9 +250,9 @@ export default function TasksModule({
 
               <button
                 type="submit"
-                className="w-full bg-navy text-gold hover:bg-slate-800 font-bold py-3 rounded-lg text-xs uppercase tracking-wider transition-all"
+                className="w-full bg-navy text-gold hover:bg-slate-800 font-bold py-3 min-h-11 rounded-lg text-xs transition-all"
               >
-                Assign Task
+                Add job
               </button>
             </form>
         </Modal>

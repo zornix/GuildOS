@@ -1,23 +1,123 @@
 import { useState } from 'react';
 import { INITIAL_EVENTS } from '../data/mockData';
-import { ChapterEvent, EventJob, SecurityAssignment } from '../types';
+import { ChapterEvent, EventJob, Member, SecurityAssignment } from '../types';
 import { api } from '../api';
-import { adaptEvents, toEventBody } from '../adapters';
+import { adaptEventDetail, adaptEvents, adaptSecurityAssignment, toEventBody } from '../adapters';
 import { ShowToast } from './useToast';
 import { EnqueueOutbox } from './useOutbox';
 import { SyncApi } from './useBackend';
 
+/** 409 conflict tokens the jobs API raises, mapped to member-facing copy. */
+const JOB_409: Record<string, string> = {
+  job_not_editable: 'Job can no longer be edited',
+  job_not_cancellable: 'Only unclaimed To-Do jobs can be deleted',
+  job_capacity_below_claims: "Can't set spots below current claims",
+  security_no_edit: 'Security shifts are managed from the Security panel',
+  security_no_cancel: 'Security shifts are managed from the Security panel'
+};
+
+/** Refusals from the notify gate (409 completeness / recipients, 429 cooldown). */
+const NOTIFY_409: Record<string, string> = {
+  'not complete enough': 'Add a supervisor, an organizer and 3 jobs before notifying',
+  'No SMS-reachable': 'No brother has a phone number on file to text',
+  'count changed': 'The member list just changed — send the blast again',
+  'within the last hour': 'This event was already notified in the last hour'
+};
+
+/** api.ts throws `Error('PATCH /path failed (409): <detail>')`, so the conflict
+ *  token is matched inside the message rather than read off a field. */
+const errorToast = (err: unknown, tokens: Record<string, string>, fallback: string) => {
+  const msg = err instanceof Error ? err.message : '';
+  const hit = Object.keys(tokens).find(token => msg.includes(token));
+  return hit ? tokens[hit] : fallback;
+};
+
 interface Deps {
+  members: Member[];
   syncApi: SyncApi;
   showToast: ShowToast;
   enqueueOutbox: EnqueueOutbox;
+  refetchJobs: () => Promise<void>;
 }
 
 /** Chapter events plus their claimable jobs and security shifts. */
-export function useEvents({ syncApi, showToast, enqueueOutbox }: Deps) {
+export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJobs }: Deps) {
   const [events, setEvents] = useState<ChapterEvent[]>(INITIAL_EVENTS);
 
-  const refetchEvents = async () => setEvents(adaptEvents(await api.getEvents()));
+  // adaptEvents rebuilds rows with empty jobs, security and leader lists.
+  // refetchJobs restamps the boards below; security shifts and everything that
+  // only the detail endpoint carries (supervisors, organizers, notify stamp,
+  // door link) load per event, so those are carried across rather than blanked.
+  const refetchEvents = async () => {
+    const rows = adaptEvents(await api.getEvents());
+    setEvents(prev => {
+      const byId = new Map<string, ChapterEvent>(prev.map(e => [e.id, e]));
+      return rows.map(e => {
+        const old = byId.get(e.id);
+        return old ? {
+          ...e,
+          securityAssignments: old.securityAssignments,
+          supervisors: old.supervisors,
+          organizers: old.organizers,
+          checkedInCount: old.checkedInCount,
+          notifiedAt: old.notifiedAt,
+          checkInToken: old.checkInToken,
+          checkInLinkActive: old.checkInLinkActive
+        } : e;
+      });
+    });
+    await refetchJobs();
+  };
+
+  /** Supervisors, organizers, the notify stamp and the live door link exist only
+   *  on the per-event endpoints, so the selected event's row is patched here. */
+  const refetchEventDetail = async (eventId: string) => {
+    const [detail, link] = await Promise.all([api.getEvent(eventId), api.getCheckInLink(eventId)]);
+    setEvents(prev => prev.map(e => e.id === eventId ? {
+      ...e,
+      ...adaptEventDetail(detail, members),
+      checkInToken: link.short_code,
+      checkInLinkActive: !!link.short_code
+    } : e));
+  };
+
+  /** The events screen calls this whenever its selection lands on an event; a
+   *  failure just leaves that row showing what it already had. */
+  const handleSelectEvent = (eventId: string) => {
+    refetchEventDetail(eventId).catch(err => console.error(`Event detail load failed for ${eventId}`, err));
+  };
+
+  /** Reload one event's security roster from the backend. */
+  const refetchSecurity = async (eventId: string) => {
+    const membersById = new Map(members.map(m => [m.id, m]));
+    const rows = await api.listSecurity(eventId);
+    const securityAssignments = rows.map(row => adaptSecurityAssignment(row, membersById));
+    setEvents(prev => prev.map(e => e.id === eventId ? { ...e, securityAssignments } : e));
+  };
+
+  /** The swap id lives on the assignment row, so read it fresh before acting. */
+  const pendingSwapId = async (eventId: string, assignmentId: string) => {
+    const rows = await api.listSecurity(eventId);
+    const swap = rows.find(r => r.task_id === assignmentId)?.pending_swap;
+    if (!swap || swap.status !== 'pending') throw new Error('That swap request is no longer pending');
+    return swap.id;
+  };
+
+  /** Swap mutations share one 409 the UI can put in plain words. */
+  const syncSwap = (eventId: string, call: () => Promise<unknown>) =>
+    syncApi(async () => {
+      try {
+        await call();
+      } catch (err) {
+        await refetchSecurity(eventId).catch(() => { /* leave the optimistic row */ });
+        const message = (err as Error).message;
+        if (message.includes('swap_wrong_state') || message.includes('no longer pending')) {
+          showToast('That swap request is no longer pending');
+          return;
+        }
+        throw err;
+      }
+    }, () => refetchSecurity(eventId));
 
   const handleAddEvent = (newEvent: Omit<ChapterEvent, 'id' | 'attendanceTaken' | 'checkedInCount'>) => {
     const ev: ChapterEvent = {
@@ -25,8 +125,8 @@ export function useEvents({ syncApi, showToast, enqueueOutbox }: Deps) {
       id: 'e_' + Math.random().toString(36).substring(2, 9),
       attendanceTaken: false,
       checkedInCount: 0,
-      checkInPin: Math.floor(1000 + Math.random() * 9000).toString(),
-      checkInLinkActive: true,
+      // A fresh event has no check-in link until an officer opens the door.
+      checkInLinkActive: false,
       securityAssignments: []
     };
     setEvents(prev => [ev, ...prev]);
@@ -44,11 +144,17 @@ export function useEvents({ syncApi, showToast, enqueueOutbox }: Deps) {
       if (e.id === eventId) {
         const currentOrgs = e.organizers || [];
         if (!currentOrgs.includes(memberName)) {
-          return { ...e, organizers: [...currentOrgs, memberName] };
+          return {
+            ...e,
+            organizers: [...currentOrgs, memberName],
+            organizerCount: (e.organizerCount || currentOrgs.length) + 1
+          };
         }
       }
       return e;
     }));
+    // The backend signs up the signed-in member; it has no impersonation concept.
+    syncApi(() => api.addOrganizer(eventId), () => refetchEventDetail(eventId));
     showToast(`Volunteered as Organizer for event!`);
   };
 
@@ -74,6 +180,8 @@ export function useEvents({ syncApi, showToast, enqueueOutbox }: Deps) {
       }
       return e;
     }));
+    // The backend commits the signed-in member; it has no impersonation concept.
+    syncApi(() => api.commitTask(jobId), refetchJobs);
     showToast(`Claimed job successfully!`);
   };
 
@@ -97,6 +205,7 @@ export function useEvents({ syncApi, showToast, enqueueOutbox }: Deps) {
       }
       return e;
     }));
+    syncApi(() => api.uncommitTask(jobId), refetchJobs);
     showToast(`Unclaimed job.`);
   };
 
@@ -120,6 +229,7 @@ export function useEvents({ syncApi, showToast, enqueueOutbox }: Deps) {
       }
       return e;
     }));
+    syncApi(() => api.reportJobDone(jobId), refetchJobs);
     showToast(`Reported job complete! Awaiting supervisor sign-off.`);
   };
 
@@ -143,6 +253,7 @@ export function useEvents({ syncApi, showToast, enqueueOutbox }: Deps) {
       }
       return e;
     }));
+    syncApi(() => api.approveJob(jobId), refetchJobs);
     showToast(`Job approved and verified by supervisor.`);
   };
 
@@ -158,7 +269,7 @@ export function useEvents({ syncApi, showToast, enqueueOutbox }: Deps) {
                 enqueueOutbox({
                   type: 'JOB_REJECTED',
                   recipient: c.memberName,
-                  message: `[GreekOS Task Notice] Your job "${j.title}" on event "${e.title}" was returned with feedback: ${reason}`,
+                  message: `[GreekOS Job Notice] Your job "${j.title}" on event "${e.title}" was returned with feedback: ${reason}`,
                   channel: 'SMS'
                 });
               });
@@ -175,6 +286,7 @@ export function useEvents({ syncApi, showToast, enqueueOutbox }: Deps) {
       }
       return e;
     }));
+    syncApi(() => api.rejectJob(jobId, reason), refetchJobs);
     showToast(`Job rejected with feedback sent to brother outbox.`);
   };
 
@@ -191,7 +303,50 @@ export function useEvents({ syncApi, showToast, enqueueOutbox }: Deps) {
       }
       return e;
     }));
+    syncApi(
+      () =>
+        api.createJob({
+          title: jobData.title,
+          description: jobData.description,
+          people_needed: jobData.peopleNeeded,
+          event_id: eventId
+        }),
+      refetchJobs
+    );
     showToast(`Added job to event.`);
+  };
+
+  // Edit/delete are not applied optimistically: the backend can refuse either
+  // (claimed job, capacity below claims, security shift), so the refetch is the
+  // only source of truth and the 409 copy explains the refusal.
+  const handleEditJob = (
+    _eventId: string,
+    jobId: string,
+    patch: { title?: string; description?: string; peopleNeeded?: number }
+  ) => {
+    syncApi(async () => {
+      try {
+        await api.updateJob(jobId, {
+          title: patch.title,
+          description: patch.description,
+          people_needed: patch.peopleNeeded
+        });
+        showToast('Job updated.');
+      } catch (err) {
+        showToast(errorToast(err, JOB_409, 'Could not update job'));
+      }
+    }, refetchJobs);
+  };
+
+  const handleDeleteJob = (_eventId: string, jobId: string) => {
+    syncApi(async () => {
+      try {
+        await api.deleteJob(jobId);
+        showToast('Job deleted.');
+      } catch (err) {
+        showToast(errorToast(err, JOB_409, 'Could not delete job'));
+      }
+    }, refetchJobs);
   };
 
   const handleSendEventNotifyBlast = (eventId: string) => {
@@ -199,32 +354,44 @@ export function useEvents({ syncApi, showToast, enqueueOutbox }: Deps) {
     if (!ev) return;
 
     setEvents(prev => prev.map(e => e.id === eventId ? { ...e, notifiedAt: new Date().toISOString() } : e));
+    // The outbox tab stays a demo surface; the real send is the API call below,
+    // and the refetch replaces the optimistic stamp with last_notified_at.
     enqueueOutbox({
       type: 'EVENT_NOTIFY',
       recipient: 'All Active Chapter Brothers (10)',
       message: `[GreekOS Broadcast] ${ev.title} on ${ev.date} at ${ev.time} (${ev.location}). Open jobs are ready for sign-up!`,
       channel: 'SMS'
     });
-    showToast(`Notification blast dispatched to Chapter outbox!`);
-  };
-
-  const handleToggleCheckInLink = (eventId: string) => {
-    setEvents(prev => prev.map(e => {
-      if (e.id === eventId) {
-        return { ...e, checkInLinkActive: !e.checkInLinkActive };
+    syncApi(async () => {
+      try {
+        // Two-phase confirm: send back the count the preview just resolved.
+        const preview = await api.notifyPreview(eventId);
+        await api.notifyEvent(eventId, preview.recipient_count);
+        showToast('Notification blast sent to the chapter.');
+      } catch (err) {
+        showToast(errorToast(err, NOTIFY_409, 'Could not send the notification blast'));
       }
-      return e;
-    }));
+    }, () => refetchEventDetail(eventId));
   };
 
-  const handleAssignSecurity = (eventId: string, memberId: string, memberName: string, station: string) => {
+  /** Opening the door creates a short-lived check-in link; closing it kills it. */
+  const handleToggleCheckInLink = (eventId: string) => {
+    const wasActive = !!events.find(e => e.id === eventId)?.checkInLinkActive;
+    setEvents(prev => prev.map(e => e.id === eventId ? { ...e, checkInLinkActive: !wasActive } : e));
+    syncApi(
+      () => wasActive ? api.closeCheckInLink(eventId) : api.openCheckInLink(eventId),
+      () => refetchEventDetail(eventId)
+    );
+  };
+
+  const handleAssignSecurity = (eventId: string, memberId: string, memberName: string, _station?: string) => {
     setEvents(prev => prev.map(e => {
       if (e.id === eventId) {
         const newAssignment: SecurityAssignment = {
           id: 'sec_' + Math.random().toString(36).substring(2, 9),
           memberId,
           memberName,
-          station,
+          station: '',
           status: 'Confirmed'
         };
         return {
@@ -234,10 +401,11 @@ export function useEvents({ syncApi, showToast, enqueueOutbox }: Deps) {
       }
       return e;
     }));
+    syncApi(() => api.assignSecurity(eventId, memberId), () => refetchSecurity(eventId));
     enqueueOutbox({
       type: 'SECURITY_ASSIGNED',
       recipient: memberName,
-      message: `[GreekOS Security] You have been assigned to station: ${station}`,
+      message: `[GreekOS Security] You have been assigned to a security shift.`,
       channel: 'SMS'
     });
     showToast(`Assigned ${memberName} to security shift.`);
@@ -263,6 +431,7 @@ export function useEvents({ syncApi, showToast, enqueueOutbox }: Deps) {
       }
       return e;
     }));
+    syncSwap(eventId, () => api.requestSwap(eventId, assignmentId, targetMemberId));
 
     enqueueOutbox({
       type: 'SECURITY_SWAP_REQUEST',
@@ -304,13 +473,41 @@ export function useEvents({ syncApi, showToast, enqueueOutbox }: Deps) {
       }
       return e;
     }));
+    syncSwap(eventId, async () => {
+      const swapId = await pendingSwapId(eventId, assignmentId);
+      await (accept ? api.acceptSwap(eventId, swapId) : api.declineSwap(eventId, swapId));
+    });
     showToast(accept ? 'Accepted security shift swap.' : 'Declined shift swap.');
+  };
+
+  /** The requester withdraws their own pending swap request. */
+  const handleCancelSecuritySwap = (eventId: string, assignmentId: string) => {
+    setEvents(prev => prev.map(e => {
+      if (e.id === eventId && e.securityAssignments) {
+        return {
+          ...e,
+          securityAssignments: e.securityAssignments.map(s => s.id === assignmentId ? {
+            ...s,
+            swapRequestedWithId: undefined,
+            swapRequestedWithName: undefined,
+            swapStatus: 'None' as const
+          } : s)
+        };
+      }
+      return e;
+    }));
+    syncSwap(eventId, async () => {
+      const swapId = await pendingSwapId(eventId, assignmentId);
+      await api.cancelSwap(eventId, swapId);
+    });
+    showToast('Cancelled your shift swap request.');
   };
 
   return {
     events,
     setEvents,
     refetchEvents,
+    handleSelectEvent,
     handleAddEvent,
     handleUpdateEvent,
     handleVolunteerOrganizer,
@@ -320,10 +517,13 @@ export function useEvents({ syncApi, showToast, enqueueOutbox }: Deps) {
     handleApproveJob,
     handleRejectJob,
     handleAddJobToEvent,
+    handleEditJob,
+    handleDeleteJob,
     handleSendEventNotifyBlast,
     handleToggleCheckInLink,
     handleAssignSecurity,
     handleRequestSecuritySwap,
-    handleRespondSecuritySwap
+    handleRespondSecuritySwap,
+    handleCancelSecuritySwap
   };
 }

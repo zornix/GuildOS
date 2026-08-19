@@ -1,14 +1,11 @@
 import React, { useState } from 'react';
-import { 
-  DollarSign, 
-  CreditCard, 
-  AlertCircle, 
-  Plus, 
-  CheckCircle, 
-  History, 
-  FileText, 
-  Search, 
-  TrendingUp, 
+import {
+  DollarSign,
+  CreditCard,
+  AlertCircle,
+  Plus,
+  History,
+  Search,
   Receipt,
   RotateCcw,
   ShieldCheck
@@ -151,14 +148,11 @@ export default function FinanceModule({
           <div className="flex items-center gap-2">
             <DollarSign className="w-6 h-6 text-gold" />
             <h2 className="text-2xl font-display font-extrabold text-slate-900 tracking-tight">
-              Treasury, Dues & Audit Ledger
+              Treasury
             </h2>
-            <span className="text-xs font-mono font-bold bg-navy text-gold px-2 py-0.5 rounded-full">
-              Integer-Cents Ledger
-            </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Track receivables, dues collections, disciplinary fines, and inspect the permanent append-only audit ledger.
+            Dues, payments, fines, and the chapter ledger.
           </p>
         </div>
 
@@ -166,7 +160,7 @@ export default function FinanceModule({
           {!isOfficer && (
             <button
               onClick={() => setShowPayModal(true)}
-              className="bg-gold hover:bg-[#c5a02b] text-navy font-bold text-xs px-4 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer"
+              className="bg-gold hover:bg-[#c5a02b] text-navy font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer"
             >
               <CreditCard className="w-4 h-4" />
               Pay My Dues / Fines
@@ -176,7 +170,7 @@ export default function FinanceModule({
           {isOfficer && (
             <button
               onClick={() => setShowIssueFineModal(true)}
-              className="bg-red-700 hover:bg-red-800 text-white font-bold text-xs px-4 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer"
+              className="bg-red-700 hover:bg-red-800 text-white font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               Issue Fine Citation
@@ -188,27 +182,27 @@ export default function FinanceModule({
       {/* KPI Cards Ribbon */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card className="p-5 space-y-1">
-          <span className="text-[11px] font-bold font-mono text-slate-500 uppercase tracking-wider">Total Chapter Receivables</span>
+          <span className="text-xs font-bold text-slate-500">Total Chapter Receivables</span>
           <div className="text-2xl font-display font-black text-slate-900">
             {formatMoney(totalReceivablesCents)}
           </div>
-          <span className="text-[10px] text-slate-400 font-mono">Outstanding brother dues balances</span>
+          <span className="text-xs text-slate-500">Outstanding brother dues balances</span>
         </Card>
 
         <Card className="p-5 space-y-1">
-          <span className="text-[11px] font-bold font-mono text-emerald-700 uppercase tracking-wider">Collected This Semester</span>
+          <span className="text-xs font-bold text-emerald-700">Collected This Semester</span>
           <div className="text-2xl font-display font-black text-emerald-600">
             {formatMoney(totalPaidCents)}
           </div>
-          <span className="text-[10px] text-emerald-700/80 font-mono">{payments.length} verified transactions</span>
+          <span className="text-xs text-emerald-700/80">{payments.length} verified transactions</span>
         </Card>
 
         <Card className="p-5 space-y-1">
-          <span className="text-[11px] font-bold font-mono text-red-700 uppercase tracking-wider">Unpaid Fines Outstanding</span>
+          <span className="text-xs font-bold text-red-700">Unpaid Fines Outstanding</span>
           <div className="text-2xl font-display font-black text-red-600">
             {formatMoney(totalUnpaidFinesCents)}
           </div>
-          <span className="text-[10px] text-red-700/80 font-mono">{fines.filter(f => f.status === 'Unpaid').length} active citations</span>
+          <span className="text-xs text-red-700/80">{fines.filter(f => f.status === 'Unpaid').length} active citations</span>
         </Card>
       </div>
 
@@ -273,7 +267,7 @@ export default function FinanceModule({
             </div>
 
             <div className="relative w-full sm:w-64">
-              <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+              <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
               <input
                 type="text"
                 placeholder="Search brother..."
@@ -286,7 +280,7 @@ export default function FinanceModule({
 
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-left">
-              <thead className="bg-slate-50 border-y border-slate-200 text-slate-600 font-mono uppercase text-[10px]">
+              <thead className="bg-slate-50 border-y border-slate-200 text-slate-600 text-xs">
                 <tr>
                   <th className="py-2.5 px-3">Brother</th>
                   <th className="py-2.5 px-3">Standing</th>
@@ -304,10 +298,10 @@ export default function FinanceModule({
                     <tr key={mem.id} className="hover:bg-slate-50/60">
                       <td className="py-3 px-3">
                         <div className="font-bold text-slate-900">{mem.name}</div>
-                        <div className="text-[10px] text-slate-500 font-mono">{mem.role}</div>
+                        <div className="text-xs text-slate-500">{mem.role}</div>
                       </td>
                       <td className="py-3 px-3">
-                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-semibold ${
+                        <span className={`text-xs px-2 py-0.5 rounded font-semibold ${
                           mem.standing === 'Good Standing' 
                             ? 'bg-emerald-50 text-emerald-800' 
                             : 'bg-red-50 text-red-800'
@@ -315,7 +309,7 @@ export default function FinanceModule({
                           {mem.standing}
                         </span>
                       </td>
-                      <td className="py-3 px-3 text-slate-600 font-mono">{mem.pledgeClass}</td>
+                      <td className="py-3 px-3 text-slate-600">{mem.pledgeClass}</td>
                       <td className="py-3 px-3 text-right">
                         <span className={`font-mono font-bold text-xs ${
                           balanceCents > 0 ? 'text-red-600' : 'text-emerald-600'
@@ -338,7 +332,7 @@ export default function FinanceModule({
                                 reference: 'IN_PERSON_CASH'
                               });
                             }}
-                            className="text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold px-2 py-1 rounded transition-all cursor-pointer"
+                            className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold px-2 py-1 rounded transition-all cursor-pointer"
                           >
                             Mark Paid
                           </button>
@@ -367,7 +361,7 @@ export default function FinanceModule({
               </p>
             </div>
 
-            <div className="flex gap-1 bg-slate-100 p-1 rounded-lg text-xs font-mono">
+            <div className="flex gap-1 bg-slate-100 p-1 rounded-lg text-xs">
               {['ALL', 'DUES_CHARGE', 'FINE_CHARGE', 'PAYMENT_CREDIT', 'ADJUSTMENT_CORRECTION'].map(ft => (
                 <button
                   key={ft}
@@ -384,7 +378,7 @@ export default function FinanceModule({
 
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-left">
-              <thead className="bg-slate-50 border-y border-slate-200 text-slate-600 font-mono uppercase text-[10px]">
+              <thead className="bg-slate-50 border-y border-slate-200 text-slate-600 text-xs">
                 <tr>
                   <th className="py-2.5 px-3">Seq #</th>
                   <th className="py-2.5 px-3">Timestamp</th>
@@ -402,10 +396,10 @@ export default function FinanceModule({
                   return (
                     <tr key={entry.id} className="hover:bg-slate-50/60 text-xs">
                       <td className="py-3 px-3 font-bold text-slate-500">#{entry.sequence}</td>
-                      <td className="py-3 px-3 text-slate-500 text-[11px]">{entry.timestamp}</td>
+                      <td className="py-3 px-3 text-slate-500 text-xs">{entry.timestamp}</td>
                       <td className="py-3 px-3 font-bold text-slate-900 font-sans">{entry.memberName}</td>
                       <td className="py-3 px-3">
-                        <span className={`text-[9px] px-2 py-0.5 rounded font-bold ${
+                        <span className={`text-xs px-2 py-0.5 rounded font-bold ${
                           entry.type === 'PAYMENT_CREDIT' 
                             ? 'bg-emerald-100 text-emerald-800' 
                             : entry.type === 'FINE_CHARGE' 
@@ -419,9 +413,9 @@ export default function FinanceModule({
                       </td>
                       <td className="py-3 px-3 font-sans">
                         <div className="text-slate-800 font-medium">{entry.description}</div>
-                        <div className="text-[10px] text-slate-400 font-mono">Auth: {entry.authorizedBy}</div>
+                        <div className="text-xs text-slate-500">Auth: {entry.authorizedBy}</div>
                         {entry.correctsEntryId && (
-                          <div className="text-[10px] text-purple-700 font-mono mt-0.5">
+                          <div className="text-xs text-purple-700 mt-0.5">
                             Ref Correction &rarr; {entry.correctsEntryId}
                           </div>
                         )}
@@ -439,7 +433,7 @@ export default function FinanceModule({
                               setShowCorrectionModal(entry);
                               setCorrectionAmountCents(-entry.amountCents);
                             }}
-                            className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded transition-all cursor-pointer flex items-center gap-1 ml-auto"
+                            className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded transition-all cursor-pointer flex items-center gap-1 ml-auto"
                             title="Post linked offsetting correction to immutable ledger"
                           >
                             <RotateCcw className="w-3 h-3" />
@@ -472,12 +466,12 @@ export default function FinanceModule({
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-xs text-slate-900">{f.memberName}</span>
-                    <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded ${
                       f.status === 'Paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
                     }`}>
                       {f.status}
                     </span>
-                    <span className="text-[10px] font-mono text-slate-400">{f.date}</span>
+                    <span className="text-xs text-slate-500">{f.date}</span>
                   </div>
                   <p className="text-xs text-slate-600">{f.reason}</p>
                 </div>
@@ -514,7 +508,7 @@ export default function FinanceModule({
 
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-left">
-              <thead className="bg-slate-50 border-y border-slate-200 text-slate-600 font-mono uppercase text-[10px]">
+              <thead className="bg-slate-50 border-y border-slate-200 text-slate-600 text-xs">
                 <tr>
                   <th className="py-2.5 px-3">Date</th>
                   <th className="py-2.5 px-3">Brother</th>
@@ -549,7 +543,7 @@ export default function FinanceModule({
                 <AlertCircle className="w-5 h-5 text-red-600" />
                 Issue Fine Citation
               </h3>
-              <button onClick={() => setShowIssueFineModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+              <button onClick={() => setShowIssueFineModal(false)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
             </div>
 
             <form onSubmit={handleIssueFineSubmit} className="space-y-4">
@@ -591,7 +585,7 @@ export default function FinanceModule({
 
               <button
                 type="submit"
-                className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg text-xs uppercase tracking-wider transition-all"
+                className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 min-h-11 rounded-lg text-xs transition-all"
               >
                 Assess Fine to Member Ledger
               </button>
@@ -607,7 +601,7 @@ export default function FinanceModule({
                 <CreditCard className="w-5 h-5 text-gold" />
                 Settle Dues / Fines Balance
               </h3>
-              <button onClick={() => setShowPayModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+              <button onClick={() => setShowPayModal(false)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
             </div>
 
             <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs mb-4">
@@ -644,7 +638,7 @@ export default function FinanceModule({
 
               <button
                 type="submit"
-                className="w-full bg-gold hover:bg-[#c5a02b] text-navy font-bold py-3 rounded-lg text-xs uppercase tracking-wider transition-all"
+                className="w-full bg-gold hover:bg-[#c5a02b] text-navy font-bold py-3 min-h-11 rounded-lg text-xs transition-all"
               >
                 Submit Payment Authorization
               </button>
@@ -660,7 +654,7 @@ export default function FinanceModule({
                 <RotateCcw className="w-5 h-5 text-purple-600" />
                 Post Linked Ledger Correction
               </h3>
-              <button onClick={() => setShowCorrectionModal(null)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+              <button onClick={() => setShowCorrectionModal(null)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
             </div>
 
             <p className="text-xs text-slate-600 mb-3">
@@ -693,7 +687,7 @@ export default function FinanceModule({
 
               <button
                 type="submit"
-                className="w-full bg-purple-700 hover:bg-purple-800 text-white font-bold py-3 rounded-lg text-xs uppercase tracking-wider transition-all"
+                className="w-full bg-purple-700 hover:bg-purple-800 text-white font-bold py-3 min-h-11 rounded-lg text-xs transition-all"
               >
                 Commit Linked Audit Adjustment
               </button>

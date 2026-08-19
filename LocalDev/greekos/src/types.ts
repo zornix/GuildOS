@@ -39,6 +39,8 @@ export interface Member {
   pledgeClass: string; // e.g. "Fall '22"
   roomNumber?: string;
   securityHoursServed?: number;
+  /** Approved security jobs already held (D17) — picker decoration only. */
+  priorSecurityShifts?: number;
 }
 
 export type EventType = 
@@ -90,18 +92,20 @@ export interface ChapterEvent {
   location: string;
   type: EventType;
   audience: 'All Members' | 'Officers Only' | 'Actives Only' | 'Pledges Only';
-  points: number;
   required: boolean;
   attendanceTaken: boolean;
   checkedInCount?: number;
-  supervisors: string[]; // member names / IDs (Officers)
-  organizers: string[]; // member names / IDs (Chairs/members)
+  supervisors: string[]; // member names (loaded with the event detail)
+  organizers: string[]; // member names (loaded with the event detail)
+  /** Backend count from the events list — names only arrive with the detail. */
+  organizerCount?: number;
   jobs: EventJob[];
+  jobCount?: number;
+  openJobCount?: number;
   securityAssignments?: SecurityAssignment[];
-  notifiedAt?: string; // set when notify gate passes and blast is sent
+  notifiedAt?: string; // last notify blast (backend last_notified_at)
   checkInLinkActive?: boolean;
-  checkInToken?: string;
-  checkInPin?: string;
+  checkInToken?: string; // live door code (backend check-in link short_code)
 }
 
 export interface Initiative {
@@ -234,6 +238,8 @@ export interface Announcement {
   date: string;
   priority: 'Normal' | 'Urgent' | 'Mandatory';
   channels: ('Calendar' | 'SMS' | 'Push')[];
+  calendarDate?: string; // YYYY-MM-DD — the day it occupies on the calendar
+  calendarTime?: string; // HH:MM, only ever set alongside calendarDate
 }
 
 export interface OutboxNotification {

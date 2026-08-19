@@ -1,16 +1,10 @@
 import React, { useState } from 'react';
-import { 
-  Users, 
-  Search, 
-  GraduationCap, 
-  Award, 
-  Shield, 
-  DollarSign, 
-  Phone, 
-  Mail, 
-  Plus, 
-  CheckCircle2, 
-  AlertTriangle 
+import {
+  Users,
+  Search,
+  GraduationCap,
+  Phone,
+  Plus
 } from 'lucide-react';
 import { Member } from '../types';
 import Modal from './ui/Modal';
@@ -87,21 +81,21 @@ export default function RosterModule({
           <div className="flex items-center gap-2">
             <Users className="w-6 h-6 text-gold" />
             <h2 className="text-2xl font-display font-extrabold text-slate-900 tracking-tight">
-              Chapter Roster & Brotherhood
+              Roster
             </h2>
-            <span className="text-xs font-mono font-bold bg-navy text-gold px-2 py-0.5 rounded-full">
-              {members.length} Total Brothers
+            <span className="text-xs font-semibold bg-navy text-gold px-2 py-0.5 rounded-full">
+              {members.length} members
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Official roll of officers, active members, pledge educators, and new initiates.
+            Everyone on the chapter roll, from new pledges to officers.
           </p>
         </div>
 
         {isOfficer && (
           <button
             onClick={() => setShowAddModal(true)}
-            className="bg-gold hover:bg-[#c5a02b] text-navy font-bold text-xs px-4 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer"
+            className="bg-gold hover:bg-[#c5a02b] text-navy font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             Add Member
@@ -111,7 +105,7 @@ export default function RosterModule({
 
       {/* Filter and Search Bar */}
       <Card className="p-4 flex flex-col sm:flex-row gap-3 items-center justify-between">
-        <div className="flex flex-wrap items-center gap-1.5 text-xs font-mono">
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
           {['ALL', 'President', 'Treasurer', 'Risk Manager', 'Active', 'Pledge'].map(r => (
             <button
               key={r}
@@ -126,7 +120,7 @@ export default function RosterModule({
         </div>
 
         <div className="relative w-full sm:w-64">
-          <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+          <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
           <input
             type="text"
             placeholder="Search roster..."
@@ -141,12 +135,13 @@ export default function RosterModule({
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-mono uppercase text-[10px]">
+            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs">
               <tr>
                 <th className="py-3 px-4">Brother & Role</th>
                 <th className="py-3 px-4">Pledge Class</th>
                 <th className="py-3 px-4">Academic Standing</th>
-                <th className="py-3 px-4">Attendance</th>
+                {/* Attendance rates are for the member themself and officers only. */}
+                {isOfficer && <th className="py-3 px-4">Attendance</th>}
                 <th className="py-3 px-4">Dues Balance</th>
                 <th className="py-3 px-4">Risk Shifts</th>
                 <th className="py-3 px-4 text-right">Actions</th>
@@ -160,31 +155,33 @@ export default function RosterModule({
                   <tr key={mem.id} className="hover:bg-slate-50/60">
                     <td className="py-3 px-4">
                       <div className="font-bold text-slate-900 text-sm">{mem.name}</div>
-                      <div className="text-[11px] text-gold-muted font-semibold font-mono">{mem.role}</div>
-                      <div className="text-[10px] text-slate-400">{mem.major} &bull; Room {mem.roomNumber || 'N/A'}</div>
+                      <div className="text-xs text-gold-muted font-semibold">{mem.role}</div>
+                      <div className="text-xs text-slate-500">{mem.major} &bull; Room {mem.roomNumber || 'N/A'}</div>
                     </td>
 
-                    <td className="py-3 px-4 text-slate-600 font-mono">
+                    <td className="py-3 px-4 text-slate-600">
                       {mem.pledgeClass}
                     </td>
 
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-1.5">
-                        <GraduationCap className="w-3.5 h-3.5 text-slate-400" />
-                        <span className="font-mono font-bold text-slate-800">{mem.gpa} GPA</span>
+                        <GraduationCap className="w-3.5 h-3.5 text-slate-500" />
+                        <span className="font-bold text-slate-800">{mem.gpa} GPA</span>
                       </div>
-                      <span className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded mt-0.5 inline-block ${
+                      <span className={`text-xs font-bold px-1.5 py-0.2 rounded mt-0.5 inline-block ${
                         mem.standing === 'Good Standing' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
                       }`}>
                         {mem.standing}
                       </span>
                     </td>
 
-                    <td className="py-3 px-4 font-mono font-bold text-slate-800">
-                      <span className={mem.attendanceRate >= 85 ? 'text-emerald-600' : 'text-red-600'}>
-                        {mem.attendanceRate}%
-                      </span>
-                    </td>
+                    {isOfficer && (
+                      <td className="py-3 px-4 font-bold text-slate-800">
+                        <span className={mem.attendanceRate >= 85 ? 'text-emerald-600' : 'text-red-600'}>
+                          {mem.attendanceRate}%
+                        </span>
+                      </td>
+                    )}
 
                     <td className="py-3 px-4 font-mono font-bold">
                       <span className={mem.duesBalance > 0 ? 'text-red-600' : 'text-emerald-600'}>
@@ -192,7 +189,7 @@ export default function RosterModule({
                       </span>
                     </td>
 
-                    <td className="py-3 px-4 font-mono text-slate-600">
+                    <td className="py-3 px-4 text-slate-600">
                       {mem.securityHoursServed || 0} hrs
                     </td>
 
@@ -201,7 +198,7 @@ export default function RosterModule({
                         <select
                           value={mem.standing}
                           onChange={e => onUpdateStanding(mem.id, e.target.value as any)}
-                          className="text-[10px] font-mono border border-slate-200 rounded p-1 bg-white cursor-pointer"
+                          className="text-xs border border-slate-200 rounded p-1 bg-white cursor-pointer"
                         >
                           <option value="Good Standing">Good Standing</option>
                           <option value="Academic Probation">Academic Probation</option>
@@ -226,7 +223,7 @@ export default function RosterModule({
                 <Users className="w-5 h-5 text-gold" />
                 Enroll New Brother on Roster
               </h3>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+              <button onClick={() => setShowAddModal(false)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
             </div>
 
             <form onSubmit={handleAddSubmit} className="space-y-4">
@@ -321,7 +318,7 @@ export default function RosterModule({
 
               <button
                 type="submit"
-                className="w-full bg-navy text-gold hover:bg-slate-800 font-bold py-3 rounded-lg text-xs uppercase tracking-wider transition-all mt-2 cursor-pointer"
+                className="w-full bg-navy text-gold hover:bg-slate-800 font-bold py-3 min-h-11 rounded-lg text-xs transition-all mt-2 cursor-pointer"
               >
                 Add Brother to Roster
               </button>

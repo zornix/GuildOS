@@ -1,23 +1,24 @@
-import React, { useState } from 'react';
-import { 
-  Calendar, 
-  MapPin, 
-  Clock, 
-  Plus, 
-  Shield, 
-  UserCheck, 
-  AlertTriangle, 
-  CheckCircle2, 
-  Send, 
-  QrCode, 
-  KeyRound, 
-  ArrowLeftRight, 
-  Lock, 
-  Info,
+import React, { useEffect, useState } from 'react';
+import {
+  Calendar,
+  MapPin,
+  Plus,
+  Shield,
+  UserCheck,
+  AlertTriangle,
+  CheckCircle2,
+  Send,
+  QrCode,
+  KeyRound,
+  ArrowLeftRight,
+  Lock,
   XCircle,
-  Sparkles
+  Sparkles,
+  Pencil,
+  Trash2
 } from 'lucide-react';
-import { ChapterEvent, EventJob, Member, SecurityAssignment, EventType } from '../types';
+import { ChapterEvent, EventJob, Member, EventType } from '../types';
+import { hasStarted, isoDay, isWithin36Hours } from '../formatters';
 import Modal from './ui/Modal';
 import Card from './ui/Card';
 
@@ -26,6 +27,8 @@ interface EventsModuleProps {
   members: Member[];
   isOfficer: boolean;
   currentMemberName: string;
+  /** Loads the selected event's supervisors, organizers and door link. */
+  onSelectEvent: (eventId: string) => void;
   onAddEvent: (event: Omit<ChapterEvent, 'id' | 'attendanceTaken' | 'checkedInCount'>) => void;
   onUpdateEvent: (event: ChapterEvent) => void;
   onVolunteerOrganizer: (eventId: string, memberName: string) => void;
@@ -35,11 +38,14 @@ interface EventsModuleProps {
   onApproveJob: (eventId: string, jobId: string, officerName: string) => void;
   onRejectJob: (eventId: string, jobId: string, officerName: string, reason: string) => void;
   onAddJobToEvent: (eventId: string, job: Omit<EventJob, 'id' | 'claimants' | 'status'>) => void;
+  onEditJob: (eventId: string, jobId: string, patch: { title?: string; description?: string; peopleNeeded?: number }) => void;
+  onDeleteJob: (eventId: string, jobId: string) => void;
   onSendEventNotifyBlast: (eventId: string) => void;
   onToggleCheckInLink: (eventId: string) => void;
-  onAssignSecurity: (eventId: string, memberId: string, memberName: string, station: string) => void;
+  onAssignSecurity: (eventId: string, memberId: string, memberName: string) => void;
   onRequestSecuritySwap: (eventId: string, assignmentId: string, targetMemberId: string, targetMemberName: string) => void;
   onRespondSecuritySwap: (eventId: string, assignmentId: string, accept: boolean) => void;
+  onCancelSecuritySwap: (eventId: string, assignmentId: string) => void;
 }
 
 export default function EventsModule({
@@ -47,6 +53,7 @@ export default function EventsModule({
   members,
   isOfficer,
   currentMemberName,
+  onSelectEvent,
   onAddEvent,
   onUpdateEvent,
   onVolunteerOrganizer,
@@ -56,16 +63,20 @@ export default function EventsModule({
   onApproveJob,
   onRejectJob,
   onAddJobToEvent,
+  onEditJob,
+  onDeleteJob,
   onSendEventNotifyBlast,
   onToggleCheckInLink,
   onAssignSecurity,
   onRequestSecuritySwap,
-  onRespondSecuritySwap
+  onRespondSecuritySwap,
+  onCancelSecuritySwap
 }: EventsModuleProps) {
   const [selectedEventId, setSelectedEventId] = useState<string>(events[0]?.id || '');
   const [filterType, setFilterType] = useState<string>('All');
   const [showAddForm, setShowAddForm] = useState(false);
   const [showAddJobModal, setShowAddJobModal] = useState(false);
+  const [editJobId, setEditJobId] = useState<string | null>(null);
   const [showRejectModal, setShowRejectModal] = useState<{ eventId: string; jobId: string } | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [showSecurityAssignModal, setShowSecurityAssignModal] = useState(false);
@@ -76,13 +87,13 @@ export default function EventsModule({
   // New Event Form State
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [date, setDate] = useState('2026-07-16');
+  const [date, setDate] = useState(isoDay());
   const [startTime, setStartTime] = useState('18:00');
   const [endTime, setEndTime] = useState('20:00');
   const [location, setLocation] = useState('');
   const [type, setType] = useState<EventType>('Chapter Meeting');
-  const [audience, setAudience] = useState<'All Members' | 'Officers Only' | 'Actives Only' | 'Pledges Only'>('All Members');
-  const [points, setPoints] = useState('5');
+  // The backend only distinguishes all-members from officers-only.
+  const [audience, setAudience] = useState<'All Members' | 'Officers Only'>('All Members');
   const [required, setRequired] = useState(true);
 
   // New Job State
@@ -92,10 +103,15 @@ export default function EventsModule({
 
   // Security Assign State
   const [selectedSecMemberId, setSelectedSecMemberId] = useState(members[0]?.id || '');
-  const [secStation, setSecStation] = useState('Front Porch / Main Entry Door');
 
   const currentMember = members.find(m => m.name === currentMemberName);
   const selectedEvent = events.find(e => e.id === selectedEventId) || events[0];
+
+  // Keyed on the resolved event, so the fallback selection (and the swap from
+  // mock rows to backend rows) loads its detail too.
+  useEffect(() => {
+    if (selectedEvent) onSelectEvent(selectedEvent.id);
+  }, [selectedEvent?.id]);
 
   const handleCreateEvent = (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,7 +125,6 @@ export default function EventsModule({
       location,
       type,
       audience,
-      points: parseInt(points) || 5,
       required,
       supervisors: [isOfficer ? currentMemberName : 'Alexander Mercer'],
       organizers: [], // starts empty to highlight "Organizers Needed"
@@ -131,18 +146,36 @@ export default function EventsModule({
     setShowAddForm(false);
   };
 
-  const handleAddJobSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedEvent) return;
-    onAddJobToEvent(selectedEvent.id, {
-      title: jobTitle,
-      description: jobDesc,
-      peopleNeeded: Number(jobPeopleNeeded) || 1
-    });
+  // One form serves both "add job" and "edit job" — editJobId picks the target.
+  const closeJobForm = () => {
     setJobTitle('');
     setJobDesc('');
     setJobPeopleNeeded(2);
     setShowAddJobModal(false);
+    setEditJobId(null);
+  };
+
+  const openEditJob = (job: EventJob) => {
+    setJobTitle(job.title);
+    setJobDesc(job.description || '');
+    setJobPeopleNeeded(job.peopleNeeded || 1);
+    setEditJobId(job.id);
+  };
+
+  const handleAddJobSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEvent) return;
+    const jobFields = {
+      title: jobTitle,
+      description: jobDesc,
+      peopleNeeded: Number(jobPeopleNeeded) || 1
+    };
+    if (editJobId) {
+      onEditJob(selectedEvent.id, editJobId, jobFields);
+    } else {
+      onAddJobToEvent(selectedEvent.id, jobFields);
+    }
+    closeJobForm();
   };
 
   const handleConfirmReject = () => {
@@ -157,7 +190,7 @@ export default function EventsModule({
     if (!selectedEvent) return;
     const targetMem = members.find(m => m.id === selectedSecMemberId);
     if (targetMem) {
-      onAssignSecurity(selectedEvent.id, targetMem.id, targetMem.name, secStation);
+      onAssignSecurity(selectedEvent.id, targetMem.id, targetMem.name);
     }
     setShowSecurityAssignModal(false);
   };
@@ -172,23 +205,27 @@ export default function EventsModule({
     setTargetSwapMemberId('');
   };
 
-  // Helper check: Notify Gate criteria
+  // Helper check: Notify Gate criteria (the backend gate, spec §2.7)
   // ≥1 supervisor, ≥1 organizer, ≥3 jobs
   const supervisorCount = selectedEvent?.supervisors?.length || 0;
-  const organizerCount = selectedEvent?.organizers?.length || 0;
+  const organizerCount = selectedEvent?.organizerCount ?? (selectedEvent?.organizers?.length || 0);
   const jobsCount = selectedEvent?.jobs?.length || 0;
   const isNotifyGateReady = supervisorCount >= 1 && organizerCount >= 1 && jobsCount >= 3;
 
-  // 36-hour lock simulation check
-  const isWithin36Hours = (eventDateStr: string) => {
-    // July 11, 2026 is current simulated date
-    // Event on July 11 or July 12 is within 36 hours
-    return eventDateStr <= '2026-07-13';
-  };
+  const unclaimLocked = selectedEvent
+    ? isWithin36Hours(selectedEvent.date, selectedEvent.startTime)
+    : false;
+  const eventStarted = selectedEvent
+    ? hasStarted(selectedEvent.date, selectedEvent.startTime)
+    : false;
 
   const safeEvents = events || [];
   const safeMembers = members || [];
   const filteredEvents = safeEvents.filter(e => filterType === 'All' || e.type === filterType);
+  // Security picker order (D17): fewest prior shifts first — that's who to pick.
+  const securityPickerMembers = [...safeMembers].sort(
+    (a, b) => (a.priorSecurityShifts || 0) - (b.priorSecurityShifts || 0)
+  );
 
   return (
     <div className="space-y-6">
@@ -198,21 +235,18 @@ export default function EventsModule({
           <div className="flex items-center gap-2">
             <Calendar className="w-6 h-6 text-gold" />
             <h2 className="text-2xl font-display font-extrabold text-slate-900 tracking-tight">
-              Events, Jobs & Operations
+              Events
             </h2>
-            <span className="text-xs font-mono font-bold bg-gold/15 text-gold-muted px-2 py-0.5 rounded-full border border-gold/30">
-              Exec & Operations
-            </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Plan chapter events, assign supervisors, recruit organizers, publish claimable jobs, and manage security shifts.
+            Plan events, assign supervisors, and publish claimable jobs.
           </p>
         </div>
 
         {isOfficer && (
           <button
             onClick={() => setShowAddForm(true)}
-            className="bg-gold hover:bg-[#c5a02b] text-navy font-bold text-xs px-4 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer w-full sm:w-auto justify-center"
+            className="bg-gold hover:bg-[#c5a02b] text-navy font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer w-full sm:w-auto justify-center"
           >
             <Plus className="w-4 h-4" />
             Create Chapter Event
@@ -228,15 +262,15 @@ export default function EventsModule({
           {/* Category Filter */}
           <div className="bg-white rounded-xl border border-slate-200/80 p-3 shadow-xs">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-bold text-slate-700 font-mono uppercase tracking-wider">Filter Events</span>
-              <span className="text-[10px] text-slate-400 font-mono">{filteredEvents.length} items</span>
+              <span className="text-xs font-bold text-slate-700">Filter Events</span>
+              <span className="text-xs text-slate-500">{filteredEvents.length} items</span>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {['All', 'Chapter Meeting', 'Philanthropy', 'Brotherhood', 'Social', 'Pledge Education'].map(t => (
                 <button
                   key={t}
                   onClick={() => setFilterType(t)}
-                  className={`text-[11px] px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer ${
+                  className={`text-xs px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer ${
                     filterType === t 
                       ? 'bg-navy text-gold shadow-xs' 
                       : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
@@ -252,9 +286,10 @@ export default function EventsModule({
           <div className="space-y-3 max-h-[75vh] overflow-y-auto pr-1">
             {filteredEvents.map(e => {
               const isSelected = e.id === selectedEventId;
-              const hasNoOrganizers = (!e.organizers || e.organizers.length === 0);
-              const eventJobs = e.jobs || [];
-              const openJobs = eventJobs.filter(j => (j.claimants || []).length < (j.peopleNeeded || 1)).length;
+              // The list endpoint carries the count; names only load per event.
+              const orgCount = e.organizerCount ?? (e.organizers || []).length;
+              // Backend-decorated count (spec Screen 1) — the claim lure.
+              const openJobCount = e.openJobCount || 0;
 
               return (
                 <div
@@ -267,11 +302,11 @@ export default function EventsModule({
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2 mb-1.5">
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-gold-muted bg-amber-50 px-2 py-0.5 rounded">
+                    <span className="text-xs font-bold text-amber-900 bg-amber-50 px-2 py-0.5 rounded">
                       {e.type}
                     </span>
                     {e.required && (
-                      <span className="text-[9px] font-mono font-extrabold uppercase bg-red-50 text-red-700 px-1.5 py-0.5 rounded border border-red-200">
+                      <span className="text-xs font-extrabold bg-red-50 text-red-700 px-1.5 py-0.5 rounded border border-red-200">
                         Mandatory
                       </span>
                     )}
@@ -281,39 +316,39 @@ export default function EventsModule({
                     {e.title}
                   </h3>
 
-                  <div className="text-[11px] text-slate-500 space-y-1 mb-3">
+                  <div className="text-xs text-slate-500 space-y-1 mb-3">
                     <p className="flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <Calendar className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                       <span>{e.date} &bull; {e.time}</span>
                     </p>
                     <p className="flex items-center gap-1.5 truncate">
-                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                       <span>{e.location}</span>
                     </p>
                   </div>
 
                   {/* Badges / Operational Flags */}
                   <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100">
-                    {hasNoOrganizers ? (
-                      <span className="text-[10px] font-bold font-mono bg-red-100 text-red-800 px-2 py-0.5 rounded flex items-center gap-1 animate-pulse">
+                    {orgCount === 0 ? (
+                      <span className="text-xs font-semibold bg-red-100 text-red-800 px-2 py-0.5 rounded flex items-center gap-1">
                         <AlertTriangle className="w-3 h-3 text-red-600" />
-                        Organizers Needed!
+                        Organizers needed
                       </span>
                     ) : (
-                      <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
+                      <span className="text-xs text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
                         <UserCheck className="w-3 h-3" />
-                        {e.organizers.length} Chair{e.organizers.length > 1 ? 's' : ''}
+                        {orgCount} Chair{orgCount > 1 ? 's' : ''}
                       </span>
                     )}
 
-                    {openJobs > 0 && (
-                      <span className="text-[10px] font-mono text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                        {openJobs} Open Job{openJobs > 1 ? 's' : ''}
+                    {openJobCount > 0 && (
+                      <span className="text-xs font-bold bg-gold/20 text-amber-900 px-2 py-0.5 rounded">
+                        {openJobCount} open jobs
                       </span>
                     )}
 
                     {e.notifiedAt && (
-                      <span className="text-[10px] font-mono text-blue-700 bg-blue-50 px-2 py-0.5 rounded flex items-center gap-1">
+                      <span className="text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded flex items-center gap-1">
                         <Send className="w-3 h-3" />
                         Notified
                       </span>
@@ -333,17 +368,14 @@ export default function EventsModule({
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono font-bold bg-navy text-gold px-2.5 py-0.5 rounded">
+                    <span className="text-xs font-bold bg-navy text-gold px-2.5 py-0.5 rounded">
                       {selectedEvent.type}
                     </span>
                     {selectedEvent.required && (
-                      <span className="text-xs font-mono font-bold bg-red-100 text-red-800 px-2 py-0.5 rounded">
-                        Mandatory Attendance
+                      <span className="text-xs font-semibold bg-red-100 text-red-800 px-2 py-0.5 rounded">
+                        Attendance required
                       </span>
                     )}
-                    <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
-                      {selectedEvent.points} Points
-                    </span>
                   </div>
                   <h2 className="text-xl font-display font-extrabold text-slate-900 tracking-tight pt-1">
                     {selectedEvent.title}
@@ -373,7 +405,7 @@ export default function EventsModule({
                       }`}
                     >
                       <KeyRound className="w-3.5 h-3.5" />
-                      {selectedEvent.checkInLinkActive ? 'Check-in: ACTIVE' : 'Enable Door Link'}
+                      {selectedEvent.checkInLinkActive ? 'Check-in open' : 'Enable door link'}
                     </button>
                   )}
                 </div>
@@ -382,19 +414,19 @@ export default function EventsModule({
               {/* Event Metadata Ribbon */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-slate-100 text-xs">
                 <div>
-                  <span className="text-[10px] text-slate-400 font-mono block uppercase">Date</span>
+                  <span className="text-xs text-slate-500 block">Date</span>
                   <span className="font-semibold text-slate-800">{selectedEvent.date}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-400 font-mono block uppercase">Time Range</span>
+                  <span className="text-xs text-slate-500 block">Time</span>
                   <span className="font-semibold text-slate-800">{selectedEvent.time}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-400 font-mono block uppercase">Location</span>
+                  <span className="text-xs text-slate-500 block">Location</span>
                   <span className="font-semibold text-slate-800 truncate block">{selectedEvent.location}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-400 font-mono block uppercase">Audience</span>
+                  <span className="text-xs text-slate-500 block">Audience</span>
                   <span className="font-semibold text-slate-800">{selectedEvent.audience}</span>
                 </div>
               </div>
@@ -404,11 +436,11 @@ export default function EventsModule({
                 {/* Supervisors (Officers) */}
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/70 space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-slate-700 font-mono uppercase flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                       <Shield className="w-3.5 h-3.5 text-blue-600" />
                       Supervisors (Officers)
                     </span>
-                    <span className="text-[10px] text-slate-400 font-mono">{selectedEvent.supervisors?.length || 0} assigned</span>
+                    <span className="text-xs text-slate-500">{selectedEvent.supervisors?.length || 0} assigned</span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {selectedEvent.supervisors && selectedEvent.supervisors.length > 0 ? (
@@ -418,25 +450,25 @@ export default function EventsModule({
                         </span>
                       ))
                     ) : (
-                      <span className="text-xs text-slate-400 italic">No supervisor assigned</span>
+                      <span className="text-xs text-slate-500 italic">No supervisor assigned</span>
                     )}
                   </div>
-                  <p className="text-[10px] text-slate-500">Supervisors own the event and sign off on completed jobs.</p>
+                  <p className="text-xs text-slate-500">Supervisors own the event and sign off on completed jobs.</p>
                 </div>
 
                 {/* Organizers (Chairs on the Ground) */}
                 <div className={`p-3 rounded-xl border space-y-1.5 ${
-                  !selectedEvent.organizers || selectedEvent.organizers.length === 0
+                  organizerCount === 0
                     ? 'bg-red-50/70 border-red-200 text-red-900'
                     : 'bg-slate-50 border-slate-200/70 text-slate-800'
                 }`}>
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold font-mono uppercase flex items-center gap-1.5">
+                    <span className="text-xs font-bold flex items-center gap-1.5">
                       <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
                       Organizers (Chairs)
                     </span>
-                    {(!selectedEvent.organizers || selectedEvent.organizers.length === 0) && (
-                      <span className="text-[10px] font-bold font-mono bg-red-200 text-red-800 px-1.5 py-0.5 rounded">
+                    {organizerCount === 0 && (
+                      <span className="text-xs font-bold bg-red-200 text-red-800 px-1.5 py-0.5 rounded">
                         Needed
                       </span>
                     )}
@@ -464,7 +496,7 @@ export default function EventsModule({
                       </button>
                     )}
                   </div>
-                  <p className="text-[10px] text-slate-500">Chairs coordinate setup, attendance, and member jobs on site.</p>
+                  <p className="text-xs text-slate-500">Chairs coordinate setup, attendance, and member jobs on site.</p>
                 </div>
               </div>
 
@@ -472,11 +504,11 @@ export default function EventsModule({
               <div className="p-4 bg-slate-900 text-white rounded-xl space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div>
-                    <h4 className="text-xs font-mono uppercase tracking-wider font-bold text-gold flex items-center gap-1.5">
+                    <h4 className="text-xs font-bold text-gold flex items-center gap-1.5">
                       <Send className="w-3.5 h-3.5" />
                       Notify Members Gate (SMS & Broadcast)
                     </h4>
-                    <p className="text-[11px] text-slate-300">
+                    <p className="text-xs text-slate-300">
                       Blast stays locked until the event is fully planned with supervisors, organizers, and jobs.
                     </p>
                   </div>
@@ -484,7 +516,7 @@ export default function EventsModule({
                   <button
                     disabled={!isNotifyGateReady || !!selectedEvent.notifiedAt}
                     onClick={() => onSendEventNotifyBlast(selectedEvent.id)}
-                    className={`px-4 py-2 rounded-lg text-xs font-bold font-mono uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
+                    className={`px-4 py-2 min-h-11 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all ${
                       selectedEvent.notifiedAt
                         ? 'bg-blue-900/60 text-blue-300 border border-blue-700 cursor-default'
                         : isNotifyGateReady
@@ -512,7 +544,7 @@ export default function EventsModule({
                 </div>
 
                 {/* Inline Gate Checklist */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-800 text-xs font-mono">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-800 text-xs">
                   <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded bg-slate-800/80 ${
                     supervisorCount >= 1 ? 'text-emerald-400' : 'text-amber-400'
                   }`}>
@@ -562,11 +594,15 @@ export default function EventsModule({
               </div>
 
               {/* 36-Hour Lock Warning Banner */}
-              {isWithin36Hours(selectedEvent.date) && (
+              {unclaimLocked && (
                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 flex items-center gap-2">
                   <Lock className="w-4 h-4 text-amber-700 shrink-0" />
                   <span>
-                    <strong>36-Hour Lock Active:</strong> Unclaiming is locked for this event. Late volunteers are welcome to claim open spots!
+                    {eventStarted ? (
+                      <>This event has started &mdash; unclaiming is closed.</>
+                    ) : (
+                      <><strong>36-Hour Lock Active:</strong> Unclaiming is locked for this event. Late volunteers are welcome to claim open spots!</>
+                    )}
                   </span>
                 </div>
               )}
@@ -574,14 +610,14 @@ export default function EventsModule({
               {/* Jobs List */}
               <div className="space-y-3">
                 {(!selectedEvent.jobs || selectedEvent.jobs.length === 0) ? (
-                  <p className="text-xs text-slate-400 py-4 text-center">No jobs created yet. Click "Add Job" above.</p>
+                  <p className="text-xs text-slate-500 py-4 text-center">No jobs created yet. Click "Add Job" above.</p>
                 ) : (
                   (selectedEvent.jobs || []).map(job => {
                     const claimants = job.claimants || [];
                     const isClaimedByMe = currentMember && claimants.some(c => c.memberId === currentMember.id);
                     const isFull = claimants.length >= (job.peopleNeeded || 1);
                     const isSupervisor = (selectedEvent.supervisors || []).includes(currentMemberName) || isOfficer;
-                    const lockUnclaim = isWithin36Hours(selectedEvent.date);
+                    const lockUnclaim = unclaimLocked;
 
                     return (
                       <div 
@@ -592,7 +628,7 @@ export default function EventsModule({
                           <div>
                             <div className="flex items-center gap-2">
                               <h4 className="font-bold text-sm text-slate-900">{job.title}</h4>
-                              <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
+                              <span className={`text-xs font-bold px-2 py-0.5 rounded ${
                                 job.status === 'Approved' 
                                   ? 'bg-emerald-100 text-emerald-800' 
                                   : job.status === 'Done Reported' 
@@ -610,7 +646,7 @@ export default function EventsModule({
                           </div>
 
                           <div className="flex items-center gap-2 shrink-0">
-                            <span className={`text-xs font-mono font-bold px-2.5 py-1 rounded-md border ${
+                            <span className={`text-xs font-bold px-2.5 py-1 rounded-md border ${
                               isFull 
                                 ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
                                 : 'bg-amber-50 text-amber-800 border-amber-200'
@@ -622,9 +658,9 @@ export default function EventsModule({
 
                         {/* Claimants list */}
                         <div className="flex flex-wrap items-center gap-2 text-xs pt-1">
-                          <span className="text-[10px] text-slate-400 font-mono uppercase">Assigned:</span>
+                          <span className="text-xs text-slate-500">Assigned:</span>
                           {job.claimants.length === 0 ? (
-                            <span className="text-slate-400 italic">No volunteers yet</span>
+                            <span className="text-slate-500 italic">No volunteers yet</span>
                           ) : (
                             job.claimants.map(c => (
                               <span key={c.memberId} className="bg-white border border-slate-200 text-slate-800 font-semibold px-2 py-0.5 rounded text-xs">
@@ -670,7 +706,7 @@ export default function EventsModule({
                                 }}
                                 className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all ${
                                   lockUnclaim
-                                    ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                                    ? 'bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed'
                                     : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100 cursor-pointer'
                                 }`}
                               >
@@ -685,6 +721,28 @@ export default function EventsModule({
                                 className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1.5 rounded-lg transition-all cursor-pointer"
                               >
                                 Report Completed
+                              </button>
+                            )}
+
+                            {/* Officer job management: edit always, delete only while
+                                unclaimed and To-Do (mirrors the job_not_cancellable rule) */}
+                            {isOfficer && (
+                              <button
+                                onClick={() => openEditJob(job)}
+                                className="text-xs font-semibold px-3 py-1.5 rounded-lg border bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 transition-all cursor-pointer flex items-center gap-1"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                                Edit
+                              </button>
+                            )}
+
+                            {isOfficer && job.status === 'To Do' && claimants.length === 0 && (
+                              <button
+                                onClick={() => onDeleteJob(selectedEvent.id, job.id)}
+                                className="text-xs font-semibold px-3 py-1.5 rounded-lg border bg-red-50 text-red-700 border-red-200 hover:bg-red-100 transition-all cursor-pointer flex items-center gap-1"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                Delete
                               </button>
                             )}
                           </div>
@@ -732,7 +790,11 @@ export default function EventsModule({
 
                 {isOfficer && (
                   <button
-                    onClick={() => setShowSecurityAssignModal(true)}
+                    onClick={() => {
+                      // The mount-time default is a mock id once the real roster lands.
+                      setSelectedSecMemberId(members[0]?.id || '');
+                      setShowSecurityAssignModal(true);
+                    }}
                     className="text-xs bg-navy hover:bg-slate-800 text-gold font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />
@@ -744,9 +806,8 @@ export default function EventsModule({
               {/* Security Assignments Table */}
               <div className="overflow-x-auto">
                 <table className="w-full text-xs text-left">
-                  <thead className="bg-slate-50 border-y border-slate-200 text-slate-600 font-mono uppercase text-[10px]">
+                  <thead className="bg-slate-50 border-y border-slate-200 text-slate-600 text-xs">
                     <tr>
-                      <th className="py-2.5 px-3">Station</th>
                       <th className="py-2.5 px-3">Assigned Brother</th>
                       <th className="py-2.5 px-3">Standing</th>
                       <th className="py-2.5 px-3">Swap Status</th>
@@ -758,26 +819,33 @@ export default function EventsModule({
                       selectedEvent.securityAssignments.map(sec => {
                         const isMyAssignment = currentMember && sec.memberId === currentMember.id;
                         const isTargetOfSwap = currentMember && sec.swapRequestedWithId === currentMember.id;
+                        // Assignee may be off the loaded roster (alumni, filtered), so standing can be missing.
+                        const standing = members.find(m => m.id === sec.memberId)?.standing;
 
                         return (
                           <tr key={sec.id} className="hover:bg-slate-50/60">
-                            <td className="py-3 px-3 font-semibold text-slate-900">{sec.station}</td>
                             <td className="py-3 px-3">
                               <span className="font-bold text-slate-800">{sec.memberName}</span>
                             </td>
                             <td className="py-3 px-3">
-                              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-semibold">
-                                Good Standing
-                              </span>
+                              {standing ? (
+                                <span className={`text-xs px-2 py-0.5 rounded font-semibold ${
+                                  standing === 'Good Standing' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+                                }`}>
+                                  {standing}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-slate-500">&mdash;</span>
+                              )}
                             </td>
                             <td className="py-3 px-3">
                               {sec.swapStatus === 'Pending' ? (
-                                <span className="text-[10px] font-mono font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded flex items-center gap-1 w-fit">
+                                <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded flex items-center gap-1 w-fit">
                                   <ArrowLeftRight className="w-3 h-3" />
                                   Swap w/ {sec.swapRequestedWithName}
                                 </span>
                               ) : (
-                                <span className="text-[10px] font-mono text-slate-400">Confirmed</span>
+                                <span className="text-xs text-slate-500">Confirmed</span>
                               )}
                             </td>
                             <td className="py-3 px-3 text-right">
@@ -785,9 +853,19 @@ export default function EventsModule({
                               {isMyAssignment && sec.swapStatus !== 'Pending' && (
                                 <button
                                   onClick={() => setShowSwapModal({ eventId: selectedEvent.id, assignmentId: sec.id })}
-                                  className="text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold px-2.5 py-1 rounded transition-all cursor-pointer"
+                                  className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold px-2.5 py-1 rounded transition-all cursor-pointer"
                                 >
                                   Request Swap
+                                </button>
+                              )}
+
+                              {/* Withdraw my own pending request */}
+                              {isMyAssignment && sec.swapStatus === 'Pending' && (
+                                <button
+                                  onClick={() => onCancelSecuritySwap(selectedEvent.id, sec.id)}
+                                  className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold px-2.5 py-1 rounded transition-all cursor-pointer"
+                                >
+                                  Cancel request
                                 </button>
                               )}
 
@@ -796,13 +874,13 @@ export default function EventsModule({
                                 <div className="flex items-center justify-end gap-1.5">
                                   <button
                                     onClick={() => onRespondSecuritySwap(selectedEvent.id, sec.id, true)}
-                                    className="text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2 py-1 rounded cursor-pointer"
+                                    className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2 py-1 rounded cursor-pointer"
                                   >
                                     Accept
                                   </button>
                                   <button
                                     onClick={() => onRespondSecuritySwap(selectedEvent.id, sec.id, false)}
-                                    className="text-[10px] bg-red-600 hover:bg-red-700 text-white font-bold px-2 py-1 rounded cursor-pointer"
+                                    className="text-xs bg-red-600 hover:bg-red-700 text-white font-bold px-2 py-1 rounded cursor-pointer"
                                   >
                                     Decline
                                   </button>
@@ -814,8 +892,8 @@ export default function EventsModule({
                       })
                     ) : (
                       <tr>
-                        <td colSpan={5} className="py-6 text-center text-slate-400 italic">
-                          No security stations required for this event type.
+                        <td colSpan={4} className="py-6 text-center text-slate-500 italic">
+                          No security shifts assigned for this event yet.
                         </td>
                       </tr>
                     )}
@@ -825,7 +903,7 @@ export default function EventsModule({
             </Card>
           </div>
         ) : (
-          <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-400">
+          <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-500">
             Select an event from the left list to inspect details.
           </div>
         )}
@@ -841,7 +919,7 @@ export default function EventsModule({
               </h3>
               <button 
                 onClick={() => setShowAddForm(false)}
-                className="text-slate-400 hover:text-slate-600 font-bold"
+                className="text-slate-500 hover:text-slate-600 font-bold"
               >
                 ✕
               </button>
@@ -871,7 +949,7 @@ export default function EventsModule({
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-slate-700 block mb-1">Date</label>
                   <input 
@@ -933,63 +1011,50 @@ export default function EventsModule({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1">Target Audience</label>
-                  <select 
-                    value={audience} 
-                    onChange={e => setAudience(e.target.value as any)}
-                    className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-gold"
-                  >
-                    <option value="All Members">All Members</option>
-                    <option value="Officers Only">Officers Only</option>
-                    <option value="Actives Only">Actives Only</option>
-                    <option value="Pledges Only">Pledges Only</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1">Point Value</label>
-                  <input 
-                    type="number" 
-                    value={points} 
-                    onChange={e => setPoints(e.target.value)}
-                    className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-gold"
-                  />
-                </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-700 block mb-1">Who it is for</label>
+                <select
+                  value={audience}
+                  onChange={e => setAudience(e.target.value as 'All Members' | 'Officers Only')}
+                  className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-gold"
+                >
+                  <option value="All Members">All members</option>
+                  <option value="Officers Only">Officers only</option>
+                </select>
               </div>
 
               <div className="flex items-center gap-2 pt-2">
-                <input 
-                  type="checkbox" 
-                  id="reqEvt" 
-                  checked={required} 
+                <input
+                  type="checkbox"
+                  id="reqEvt"
+                  checked={required}
                   onChange={e => setRequired(e.target.checked)}
                   className="rounded text-gold focus:ring-gold"
                 />
                 <label htmlFor="reqEvt" className="text-xs font-semibold text-slate-700 cursor-pointer">
-                  Mandatory attendance (unexcused absence incurs standard fine)
+                  Attendance required
                 </label>
               </div>
 
-              <button 
-                type="submit" 
-                className="w-full bg-navy text-gold hover:bg-slate-800 font-bold py-3 rounded-lg text-xs uppercase tracking-wider transition-all mt-3 cursor-pointer"
+              <button
+                type="submit"
+                className="w-full min-h-11 bg-navy text-gold hover:bg-slate-800 font-bold py-3 rounded-lg text-xs transition-all mt-3 cursor-pointer"
               >
-                Create Event & Open Planning Gate
+                Create event
               </button>
             </form>
         </Modal>
       )}
 
-      {/* MODAL: Add Job to Event */}
-      {showAddJobModal && selectedEvent && (
+      {/* MODAL: Add / Edit Job on Event */}
+      {(showAddJobModal || editJobId) && selectedEvent && (
         <Modal>
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-display font-bold text-base text-slate-900 flex items-center gap-2">
-                <Plus className="w-5 h-5 text-gold" />
-                Add Claimable Job / Shift
+                {editJobId ? <Pencil className="w-5 h-5 text-gold" /> : <Plus className="w-5 h-5 text-gold" />}
+                {editJobId ? 'Edit Claimable Job / Shift' : 'Add Claimable Job / Shift'}
               </h3>
-              <button onClick={() => setShowAddJobModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+              <button onClick={closeJobForm} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
             </div>
             
             <form onSubmit={handleAddJobSubmit} className="space-y-4">
@@ -1032,9 +1097,9 @@ export default function EventsModule({
 
               <button 
                 type="submit" 
-                className="w-full bg-gold hover:bg-[#c5a02b] text-navy font-bold py-3 rounded-lg text-xs uppercase tracking-wider transition-all cursor-pointer"
+                className="w-full bg-gold hover:bg-[#c5a02b] text-navy font-bold py-3 min-h-11 rounded-lg text-xs transition-all cursor-pointer"
               >
-                Publish Job to Event
+                {editJobId ? 'Save Job Changes' : 'Publish Job to Event'}
               </button>
             </form>
         </Modal>
@@ -1048,7 +1113,7 @@ export default function EventsModule({
               Reject Job Completion
             </h3>
             <p className="text-xs text-slate-600 mb-4">
-              Work is never silently undone. State the exact reason why this task was rejected so claimants receive the notice in their SMS / push outbox.
+              Work is never silently undone. State the exact reason why this job was rejected so claimants receive the notice in their SMS / push outbox.
             </p>
 
             <textarea
@@ -1086,7 +1151,7 @@ export default function EventsModule({
                 <Shield className="w-5 h-5 text-blue-600" />
                 Assign Member to Security Shift
               </h3>
-              <button onClick={() => setShowSecurityAssignModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+              <button onClick={() => setShowSecurityAssignModal(false)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
             </div>
 
             <form onSubmit={handleConfirmSecurityAssign} className="space-y-4">
@@ -1097,29 +1162,20 @@ export default function EventsModule({
                   onChange={e => setSelectedSecMemberId(e.target.value)}
                   className="w-full text-xs border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-gold"
                 >
-                  {members.map(m => (
+                  {securityPickerMembers.map(m => (
                     <option key={m.id} value={m.id}>
-                      {m.name} &bull; GPA: {m.gpa} &bull; Att: {m.attendanceRate}% &bull; Standing: {m.standing} &bull; Sec Hrs: {m.securityHoursServed || 0}h
+                      {m.name} &bull; Prior shifts: {m.priorSecurityShifts || 0} &bull; GPA: {m.gpa} &bull; Att: {m.attendanceRate}% &bull; Standing: {m.standing} &bull; Sec Hrs: {m.securityHoursServed || 0}h
                     </option>
                   ))}
                 </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">Assigned Security Post / Station</label>
-                <input
-                  type="text"
-                  value={secStation}
-                  onChange={e => setSecStation(e.target.value)}
-                  placeholder="e.g. Front Door Wristband Scan"
-                  className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-gold"
-                  required
-                />
+                <p className="text-xs text-slate-500 mt-1">
+                  Ordered by prior security shifts — fewest first.
+                </p>
               </div>
 
               <button
                 type="submit"
-                className="w-full bg-navy text-gold hover:bg-slate-800 font-bold py-3 rounded-lg text-xs uppercase tracking-wider transition-all"
+                className="w-full bg-navy text-gold hover:bg-slate-800 font-bold py-3 min-h-11 rounded-lg text-xs transition-all"
               >
                 Confirm Shift Assignment
               </button>
@@ -1171,8 +1227,8 @@ export default function EventsModule({
       {showLiveQRModal && selectedEvent && (
         <Modal maxWidth="max-w-sm" className="text-center space-y-4" overlayClassName="bg-slate-900/70">
             <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-              <span className="text-xs font-mono font-bold uppercase text-slate-400">Live Door Mode</span>
-              <button onClick={() => setShowLiveQRModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+              <span className="text-xs font-bold text-slate-500">Live Door Mode</span>
+              <button onClick={() => setShowLiveQRModal(false)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
             </div>
 
             <div className="space-y-1">
@@ -1185,16 +1241,25 @@ export default function EventsModule({
               <div className="w-36 h-36 bg-navy text-gold rounded-xl flex items-center justify-center p-3 shadow-inner">
                 <QrCode className="w-28 h-28" />
               </div>
-              <span className="text-[10px] font-mono text-slate-400">Scan via GreekOS Mobile</span>
+              <span className="text-xs text-slate-500">QR rendering is demo art — read out the code below</span>
             </div>
 
-            {/* PIN Code Box */}
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1">
-              <span className="text-[10px] font-mono uppercase text-amber-800 font-bold">4-Digit Door PIN Gate</span>
-              <div className="text-2xl font-mono font-extrabold tracking-widest text-slate-900">
-                {selectedEvent.checkInPin || '4892'}
+            {/* Live door code (backend check-in link) */}
+            {selectedEvent.checkInToken ? (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1">
+                <span className="text-xs text-amber-800 font-bold">Live Door Code</span>
+                <div className="text-2xl font-mono font-extrabold tracking-widest text-slate-900">
+                  {selectedEvent.checkInToken}
+                </div>
+                <p className="text-xs text-amber-800">
+                  Brothers enter it under Attendance &rarr; Door Check-In. Expires shortly.
+                </p>
               </div>
-            </div>
+            ) : (
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500">
+                No door link is open. Use <strong>Enable Door Link</strong> on the event to open one.
+              </div>
+            )}
 
             <button
               onClick={() => setShowLiveQRModal(false)}

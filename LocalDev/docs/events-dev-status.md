@@ -3,8 +3,9 @@
 **Last updated:** 2026-08-18
 **Spec:** `docs/events-v1-spec.md` (Events Service V1, saved verbatim)
 **Current phase:** B4FEND **done** (migration 0152) — the Events V1 backend
-surface is complete; **Phase 5 (frontend)** is next and nothing in it is
-blocked on backend work
+surface is complete; **Phase 5 (frontend)** is **wired** in the `greekos`
+prototype (`LocalDev/greekos`), which now reads and writes the real API for
+events, jobs, security + swaps and announcements
 
 This document is the entry point for anyone (human or agent session) continuing
 the Events V1 build. It records what exists, what's missing, the decisions that
@@ -206,11 +207,12 @@ baked into the phase plans. Revisit here if product overrules.
 | 3 | Initiatives: new entity (chair-created, assigned chairs, required start time), reuses job machinery with chair approval; calendar aggregator includes them | `docs/imp-ev-ph3.md` | **Done** (migration 0144) |
 | 4 | Security + swaps: persisted security assignments as a special job type (replace the memberadmin stub), swap requests (one pending per assignment, accept/decline, atomic swap), notifications | `docs/imp-ev-ph4.md` | **Done** (migration 0145) |
 | B4FEND | Backend unblocks for Phase 5: `open_job_count` on list/calendar, announcement calendar date + aggregator, job PATCH/DELETE, requester swap cancel, `prior_security_shifts` on scores | `docs/B4FEND-FIX.md` | **Done** (migration 0152) |
-| 5 | Frontend: events/tasks contracts+adapters, member-picker primitive, JobCard, event-detail sections (People/Jobs/Security/Notify + checklist + T-36h countdown), calendar badges + week view + mixed chips, initiative/security/swap screens, announcement SMS counter + scheduled time + calendar posting | `docs/imp-ev-ph5.md` | Not started |
+| 5 | Frontend: events/tasks contracts+adapters, member-picker primitive, JobCard, event-detail sections (People/Jobs/Security/Notify + checklist + T-36h countdown), calendar badges + week view + mixed chips, initiative/security/swap screens, announcement SMS counter + scheduled time + calendar posting | `docs/imp-ev-ph5.md` | **Wired** in `LocalDev/greekos` (see `greekos/README.md`) — job boards + create/claim/unclaim/report/approve/reject, job edit/delete with 409 copy, security assignments + swap request/accept/decline/cancel, announcements with calendar slots, open-job chips, `prior_security_shifts` ordering. Not in `fratos`; the demo-gated tabs (Rules/Command/Outbox) stay mock-backed |
 
 Phases 1→2→3 are sequential (each builds on the previous schema). Phase 4
 depends on Phase 1 only. Phase 5 tracks whatever backend phases have landed —
-it can start (contracts, JobCard, detail sections) once Phase 1+2 are deployed.
+with Phases 1–4 and B4FEND deployed it is wired end to end in
+`LocalDev/greekos` (jobs, security + swaps, announcements, open-job chips).
 
 **Phase 1 landed (migrations 0141/0142) — notes & minor drift from the plan:**
 - Audit actions named `ADD_EVENT_SUPERVISOR` / `REMOVE_EVENT_SUPERVISOR` (verb-first,

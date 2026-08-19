@@ -186,15 +186,13 @@ export const INITIAL_EVENTS: ChapterEvent[] = [
     location: 'Chapter Room (Basement)',
     type: 'Chapter Meeting',
     audience: 'All Members',
-    points: 10,
     required: true,
     attendanceTaken: false,
     checkedInCount: 0,
     supervisors: ['Alexander Mercer', 'John Callahan'],
     organizers: ['John Callahan'],
     checkInLinkActive: true,
-    checkInToken: 'live_chk_7829',
-    checkInPin: '4892',
+    checkInToken: 'A7x9Kp',
     notifiedAt: '2026-07-10 14:00',
     jobs: [
       {
@@ -238,14 +236,12 @@ export const INITIAL_EVENTS: ChapterEvent[] = [
     location: 'University Rec Center Pool',
     type: 'Philanthropy',
     audience: 'All Members',
-    points: 8,
     required: true,
     attendanceTaken: false,
     checkedInCount: 0,
     supervisors: ['Alexander Mercer'],
     organizers: [], // Flagged: Organizers Needed!
     checkInLinkActive: false,
-    checkInPin: '3104',
     jobs: [
       {
         id: 'job4',
@@ -306,7 +302,6 @@ export const INITIAL_EVENTS: ChapterEvent[] = [
     location: 'Fraternity House Backyard',
     type: 'Brotherhood',
     audience: 'All Members',
-    points: 4,
     required: false,
     attendanceTaken: false,
     checkedInCount: 0,
@@ -356,7 +351,6 @@ export const INITIAL_EVENTS: ChapterEvent[] = [
     location: 'House Library',
     type: 'Pledge Education',
     audience: 'Pledges Only',
-    points: 3,
     required: true,
     attendanceTaken: true,
     checkedInCount: 8,

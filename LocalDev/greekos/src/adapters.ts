@@ -1,14 +1,17 @@
 // Backend DTO -> prototype type mapping. Everything the backend does not send
 // gets an empty default here — nothing is invented. Client-local demo features
-// (event jobs, security assignments, check-in PINs, points) stay defaulted.
+// (GPA, pledge class) stay defaulted.
 import {
   AnnouncementDto,
+  EventDetailDto,
   EventDto,
   ExcuseDto,
   FineDto,
   InitiativeDto,
   MemberDto,
   RecruitDto,
+  ScoreDto,
+  SecurityAssignmentDto,
   StandingDto,
   TaskDto,
   VerifiedPaymentDto
@@ -17,6 +20,7 @@ import {
   Announcement,
   ChapterEvent,
   Excuse,
+  EventJob,
   EventType,
   Fine,
   Initiative,
@@ -25,6 +29,7 @@ import {
   MemberStanding,
   Payment,
   PNM,
+  SecurityAssignment,
   Task
 } from './types';
 
@@ -44,8 +49,15 @@ const STANDINGS: Record<string, MemberStanding> = {
   delinquent: 'Financial Hold'
 };
 
-export function adaptMembers(rows: MemberDto[], standings: StandingDto[]): Member[] {
+/** `scores` is officer-only; it arrives empty for a member session, which just
+ *  leaves every prior-shift count at 0. */
+export function adaptMembers(
+  rows: MemberDto[],
+  standings: StandingDto[],
+  scores: ScoreDto[] = []
+): Member[] {
   const byId = new Map(standings.map(s => [s.member_id, s]));
+  const shiftsById = new Map(scores.map(s => [s.member_id, s.prior_security_shifts]));
   return rows.map(row => {
     const s = byId.get(row.id);
     const balanceCents = s ? s.unpaid_amount_cents : 0;
@@ -63,7 +75,8 @@ export function adaptMembers(rows: MemberDto[], standings: StandingDto[]): Membe
       duesBalance: balanceCents / 100,
       attendanceRate: s && s.total_required ? Math.round((s.attended / s.total_required) * 100) : 0,
       pledgeClass: '',
-      securityHoursServed: 0
+      securityHoursServed: 0,
+      priorSecurityShifts: shiftsById.get(row.id) || 0
     };
   });
 }
@@ -99,16 +112,55 @@ export function adaptEvents(rows: EventDto[]): ChapterEvent[] {
       location: row.location || '',
       type: toEventType(row.event_type),
       audience: row.visibility === 'officer' ? 'Officers Only' : 'All Members',
-      points: 0,
       required: !!row.required,
       attendanceTaken: false,
       checkedInCount: row.attendance_count || 0,
+      jobCount: row.job_count || 0,
+      openJobCount: row.open_job_count || 0,
+      // The list carries the organizer count but no names; names arrive with
+      // the per-event detail (adaptEventDetail).
+      organizerCount: row.organizer_count || 0,
       supervisors: [],
       organizers: [],
       jobs: [],
       securityAssignments: []
     };
   });
+}
+
+/** The fields only GET /api/events/{id} carries, as a patch onto the list row.
+ *  Supervisor rows ship a name; organizer rows carry ids only, so those are
+ *  resolved off the roster the way adaptSecurityAssignment does. */
+export function adaptEventDetail(dto: EventDetailDto, members: Member[]): Partial<ChapterEvent> {
+  return {
+    supervisors: (dto.supervisors || []).map(s => s.name || nameOf(members, s.member_id)),
+    organizers: (dto.organizers || []).map(o => nameOf(members, o.member_id)),
+    organizerCount: (dto.organizers || []).length,
+    checkedInCount: dto.attendance_count || 0,
+    notifiedAt: dto.last_notified_at || undefined
+  };
+}
+
+/** Security assignment row -> shift card. The backend models a shift as a task
+ *  commitment (`task_id`) with at most one pending swap; it has no station. */
+export function adaptSecurityAssignment(
+  dto: SecurityAssignmentDto,
+  membersById: Map<string, Member>
+): SecurityAssignment {
+  const swap = dto.pending_swap && dto.pending_swap.status === 'pending' ? dto.pending_swap : null;
+  const memberId = dto.member_id || '';
+  return {
+    id: dto.task_id,
+    memberId,
+    memberName: membersById.get(memberId)?.name || 'Unknown Member',
+    station: '',
+    status: 'Confirmed',
+    swapRequestedWithId: swap ? swap.target_member_id : undefined,
+    swapRequestedWithName: swap
+      ? membersById.get(swap.target_member_id)?.name || 'Unknown Member'
+      : undefined,
+    swapStatus: swap ? 'Pending' : undefined
+  };
 }
 
 /** ChapterEvent -> EventCreate/EventUpdate body. */
@@ -213,17 +265,68 @@ export function adaptTasks(rows: TaskDto[], members: Member[]): Task[] {
 }
 
 // ----------------------------------------------------
+// JOBS (the same tasks rows, viewed as event/initiative jobs)
+// ----------------------------------------------------
+const JOB_STATUS: Record<string, EventJob['status']> = {
+  open: 'To Do',
+  in_progress: 'In Progress',
+  done_reported: 'Done Reported',
+  approved: 'Approved'
+};
+
+export function adaptTaskToJob(t: TaskDto, membersById: Map<string, Member>): EventJob {
+  return {
+    id: t.id,
+    title: t.title,
+    description: t.description ?? '',
+    peopleNeeded: t.people_needed ?? 1,
+    // The commitment summary carries ids only — no claim timestamp is exposed.
+    claimants: (t.claimants ?? []).map(id => ({
+      memberId: id,
+      memberName: membersById.get(id)?.name ?? 'Unknown',
+      claimedAt: ''
+    })),
+    status: JOB_STATUS[t.status] ?? 'To Do',
+    rejectionReason: t.rejection_reason ?? undefined,
+    isSecurity: t.kind === 'security'
+  };
+}
+
+/** Split job rows by parent. Cancelled jobs and security jobs never show on a
+ *  jobs board (security has its own screen), so both are dropped here. */
+export function groupJobsByParent(tasks: TaskDto[], membersById: Map<string, Member>) {
+  const byEvent = new Map<string, EventJob[]>();
+  const byInitiative = new Map<string, EventJob[]>();
+  const push = (map: Map<string, EventJob[]>, key: string, job: EventJob) => {
+    const list = map.get(key);
+    if (list) list.push(job);
+    else map.set(key, [job]);
+  };
+  for (const t of tasks) {
+    if (t.status === 'cancelled' || t.kind === 'security') continue;
+    const job = adaptTaskToJob(t, membersById);
+    if (t.event_id) push(byEvent, t.event_id, job);
+    else if (t.initiative_id) push(byInitiative, t.initiative_id, job);
+  }
+  return { byEvent, byInitiative };
+}
+
+// ----------------------------------------------------
 // ANNOUNCEMENTS
 // ----------------------------------------------------
 export function adaptAnnouncements(rows: AnnouncementDto[], members: Member[]): Announcement[] {
-  return rows.map(row => ({
+  // A retired (deleted) announcement stays in the backend feed but is off the
+  // calendar — the prototype only surfaces announcements as calendar items.
+  return rows.filter(row => !row.hidden_from_calendar).map(row => ({
     id: row.id,
     title: row.title,
     content: row.body,
     author: row.created_by ? nameOf(members, row.created_by) : 'Chapter',
     date: day(row.sent_at || row.created_at),
     priority: 'Normal',
-    channels: ['Calendar']
+    channels: ['Calendar'],
+    calendarDate: day(row.calendar_date) || undefined,
+    calendarTime: hhmm(row.calendar_time) || undefined
   }));
 }
 

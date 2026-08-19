@@ -1,17 +1,11 @@
 import React, { useState } from 'react';
-import { 
-  UserCheck, 
-  Check, 
-  X, 
-  Clock, 
-  KeyRound, 
-  QrCode, 
-  FileText, 
-  AlertCircle, 
-  CheckCircle2, 
-  Calendar,
-  Send,
-  Plus
+import {
+  UserCheck,
+  Check,
+  X,
+  KeyRound,
+  FileText,
+  CheckCircle2
 } from 'lucide-react';
 import { ChapterEvent, Member, Excuse } from '../types';
 import Modal from './ui/Modal';
@@ -26,7 +20,8 @@ interface AttendanceModuleProps {
   onRecordAttendance: (eventId: string, records: { memberId: string; status: 'Present' | 'Absent' | 'Excused' | 'Late' }[]) => void;
   onSubmitExcuse: (excuse: Omit<Excuse, 'id' | 'status' | 'submittedDate'>) => void;
   onReviewExcuse: (excuseId: string, status: 'Approved' | 'Rejected', reviewedBy: string) => void;
-  onSelfCheckInPin: (eventId: string, memberId: string, memberName: string, pinEntered: string) => boolean;
+  /** The door code identifies the event; the backend checks in the signed-in member. */
+  onSelfCheckIn: (code: string) => Promise<{ ok: boolean; message: string }>;
 }
 
 export default function AttendanceModule({
@@ -38,7 +33,7 @@ export default function AttendanceModule({
   onRecordAttendance,
   onSubmitExcuse,
   onReviewExcuse,
-  onSelfCheckInPin
+  onSelfCheckIn
 }: AttendanceModuleProps) {
   const safeEvents = events || [];
   const safeMembers = members || [];
@@ -48,9 +43,10 @@ export default function AttendanceModule({
   const [activeTab, setActiveTab] = useState<'roster_check' | 'excuses' | 'self_pin'>('roster_check');
   const [showExcuseModal, setShowExcuseModal] = useState(false);
 
-  // Self PIN Check-in state
-  const [enteredPin, setEnteredPin] = useState('');
-  const [pinFeedback, setPinFeedback] = useState<{ success?: boolean; msg?: string } | null>(null);
+  // Door-code check-in state
+  const [enteredCode, setEnteredCode] = useState('');
+  const [codeFeedback, setCodeFeedback] = useState<{ success?: boolean; msg?: string } | null>(null);
+  const [checkingIn, setCheckingIn] = useState(false);
 
   // Excuse Form State
   const [excuseEventId, setExcuseEventId] = useState(safeEvents[0]?.id || '');
@@ -100,17 +96,13 @@ export default function AttendanceModule({
     setShowExcuseModal(false);
   };
 
-  const handlePinCheckInSubmit = (e: React.FormEvent) => {
+  const handleCodeCheckInSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedEvent || !currentMember) return;
-
-    const success = onSelfCheckInPin(selectedEvent.id, currentMember.id, currentMember.name, enteredPin.trim());
-    if (success) {
-      setPinFeedback({ success: true, msg: `Verified! You are checked in for ${selectedEvent.title}.` });
-      setEnteredPin('');
-    } else {
-      setPinFeedback({ success: false, msg: 'Invalid 4-digit PIN code or check-in door link is currently inactive.' });
-    }
+    setCheckingIn(true);
+    const result = await onSelfCheckIn(enteredCode);
+    setCheckingIn(false);
+    setCodeFeedback({ success: result.ok, msg: result.message });
+    if (result.ok) setEnteredCode('');
   };
 
   return (
@@ -121,21 +113,18 @@ export default function AttendanceModule({
           <div className="flex items-center gap-2">
             <UserCheck className="w-6 h-6 text-gold" />
             <h2 className="text-2xl font-display font-extrabold text-slate-900 tracking-tight">
-              Attendance & Excuses
+              Attendance
             </h2>
-            <span className="text-xs font-mono font-bold bg-navy text-gold px-2 py-0.5 rounded-full">
-              Roll Call & PIN Door
-            </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Conduct formal chapter roll call, verify live PIN door check-ins, and process member excuse requests.
+            Take roll call, check members in at the door, and review excuses.
           </p>
         </div>
 
         <div className="flex gap-2">
           <button
             onClick={() => setShowExcuseModal(true)}
-            className="bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 font-bold text-xs px-4 py-2.5 rounded-lg shadow-xs flex items-center gap-2 transition-all cursor-pointer"
+            className="bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-xs flex items-center gap-2 transition-all cursor-pointer"
           >
             <FileText className="w-4 h-4 text-gold" />
             Submit Excuse Request
@@ -166,7 +155,7 @@ export default function AttendanceModule({
           }`}
         >
           <KeyRound className="w-4 h-4" />
-          Live Door PIN Check-in
+          Live Door Check-In
         </button>
 
         <button
@@ -187,7 +176,7 @@ export default function AttendanceModule({
         <Card className="p-6 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
             <div>
-              <span className="text-[10px] font-mono uppercase text-slate-400 font-bold block">Select Chapter Event</span>
+              <span className="text-xs text-slate-500 font-bold block">Select Chapter Event</span>
               <select
                 value={selectedEventId}
                 onChange={e => setSelectedEventId(e.target.value)}
@@ -204,7 +193,7 @@ export default function AttendanceModule({
             {isOfficer && (
               <button
                 onClick={handleSaveAttendance}
-                className="bg-navy hover:bg-slate-800 text-gold font-bold text-xs px-4 py-2.5 rounded-lg transition-all cursor-pointer flex items-center gap-2 shadow-xs"
+                className="bg-navy hover:bg-slate-800 text-gold font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg transition-all cursor-pointer flex items-center gap-2 shadow-xs"
               >
                 <CheckCircle2 className="w-4 h-4" />
                 Commit Attendance to Roster
@@ -215,11 +204,12 @@ export default function AttendanceModule({
           {/* Roll Call Table */}
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-left">
-              <thead className="bg-slate-50 border-y border-slate-200 text-slate-600 font-mono uppercase text-[10px]">
+              <thead className="bg-slate-50 border-y border-slate-200 text-slate-600 text-xs">
                 <tr>
                   <th className="py-2.5 px-3">Brother</th>
                   <th className="py-2.5 px-3">Role</th>
-                  <th className="py-2.5 px-3">Semester Rate</th>
+                  {/* Attendance rates are for the member themself and officers only. */}
+                  {isOfficer && <th className="py-2.5 px-3">Semester rate</th>}
                   <th className="py-2.5 px-3 text-right">Attendance Status</th>
                 </tr>
               </thead>
@@ -232,16 +222,18 @@ export default function AttendanceModule({
                       <td className="py-3 px-3">
                         <span className="font-bold text-slate-900">{mem.name}</span>
                       </td>
-                      <td className="py-3 px-3 text-slate-500 font-mono">{mem.role}</td>
-                      <td className="py-3 px-3">
-                        <span className={`font-mono font-bold ${
-                          mem.attendanceRate >= 85 ? 'text-emerald-600' : 'text-red-600'
-                        }`}>
-                          {mem.attendanceRate}%
-                        </span>
-                      </td>
+                      <td className="py-3 px-3 text-slate-500">{mem.role}</td>
+                      {isOfficer && (
+                        <td className="py-3 px-3">
+                          <span className={`font-bold ${
+                            mem.attendanceRate >= 85 ? 'text-emerald-600' : 'text-red-600'
+                          }`}>
+                            {mem.attendanceRate}%
+                          </span>
+                        </td>
+                      )}
                       <td className="py-3 px-3 text-right">
-                        <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 text-[11px] font-semibold">
+                        <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 text-xs font-semibold">
                           {(['Present', 'Late', 'Excused', 'Absent'] as const).map(st => {
                             const isCur = status === st;
                             return (
@@ -276,7 +268,7 @@ export default function AttendanceModule({
         </Card>
       )}
 
-      {/* TAB 2: Live Door PIN Check-in */}
+      {/* TAB 2: Live Door Check-In */}
       {activeTab === 'self_pin' && (
         <Card className="p-6 max-w-lg mx-auto text-center space-y-6">
           <div className="space-y-1">
@@ -284,48 +276,44 @@ export default function AttendanceModule({
               <KeyRound className="w-6 h-6" />
             </div>
             <h3 className="font-display font-extrabold text-slate-900 text-lg">
-              Live Door PIN Check-In
+              Live Door Check-In
             </h3>
             <p className="text-xs text-slate-500">
-              Enter the 4-digit numeric code displayed at the door or announced by the Marshal.
+              Enter the door code an officer is showing in Live Door Mode. The code decides
+              which event you are checked into, so no event picker here.
             </p>
           </div>
 
-          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-left text-xs space-y-1">
-            <span className="text-[10px] font-mono uppercase text-slate-400 font-bold block">Current Target Event</span>
-            <div className="font-bold text-slate-900">{selectedEvent.title}</div>
-            <div className="text-slate-500">{selectedEvent.date} &bull; {selectedEvent.time} &bull; {selectedEvent.location}</div>
-          </div>
-
-          <form onSubmit={handlePinCheckInSubmit} className="space-y-4">
+          <form onSubmit={handleCodeCheckInSubmit} className="space-y-4">
             <div>
-              <label className="text-xs font-mono font-bold text-slate-700 block mb-2">
-                ENTER 4-DIGIT DOOR PIN
+              <label className="text-xs font-bold text-slate-700 block mb-2">
+                Door code
               </label>
               <input
                 type="text"
-                maxLength={4}
-                value={enteredPin}
-                onChange={e => setEnteredPin(e.target.value)}
-                placeholder="••••"
+                maxLength={6}
+                value={enteredCode}
+                onChange={e => setEnteredCode(e.target.value)}
+                placeholder="A7x9Kp"
                 className="w-48 mx-auto text-center text-3xl font-mono font-black tracking-widest py-3 border-2 border-slate-300 rounded-xl focus:outline-none focus:border-gold"
                 required
               />
             </div>
 
-            {pinFeedback && (
+            {codeFeedback && (
               <div className={`p-3 rounded-lg text-xs font-semibold ${
-                pinFeedback.success ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'
+                codeFeedback.success ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'
               }`}>
-                {pinFeedback.msg}
+                {codeFeedback.msg}
               </div>
             )}
 
             <button
               type="submit"
-              className="w-full bg-navy text-gold hover:bg-slate-800 font-bold py-3 rounded-lg text-xs uppercase tracking-wider transition-all cursor-pointer"
+              disabled={checkingIn || !enteredCode.trim()}
+              className="w-full bg-navy text-gold hover:bg-slate-800 font-bold py-3 min-h-11 rounded-lg text-xs transition-all cursor-pointer disabled:opacity-50"
             >
-              Verify Attendance Check-In
+              {checkingIn ? 'Checking in…' : 'Verify Attendance Check-In'}
             </button>
           </form>
         </Card>
@@ -343,14 +331,14 @@ export default function AttendanceModule({
 
           <div className="divide-y divide-slate-100">
             {excuses.length === 0 ? (
-              <p className="text-xs text-slate-400 py-6 text-center italic">No excuse requests on file.</p>
+              <p className="text-xs text-slate-500 py-6 text-center italic">No excuse requests on file.</p>
             ) : (
               excuses.map(excuse => (
                 <div key={excuse.id} className="py-4 flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-sm text-slate-900">{excuse.memberName}</span>
-                      <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded ${
                         excuse.status === 'Approved' 
                           ? 'bg-emerald-100 text-emerald-800' 
                           : excuse.status === 'Rejected' 
@@ -361,7 +349,7 @@ export default function AttendanceModule({
                       </span>
                     </div>
 
-                    <div className="text-xs text-slate-500 font-mono">
+                    <div className="text-xs text-slate-500">
                       Event: <strong className="text-slate-800">{excuse.eventName || excuse.eventTitle}</strong> &bull; {excuse.eventDate}
                     </div>
 
@@ -405,7 +393,7 @@ export default function AttendanceModule({
                 <FileText className="w-5 h-5 text-gold" />
                 Submit Absence Excuse Request
               </h3>
-              <button onClick={() => setShowExcuseModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+              <button onClick={() => setShowExcuseModal(false)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
             </div>
 
             <form onSubmit={handleExcuseSubmit} className="space-y-4">
@@ -438,7 +426,7 @@ export default function AttendanceModule({
 
               <button
                 type="submit"
-                className="w-full bg-navy text-gold hover:bg-slate-800 font-bold py-3 rounded-lg text-xs uppercase tracking-wider transition-all"
+                className="w-full bg-navy text-gold hover:bg-slate-800 font-bold py-3 min-h-11 rounded-lg text-xs transition-all"
               >
                 Submit for Executive Review
               </button>

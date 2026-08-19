@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "createdAt": "2026-08-18T22:52:54.073Z",
+        "reason": "product-register UI: skill's own product.md sanctions Inter/system sans for app surfaces; pre-existing choice in greekos, not introduced by this session"
+      }
+    ]
+  }
+}

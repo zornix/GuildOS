@@ -9,7 +9,6 @@ import { SyncApi } from './useBackend';
 
 interface Deps {
   members: Member[];
-  events: ChapterEvent[];
   setEvents: Dispatch<SetStateAction<ChapterEvent[]>>;
   refetchEvents: () => Promise<void>;
   syncApi: SyncApi;
@@ -17,9 +16,9 @@ interface Deps {
   enqueueOutbox: EnqueueOutbox;
 }
 
-/** Roll call, PIN check-in and absence excuses. Attendance is recorded onto the
- *  event rows, so this hook writes into the events state too. */
-export function useAttendance({ members, events, setEvents, refetchEvents, syncApi, showToast, enqueueOutbox }: Deps) {
+/** Roll call, door-code check-in and absence excuses. Attendance is recorded onto
+ *  the event rows, so this hook writes into the events state too. */
+export function useAttendance({ members, setEvents, refetchEvents, syncApi, showToast, enqueueOutbox }: Deps) {
   const [excuses, setExcuses] = useState<Excuse[]>(INITIAL_EXCUSES);
 
   const refetchExcuses = async () => setExcuses(adaptExcuses(await api.getExcuses(), members));
@@ -67,14 +66,19 @@ export function useAttendance({ members, events, setEvents, refetchEvents, syncA
     showToast(`Excuse marked ${status}.`);
   };
 
-  const handleSelfCheckInPin = (eventId: string, memberId: string, memberName: string, pinEntered: string) => {
-    const ev = events.find(e => e.id === eventId);
-    if (!ev || !ev.checkInLinkActive) return false;
-    if (ev.checkInPin !== pinEntered && pinEntered !== '4892') return false;
-
-    // Check-in success!
-    setEvents(prev => prev.map(e => e.id === eventId ? { ...e, checkedInCount: (e.checkedInCount || 0) + 1 } : e));
-    return true;
+  /** Door-code check-in. The code identifies the event and the backend checks in
+   *  the signed-in member, so neither is passed from the UI. */
+  const handleSelfCheckIn = async (code: string): Promise<{ ok: boolean; message: string }> => {
+    try {
+      const res = await api.checkInWithCode(code.trim());
+      await refetchEvents();
+      return { ok: true, message: `Checked in for ${res.event_title}.` };
+    } catch (err) {
+      const msg = (err as Error).message;
+      if (msg.includes('(410)')) return { ok: false, message: 'That door code has expired or is not valid.' };
+      if (msg.includes('(409)')) return { ok: false, message: 'You are already checked in for this event.' };
+      return { ok: false, message: 'Check-in failed. Ask an officer for the current door code.' };
+    }
   };
 
   return {
@@ -83,6 +87,6 @@ export function useAttendance({ members, events, setEvents, refetchEvents, syncA
     handleRecordAttendance,
     handleSubmitExcuse,
     handleReviewExcuse,
-    handleSelfCheckInPin
+    handleSelfCheckIn
   };
 }

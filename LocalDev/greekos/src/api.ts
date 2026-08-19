@@ -78,6 +78,60 @@ export interface EventDto {
   event_type?: string | null;
   visibility?: string | null;
   attendance_count?: number;
+  organizer_count?: number;
+  job_count?: number;
+  open_job_count?: number;
+}
+
+/** GET /api/events/{id} — the list row plus the rows only the detail endpoint
+ *  carries: supervisors (the creator is auto-added), organizers, the live
+ *  attendance count and the last notify blast. */
+export interface EventDetailDto extends EventDto {
+  supervisors: { member_id: string; is_creator: boolean; name?: string | null }[];
+  organizers: { id: string; member_id: string; source: string; created_at: string }[];
+  last_notified_at?: string | null;
+}
+
+/** Check-in link. GET answers `{}` when no link is live. */
+export interface CheckInLinkDto {
+  short_code?: string;
+  url?: string;
+  expires_at?: string;
+}
+
+export interface NotifyPreviewDto {
+  recipient_count: number;
+  no_phone_count: number;
+  body_preview: string;
+  last_notified_at: string | null;
+}
+
+export interface ScoreDto {
+  member_id: string;
+  name: string;
+  email: string;
+  score: number;
+  prior_security_shifts: number;
+}
+
+export interface SwapDto {
+  id: string;
+  task_id: string;
+  event_id: string;
+  requester_member_id: string;
+  target_member_id: string;
+  note: string | null;
+  status: string;
+  created_at: string | null;
+}
+
+export interface SecurityAssignmentDto {
+  task_id: string;
+  event_id: string;
+  member_id: string | null;
+  status: string;
+  rejection_reason: string | null;
+  pending_swap: SwapDto | null;
 }
 
 export interface ExcuseDto {
@@ -132,6 +186,14 @@ export interface TaskDto {
   required: boolean;
   due_at: string | null;
   created_at: string;
+  // Job fields (V1): a task is a job on an event OR an initiative, never both.
+  event_id: string | null;
+  initiative_id: string | null;
+  kind: string; // 'standard' | 'security'
+  people_needed: number;
+  claimants: string[]; // member ids with an active commitment
+  claimed_count: number;
+  rejection_reason?: string | null;
 }
 
 export interface AnnouncementDto {
@@ -143,6 +205,10 @@ export interface AnnouncementDto {
   created_by: string | null;
   sent_at: string | null;
   created_at: string;
+  // D15 calendar slot: a dated announcement also shows on the calendar.
+  calendar_date?: string | null;
+  calendar_time?: string | null;
+  hidden_from_calendar?: boolean;
 }
 
 export interface RecruitDto {
@@ -179,11 +245,54 @@ export const api = {
 
   getMembers: () => request<MemberDto[]>('GET', '/api/members/'),
   getStandings: () => request<StandingDto[]>('GET', '/api/standing/'),
+  // Officer-gated (STANDING_VIEW_ALL): callers must tolerate a 403.
+  getScores: () => request<ScoreDto[]>('GET', '/api/memberadmin/scores'),
 
   getEvents: () => request<EventDto[]>('GET', '/api/events/'),
+  getEvent: (id: string) => request<EventDetailDto>('GET', `/api/events/${id}`),
   createEvent: (body: Record<string, unknown>) => request<EventDto>('POST', '/api/events/', body),
   updateEvent: (id: string, body: Record<string, unknown>) =>
     request<EventDto>('PUT', `/api/events/${id}`, body),
+
+  /** Self-volunteer: an omitted member_id means the signed-in member. */
+  addOrganizer: (eventId: string) =>
+    request<unknown>('POST', `/api/events/${eventId}/organizers`, {}),
+
+  notifyPreview: (eventId: string) =>
+    request<NotifyPreviewDto>('GET', `/api/events/${eventId}/notify-preview`),
+  /** Two-phase confirm: the count must still match what the preview resolved. */
+  notifyEvent: (eventId: string, confirmedRecipientCount: number) =>
+    request<unknown>('POST', `/api/events/${eventId}/notify`, {
+      confirmed_recipient_count: confirmedRecipientCount
+    }),
+
+  getCheckInLink: (eventId: string) =>
+    request<CheckInLinkDto>('GET', `/api/events/${eventId}/checkin-link`),
+  openCheckInLink: (eventId: string) =>
+    request<CheckInLinkDto>('POST', `/api/events/${eventId}/checkin-link`),
+  closeCheckInLink: (eventId: string) =>
+    request<void>('DELETE', `/api/events/${eventId}/checkin-link`),
+  /** Door-code check-in; the backend checks in the signed-in member. */
+  checkInWithCode: (shortCode: string) =>
+    request<{ status: string; event_title: string }>('POST', `/api/attendance/checkin/${shortCode}`),
+
+  listSecurity: (eventId: string) =>
+    request<SecurityAssignmentDto[]>('GET', `/api/events/${eventId}/security`),
+  assignSecurity: (eventId: string, memberId: string) =>
+    request<SecurityAssignmentDto>('POST', `/api/events/${eventId}/security`, { member_id: memberId }),
+  removeSecurity: (eventId: string, taskId: string) =>
+    request<void>('DELETE', `/api/events/${eventId}/security/${taskId}`),
+  requestSwap: (eventId: string, taskId: string, targetMemberId: string, note?: string) =>
+    request<SwapDto>('POST', `/api/events/${eventId}/security/${taskId}/swap-request`, {
+      target_member_id: targetMemberId,
+      note: note || null
+    }),
+  acceptSwap: (eventId: string, swapId: string) =>
+    request<SwapDto>('POST', `/api/events/${eventId}/security/swaps/${swapId}/accept`, {}),
+  declineSwap: (eventId: string, swapId: string) =>
+    request<SwapDto>('POST', `/api/events/${eventId}/security/swaps/${swapId}/decline`, {}),
+  cancelSwap: (eventId: string, swapId: string) =>
+    request<SwapDto>('POST', `/api/events/${eventId}/security/swaps/${swapId}/cancel`, {}),
 
   getExcuses: () => request<ExcuseDto[]>('GET', '/api/excuses/'),
   submitExcuse: (eventId: string, reason: string) =>
@@ -205,9 +314,35 @@ export const api = {
   setTaskStatus: (id: string, status: string) =>
     request<TaskDto>('POST', `/api/tasks/${id}/status`, { status }),
   commitTask: (id: string, memberId?: string) =>
-    request<unknown>('POST', `/api/tasks/${id}/commit`, { member_id: memberId }),
+    request<void>('POST', `/api/tasks/${id}/commit`, { member_id: memberId }),
+  uncommitTask: (id: string) => request<void>('POST', `/api/tasks/${id}/uncommit`, {}),
+
+  createJob: (body: {
+    title: string;
+    description?: string;
+    people_needed: number;
+    event_id?: string;
+    initiative_id?: string;
+  }) => request<TaskDto>('POST', '/api/tasks/', body),
+  updateJob: (id: string, body: { title?: string; description?: string; people_needed?: number }) =>
+    request<void>('PATCH', `/api/tasks/${id}`, body),
+  deleteJob: (id: string) => request<void>('DELETE', `/api/tasks/${id}`),
+  reportJobDone: (id: string) => request<void>('POST', `/api/tasks/${id}/report-done`, {}),
+  approveJob: (id: string) => request<void>('POST', `/api/tasks/${id}/approve`, {}),
+  rejectJob: (id: string, reason: string) =>
+    request<void>('POST', `/api/tasks/${id}/reject`, { reason }),
 
   getAnnouncements: () => request<AnnouncementDto[]>('GET', '/api/announcements/'),
+  // calendar_time without calendar_date is a 422 — only send it with a date.
+  createAnnouncement: (body: {
+    title: string;
+    body: string;
+    calendar_date?: string;
+    calendar_time?: string;
+  }) => request<AnnouncementDto>('POST', '/api/announcements/', body),
+  sendAnnouncement: (id: string) => request<void>('POST', `/api/announcements/${id}/send`),
+  /** Draft -> deleted, sent -> hidden from the calendar. Idempotent. */
+  deleteAnnouncement: (id: string) => request<void>('DELETE', `/api/announcements/${id}`),
 
   getRecruits: () => request<RecruitDto[]>('GET', '/api/recruitment/recruits'),
   createRecruit: (body: Record<string, unknown>) =>

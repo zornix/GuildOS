@@ -9,7 +9,6 @@ import {
   CheckSquare,
   Sparkles,
   Send,
-  CalendarDays,
   Terminal,
   type LucideIcon
 } from 'lucide-react';
@@ -20,21 +19,26 @@ export interface NavItem {
   icon: LucideIcon;
   /** No backend behind this tab yet — the shell gates it behind a demo notice. */
   demo?: boolean;
+  /** Hidden from the nav while the session is in member view. */
+  officerOnly?: boolean;
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'events', label: 'Events & Jobs', icon: Calendar },
-  { id: 'calendar', label: 'Unified Calendar', icon: CalendarDays },
-  { id: 'initiatives', label: 'Chair Initiatives', icon: Sparkles },
-  { id: 'attendance', label: 'Attendance & Door', icon: CheckSquare },
-  { id: 'finance', label: 'Treasury & Ledger', icon: DollarSign },
-  { id: 'roster', label: 'Roster & Standings', icon: Users },
-  { id: 'tasks', label: 'House Tasks', icon: ClipboardList },
-  { id: 'recruitment', label: 'Recruitment (PNMs)', icon: UserPlus },
-  { id: 'command', label: 'Command Console', icon: Terminal, demo: true },
-  { id: 'rules', label: 'Bylaws & Conduct', icon: BookOpen, demo: true },
-  { id: 'outbox', label: 'SMS / Push Outbox', icon: Send, demo: true }
+  { id: 'dashboard', label: 'Home', icon: LayoutDashboard },
+  { id: 'events', label: 'Events', icon: Calendar },
+  { id: 'initiatives', label: 'Initiatives', icon: Sparkles },
+  { id: 'attendance', label: 'Attendance', icon: CheckSquare },
+  { id: 'finance', label: 'Treasury', icon: DollarSign },
+  { id: 'tasks', label: 'Jobs', icon: ClipboardList },
+  { id: 'roster', label: 'Roster', icon: Users },
+  { id: 'recruitment', label: 'Recruitment', icon: UserPlus, officerOnly: true }
 ];
 
-export const isDemoTab = (tabId: string) => NAV_ITEMS.some(i => i.id === tabId && i.demo);
+/** Prototype surfaces with no backend — collapsed at the bottom of the nav. */
+export const DEMO_NAV_ITEMS: NavItem[] = [
+  { id: 'command', label: 'Command console', icon: Terminal, demo: true },
+  { id: 'rules', label: 'Bylaws', icon: BookOpen, demo: true },
+  { id: 'outbox', label: 'Message outbox', icon: Send, demo: true }
+];
+
+export const isDemoTab = (tabId: string) => DEMO_NAV_ITEMS.some(i => i.id === tabId);
