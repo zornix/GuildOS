@@ -24,7 +24,6 @@ interface FinanceModuleProps {
   currentMemberName: string;
   onRecordPayment: (payment: Omit<Payment, 'id' | 'date'>) => void;
   onIssueFine: (fine: Omit<Fine, 'id' | 'status' | 'date'>) => void;
-  onPayDues: (memberId: string, amountDollars: number) => void;
   onApproveFinePayment: (fineId: string) => void;
   onPostLedgerCorrection: (correction: { memberId: string; amountCents: number; description: string; correctsEntryId: string }) => void;
 }
@@ -38,7 +37,6 @@ export default function FinanceModule({
   currentMemberName,
   onRecordPayment,
   onIssueFine,
-  onPayDues,
   onApproveFinePayment,
   onPostLedgerCorrection
 }: FinanceModuleProps) {
@@ -111,7 +109,6 @@ export default function FinanceModule({
       reference: 'TX_' + Math.random().toString(36).substring(2, 8).toUpperCase()
     });
 
-    onPayDues(currentMember.id, amountDollars);
     setShowPayModal(false);
   };
 
@@ -321,7 +318,6 @@ export default function FinanceModule({
                         {balanceCents > 0 && isOfficer && (
                           <button
                             onClick={() => {
-                              onPayDues(mem.id, balanceCents / 100);
                               onRecordPayment({
                                 memberId: mem.id,
                                 memberName: mem.name,

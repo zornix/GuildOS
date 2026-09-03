@@ -125,18 +125,6 @@ export function useFinance({ members, setMembers, currentMemberName, isOfficer, 
     showToast(`Assessed ${formatMoney(amountCents)} fine to ${fineData.memberName}.`);
   };
 
-  const handlePayDues = (memberId: string, amountDollars: number) => {
-    const amountCents = Math.round(amountDollars * 100);
-    setMembers(prev => prev.map(m => {
-      if (m.id === memberId) {
-        const curCents = m.duesBalanceCents !== undefined ? m.duesBalanceCents : m.duesBalance * 100;
-        const newCents = Math.max(0, curCents - amountCents);
-        return { ...m, duesBalanceCents: newCents, duesBalance: newCents / 100 };
-      }
-      return m;
-    }));
-  };
-
   const handleApproveFinePayment = (fineId: string) => {
     setFines(prev => prev.map(f => f.id === fineId ? { ...f, status: 'Paid' } : f));
     showToast(`Cleared fine citation.`);
@@ -176,7 +164,6 @@ export function useFinance({ members, setMembers, currentMemberName, isOfficer, 
     setLedger,
     handleRecordPayment,
     handleIssueFine,
-    handlePayDues,
     handleApproveFinePayment,
     handlePostLedgerCorrection
   };
