@@ -176,6 +176,49 @@ def test_a_closed_session_bound_to_another_link_does_not_block(
     assert resp.status_code == 200, resp.text
 
 
+async def test_a_fresh_link_survives_a_closed_manual_session(
+    as_member, cursor, chapter_id, event_id, member_factory, member_with_phone,
+    session_factory,
+):
+    """#34: a closed manual session used to kill every link generated after it.
+
+    Manual sessions carry no checkin_link_id, so _session_for_link's unbound
+    fallback adopted the stale closed window and 410'd the brand-new link on the
+    first scan — unfixable from the officer's side, regenerating made another
+    dead link. create_checkin_link now binds the event's open sessions instead
+    of leaving the governing window to be guessed.
+    """
+    from api.attendance.services.checkin_links import validate_checkin_link
+
+    officer = member_factory(role="officer")
+    stale = session_factory(chapter_id, event_id, mode="manual", closes_in_minutes=-5)
+
+    resp = as_member(officer).post(f"/api/events/{event_id}/checkin-link")
+    assert resp.status_code == 200, resp.text
+    code = resp.json()["short_code"]
+
+    assert await validate_checkin_link(code) is not None, "the fresh link is dead on arrival"
+
+    cursor.execute("SELECT checkin_link_id FROM attendance_sessions WHERE id = %s", (stale,))
+    assert cursor.fetchone()["checkin_link_id"] is None, "a closed session must not be bound"
+
+
+async def test_a_new_link_adopts_the_open_manual_session(
+    as_member, cursor, chapter_id, event_id, member_factory, session_factory
+):
+    """The other half of the bind: an OPEN window still governs the new link."""
+    officer = member_factory(role="officer")
+    session = session_factory(chapter_id, event_id, mode="manual", closes_in_minutes=30)
+
+    resp = as_member(officer).post(f"/api/events/{event_id}/checkin-link")
+    assert resp.status_code == 200, resp.text
+
+    cursor.execute("SELECT checkin_link_id FROM attendance_sessions WHERE id = %s", (session,))
+    link_id = cursor.fetchone()["checkin_link_id"]
+    cursor.execute("SELECT short_code FROM checkin_links WHERE id = %s", (link_id,))
+    assert cursor.fetchone()["short_code"] == resp.json()["short_code"]
+
+
 # ── killing a link is chapter-scoped ──────────────────────────────────────────
 
 def test_officer_kills_their_own_chapters_link(
