@@ -134,4 +134,4 @@ Simple explicit rules (in `routes/standing.py`):
 
 Run the FastAPI app and Next.js app behind your host’s process manager or serverless platform. Set **`DATABASE_URL`**, **`JWT_SECRET`**, **`FRONTEND_URL`** (CORS), and **`BASE_URL`** (absolute check-in URLs). A scheduled job or cron can call `GET /api/cron/process-fines` on your chosen interval.
 
-**Local demo:** see [README.md](../README.md) and `deploy/local-dev.sh`.
+**Local demo:** see [README.md](../../../Prod/README.md) and `deploy/local-dev.sh`.

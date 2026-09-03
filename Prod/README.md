@@ -111,7 +111,7 @@ The script requires `status=ok` **and** `checks.database=ok`. It retries on netw
 |------|-------------|
 | `migrations/` | SQL migrations (e.g. schema, `password_hash` on `members`). |
 | `scripts/` | Operational scripts (`migrate_db.py`, `set_officer_password.py`, `check_prod_status.py`, etc.). |
-| `docs/` | Additional notes (`ARCHITECTURE.md`, `FEATURES.md`, `PHONE_LOGIN.md`). |
+| `../docs/archive/Prod/` | Archived April 2026 notes (`ARCHITECTURE.md`, `FEATURES.md`, `PHONE_LOGIN.md`). |
 | `requirements.txt` | Python dependencies for the API. |
 
 ---

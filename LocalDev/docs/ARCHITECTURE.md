@@ -37,7 +37,8 @@ The git root is `/home/mshi/GuildOS`, one level **above** this directory.
 - `Prod/` — sibling copy; `LocalDev/fratos` and `Prod/fratos` are duplicated
   frontends that **drift** (consolidation is a known open task — don't assume
   they match).
-- `GreekV1/`, `greekos-landing/` — older copy / marketing site.
+- `greekos-landing/` — marketing site. (The old `GreekV1/` copy is archived
+  under `docs/archive/GreekV1/` at the git root.)
 - `local-dev-scripts/` — tooling; `LocalDev/package.json` scripts shell out to
   `local-dev-scripts/scripts/local-dev.sh`.
 
@@ -98,10 +99,10 @@ Db plumbing is not per-domain: `get_db`, `call_rpc`, `unwrap_row` and
 directory for those, and route files import `require_permission` from
 `api.rbac.auth` directly rather than through a domain re-export.
 
-**Legacy flat modules** (`api/routes/`, `api/services/`,
-`api/models/schemas.py`) hold pre-refactor code. Some domains are "conform
-shells" that delegate to them and carry a `CONFORM_TODO.md`. Put new code in
-the domain package, never in the flat modules.
+**There are no legacy flat modules.** `api/routes/`, `api/services/` and
+`api/models/` were removed once every handler, service and schema had moved
+into its domain package; nothing delegates to them and no domain carries a
+`CONFORM_TODO.md`.
 
 Route-handler error mapping convention: services raise domain exceptions or
 return status strings; handlers map to **403** (permission/authority), **404**
@@ -130,7 +131,7 @@ token — **never from a client payload**.
 All multi-row / financial / state-machine writes go through plpgsql RPCs called
 via `api/platform/rpc.py::call_rpc(name, params)`. RPC naming is prefixed
 per domain: `tr_*` (treasury), `ev_*` (events), `tk_*` (tasks), `rbac_*`,
-`in_*` (initiatives, planned). Every RPC body enforces, in this order:
+`in_*` (initiatives). Every RPC body enforces, in this order:
 
 1. **Tenant guard** — every row touched is filtered by `p_chapter_id`; a
    cross-tenant id behaves as "not found".
@@ -315,7 +316,7 @@ otherwise.
    `treasury:payment:verify`, `calendar:event:create`); services use
    `has_permission`.
 4. Per-row authority = membership tables (`event_supervisors`,
-   `initiative_chairs` planned), checked inside RPCs.
+   `initiative_chairs`), checked inside RPCs.
 5. Roles are seeded rows (`member_roles`), not enum code paths. Officer-ish
    roles include `officer`, `treasurer`, and the six chair roles in
    `api/events/auth.py::CHAIR_ROLES`.
@@ -326,13 +327,14 @@ otherwise.
 
 - **Plan docs:** feature work is planned in `docs/imp-*.md` (decision records
   D1, D2, … carry across phases) and executed by an implementer agent exactly
-  as written. Existing: `imp-ev-ph1/2/3.md` (Events V1), `imp-fe-remediation.md`
-  (frontend). `events-dev-status.md` tracks phase status. Phase 1 + 2 are
-  landed; Phase 3 (initiatives, migration 0144) is planned but not built.
-- **Seams:** grep for `PHASE3 SEAM` — deliberate extension points left in 0142
+  as written. Live: `imp-fe-remediation.md` (frontend). Shipped plans move to
+  `docs/archive/` — the four Events V1 phases (`imp-ev-ph1/2/3/4.md`) are all
+  there, landed in migrations 0141–0145. `events-dev-status.md` tracks phase
+  status.
+- **Seams:** grep for `PHASE3 SEAM` — extension points left in 0142
   (`tk_uncommit_task` event-start resolver) and
-  `api/tasks/services/approvals.py` (`can_approve_job`) for the initiatives
-  work.
+  `api/tasks/services/approvals.py` (`can_approve_job`), both resolved by the
+  initiatives work in 0144.
 - **Issue tracker:** GitHub issues on `zornix/GuildOS` via `gh` (see
   `docs/agents/issue-tracker.md` at the git root).
 - **Verification bar before committing backend work:** relevant

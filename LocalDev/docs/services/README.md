@@ -1,9 +1,10 @@
 # GuildOS Services
 
-This directory documents the service layer under `LocalDev/api/` after the
-scaffold/conformance pass (June 2026). Everything here describes **one**
-structure — the treasury domain-package pattern — which is the canonical shape
-for every service, existing or new.
+This directory documents the service layer under `LocalDev/api/`. Everything
+here describes **one** structure — the treasury domain-package pattern — which
+is the canonical shape for every service, existing or new. The conformance pass
+that got there is finished: the legacy flat modules (`api/routes/`,
+`api/services/`, `api/models/`) no longer exist and nothing delegates to them.
 
 ## The canonical package shape
 
@@ -11,15 +12,11 @@ for every service, existing or new.
 api/<domain>/
   __init__.py
   api/
-    router.py          # aggregates the domain's APIRouters; index.py mounts only this
     <resource>.py      # route handlers (thin: parse → service → respond)
     schemas.py         # Pydantic v2 models, domain-local (never shared across domains)
+    router.py          # ONLY when several sub-routers need a fixed include order
   services/            # business logic; pure where possible, no FastAPI imports
   core/                # domain rules/value objects (e.g. treasury/core/money.py)
-  db/
-    session.py         # client acquisition
-    rpc.py             # call_rpc helper for trust-boundary plpgsql RPCs
-    repositories/      # read-side query helpers
   auth.py              # domain permission constants + capability helpers
   notifications.py     # outbox enqueue helpers (transactional outbox pattern)
 ```
@@ -27,24 +24,40 @@ api/<domain>/
 Not every domain needs every file — small domains omit what they don't use,
 but never invent a different layout.
 
+**There is no per-domain `db/`.** Client acquisition (`get_db`), `call_rpc`,
+row unwrapping and delivery mode all come from `api/platform/`, the single
+database layer (ADR-0002). Route files import `require_permission` from
+`api.rbac.auth` directly; a domain never re-exports it.
+
+**`api/router.py` is the exception, not the rule.** Only `attendance`,
+`events`, `tasks` and `treasury` have one, because their include order is
+load-bearing (fixed path segments before parameterized ones); every other
+domain exposes one resource router that `api/index.py` mounts directly. Those
+aggregators are append-only.
+
 ## Service inventory
 
-| Domain | Package | Status |
-|---|---|---|
-| RBAC | `api/rbac/` | **New** — keystone; see `permissions-matrix.md` |
-| Treasury | `api/treasury/` | Existing, untouched (pattern source) |
-| Calendar / Events | `api/events/` | Conform shell delegating to `api/routes/events.py` + new columns |
-| Attendance | `api/attendance/` | Conform shell + new `attendance_sessions` resource |
-| Tasks | `api/tasks/` | **New** |
-| Announcements | `api/announcements/` | **New** (transactional outbox, dry-run delivery) |
-| Standing | `api/memberadmin/` | Extended (reason codes, derived-standing core module) |
-| Recruitment | `api/recruitment/` | **New** |
-| Bylaws | `api/bylaws/` | **New** (honest Q&A stub — no RAG, never fabricates answers) |
-| NL Controller | `api/nl_controller/` | **New** (approval-gated; no parser, no execution yet) |
+Run `ls api/` for the authoritative list; `api/platform/` sits alongside these
+but is plumbing, not a domain.
 
-Conform shells contain a `CONFORM_TODO.md` listing what still lives in the
-legacy flat modules (`api/routes/`, `api/services/`, `api/models/schemas.py`)
-and the conditions for moving it safely.
+| Domain | Package | Notes |
+|---|---|---|
+| RBAC | `api/rbac/` | Keystone; see `permissions-matrix.md` |
+| Treasury | `api/treasury/` | Pattern source. Also owns the frozen `/api/fines` surface (`api/fines_legacy.py`) |
+| Events | `api/events/` | Events V1: times, co-supervisors, notify gate, security assignments |
+| Initiatives | `api/initiatives/` | Chair-led calendar peer of events (0144); jobs reuse the tasks machinery, authority is `initiative_chairs` |
+| Calendar | `api/calendar/` | Read-only aggregator over events + initiatives — a view, not an entity |
+| Attendance | `api/attendance/` | Check-in, excuses, check-in links, `attendance_sessions` |
+| Tasks | `api/tasks/` | Tasks, jobs, commitments, approvals, and the event-prep template engine (`/api/operations`) |
+| Announcements | `api/announcements/` | Transactional outbox, dry-run delivery |
+| Standing | `api/memberadmin/` | Owns standing (reason codes, derived-standing core module); mounted at `/api/memberadmin` and `/api/standing` |
+| Members | `api/members/` | Roster |
+| Auth | `api/auth/` | Login, JWT issue, token versioning |
+| Recruitment | `api/recruitment/` | Pipeline |
+| Bylaws | `api/bylaws/` | Honest Q&A stub — no RAG, never fabricates answers |
+| NL Controller | `api/nl_controller/` | Approval-gated; no parser, no execution yet |
+| Cron | `api/cron/` | `CRON_SECRET`-gated scheduled endpoints (outbox drain); schedule lives in the root `vercel.json` |
+| Instrumentation | `api/instrumentation/` | Usage tracking (`/api/usage`) |
 
 ## Hard rules (apply to every service)
 

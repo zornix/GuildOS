@@ -4,10 +4,9 @@ Source of truth: migrations `0083_rbac_seed_rpcs.sql` (catalog + matrix),
 `0121_treasury_v1_rbac_seeds.sql`, `0130`, `0144`, and
 `0147_authority_one_gate.sql`, plus `api/rbac/core/policy.py` (legacy compat +
 ownership scoping). This document mirrors them; if they disagree, the
-code/migration wins. The table below is the 0083 baseline plus the treasury /
-one-gate additions; a handful of later single-key seeds
-(`announcements:send:sms` in 0130, `calendar:initiative:*` in 0144) are listed
-under "Later additions" rather than as table columns.
+code/migration wins. The table below is the 0083 baseline plus the treasury,
+initiatives and one-gate additions; later seeds that add a whole **role**
+rather than a key are listed under "Later additions".
 
 ## Model
 
@@ -61,6 +60,8 @@ Treasurer only).
 | calendar:event:update | ✓ | | ✓ | ✓ | | ✓ | | ✓ | | | | | | |
 | calendar:event:delete | ✓ | | ✓ | | | | | | | | | | | |
 | calendar:officer:view | ✓ | | ✓ | ✓ | | ✓ | ✓ | | | | | | | ✓ |
+| calendar:initiative:create | | | | | | | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | | |
+| calendar:initiative:update | | | | | | | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | | |
 | attendance:checkin:create | ✓ | | ✓ | | | ✓ | | | | | | | | |
 | attendance:override | ✓ | | ✓ | | | ✓ | | | | | | | | |
 | attendance:excuse:review | ✓ | | ✓ | ✓ | | ✓ | | | | | | ✓ | | |
@@ -106,9 +107,12 @@ nme=new_member_educator, alumni=alumni_advisor.)
 | `finance_board` | 0121 | `treasury:payment:verify`, `treasury:fines:issue`, `treasury:budget:view`, `treasury:audit:view`, `bylaws:query`, `tasks:complete` |
 | `treasury_viewer` | 0147 | `treasury:budget:view`, `treasury:audit:view` |
 
-`announcements:send:sms` (0130) is held by `president` / `secretary`;
-`calendar:initiative:create|update` (0144) by the chair roles. See those
-migrations for the exact grants.
+`announcements:send:sms` (0130) is held by `president` / `secretary`.
+
+`calendar:initiative:create|update` (0144) went to the six chair roles and
+`admin` only — deliberately **not** `officer`, `president` or `vice_president`
+(imp-ev-ph3 D9: initiatives are chair-led). There is no
+`calendar:initiative:delete` key; V1 has no delete flow.
 
 ## Treasury note
 

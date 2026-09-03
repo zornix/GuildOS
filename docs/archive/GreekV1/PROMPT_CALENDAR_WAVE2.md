@@ -26,8 +26,8 @@ TEST_DATABASE_URL=postgresql://fraternityos:localdev@localhost:5434/fraternityos
 Current baseline: 301 passed, 24 errors — all ModuleNotFoundError: No module named 'api.calendar'.
 
 CONTEXT
-- Spec: GreekV1/SPEC.md §2 (calendar is a VIEW, not an entity)
-- Build plan: GreekV1/BUILD_PLAN.md Wave 2
+- Spec: SPEC.md §2 (calendar is a VIEW, not an entity)
+- Build plan: BUILD_PLAN.md Wave 2
 - Migration 0140_usage_events.sql already applied (usage_events table, append-only)
 - tests/calendar/ was renamed to tests/calendar_view/ to avoid stdlib calendar conflict — do NOT rename back
 - Wave 1 domains (events, tasks, treasury, announcements) are done and passing — do not refactor them

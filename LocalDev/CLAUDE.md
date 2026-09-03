@@ -94,9 +94,8 @@ prefixes (`excuses_router`, `checkin_links_router`, `fines_router`) re-export
 them for `index.py`. **Mounted URL paths are frozen**: check
 `fratos/lib/api-client.ts` before changing any prefix.
 
-**Conform shells.** `api/attendance/` still carries a `CONFORM_TODO.md` for
-legacy handlers not yet relocated into its domain package; put new code in the
-domain package.
+**No legacy flat modules.** `api/routes/`, `api/services/` and `api/models/`
+are gone — every handler, service and schema lives in its domain package.
 
 ### `api/platform/` — the one database layer
 

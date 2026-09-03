@@ -101,9 +101,6 @@ Backend work:
   member's events-attended count. No streaks, no percentage.
 - Attendance percentage appears only on the member's own self-view and in
   officer views.
-- Overlaps with `api/attendance/CONFORM_TODO.md` (relocate legacy handlers,
-  swap `require_officer` for permission keys) — fold in what the touched
-  routes need, don't boil the ocean.
 - Deferred/optional: live chapter attendance ticker on the officer session view.
 
 ## Phase 4 — Member money view

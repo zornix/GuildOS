@@ -32,7 +32,7 @@ Do not treat it as truth.
 
 ### 1. Product and rules
 
-- `PRODUCT.md` — who it serves
+- `../../PRODUCT.md` — who it serves
 - `CLAUDE.md` — stack, commands, hard rules
 - `docs/ARCHITECTURE.md` — conventions in full
 
@@ -91,9 +91,8 @@ There is no supabase-py path and no per-domain `db/session.py` / `db/rpc.py`.
 - `api/events/services/events.py`
 - `api/events/core/rules.py` — notify-gate completeness, organizer minimum, visibility
 
-### 10. Attendance (pattern not finished)
+### 10. Attendance
 
-- `api/attendance/CONFORM_TODO.md` — remaining legacy handlers
 - `api/attendance/api/router.py` — also re-exports excuses / check-in routers
 
 ### 11. Frontend shell

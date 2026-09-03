@@ -31,7 +31,7 @@ Primary services:
 
 Supporting sources:
 
-- `Prod/docs/FEATURES.md` (MVP status table, endpoint/UI mapping)
+- `FEATURES.md` (MVP status table, endpoint/UI mapping)
 - `GuildOS/README.MD` (feature list and endpoint groups)
 - `GuildOS/fratos/fraternity-os-frontend.tsx` (main navigation: Dashboard, Events, Fines, Members, Standing)
 
@@ -62,9 +62,9 @@ Core differentiators:
 
 Supporting sources:
 
-- `Prod/docs/PHONE_LOGIN.md` (problem, solution, flow, and rationale)
+- `PHONE_LOGIN.md` (problem, solution, flow, and rationale)
 - `GuildOS/deferred/docs/ROADMAP.md` (zero-friction onboarding/check-in vision)
-- `Prod/docs/FEATURES.md` (integrated workflow across attendance, excuses, fines, and standing)
+- `FEATURES.md` (integrated workflow across attendance, excuses, fines, and standing)
 
 ## 5) Brand and Specification Consistency Notes
 
@@ -72,7 +72,7 @@ A website auditor should be aware of several spec inconsistencies:
 
 - Naming variance: repository references both "GuildOS" and "FraternityOS."
 - Phone format inconsistency across docs/code in some areas (9-digit vs 10-digit references).
-- Some roadmap/deferred documents include future-state scope; production audit should prioritize `Prod/docs/FEATURES.md` and active app code paths.
+- Some roadmap/deferred documents include future-state scope; production audit should prioritize `FEATURES.md` and active app code paths.
 
 ## 6) Compliance and Audit Readiness Gaps
 

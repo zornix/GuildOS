@@ -4,14 +4,31 @@ Welcome to the GuildOS documentation! This folder contains all the reference mat
 
 ## 🧭 Navigation
 
-*   [Architecture Overview](ARCHITECTURE.md) - System architecture, tech stack, and network flows.
+**Start here**
+
 *   [Code map](CODEMAP.md) - Guided file order for agents (which files to open first).
-*   [Treasury Architecture](TREASURY_ARCHITECTURE.md) - Deep dive into the ledger, invoicing, and balance engine.
+*   [Architecture Overview](ARCHITECTURE.md) - System architecture, tech stack, and network flows.
 *   [Services Design](services/README.md) - The canonical domain-package pattern for all backend services.
-*   [Service Map](services/service-map.md) - How different domains (events, attendance, treasury) interact.
-*   [Permissions & RBAC](services/permissions-matrix.md) - Role-Based Access Control matrix.
+*   [Service Map](services/service-map.md) - Route ownership and the cross-domain seams.
+*   [Permissions & RBAC](services/permissions-matrix.md) - Roles x permissions matrix.
+
+**Deep dives**
+
+*   [Database](DATABASE.md) - Schema conventions, migrations, RLS.
+*   [Treasury Architecture](TREASURY_ARCHITECTURE.md) - The ledger, invoicing, and balance engine.
+*   [Events V1 spec](events-v1-spec.md) + [phase status](events-dev-status.md) - Events, jobs, notify gate, initiatives.
+*   [Ops runbook](ops-runbook.md) - Deploys, cron, outbox drain, incident steps.
+*   [Features](FEATURES.md) - What ships today, by module.
+
+**Product and process**
+
 *   [MVP Operating Loop](services/mvp-operating-loop.md) - The weekly chapter cycle the software supports.
 *   [Future Agents](services/future-agents.md) - Design constraints and hooks for future AI agents.
+*   [ADRs](../../docs/adr/) - Decisions that are settled; don't relitigate them here.
+*   [Archive](archive/README.md) - Shipped `imp-*.md` plans, kept for history only.
+
+Live `imp-*.md` plans sit in this directory; once their work ships they move to
+`archive/`.
 
 ## 🚀 Quick Start for Developers & Agents
 
@@ -41,20 +58,24 @@ graph LR
 You can spin up the entire stack locally using the scripts in `package.json`:
 
 ```bash
-# Verify the sandbox (CI-equivalent check)
-npm run verify
-
 # Interactive dev mode (Supabase demo DB, FastAPI, and Next.js)
 npm run dev
+
+# Apply pending migrations against the demo DB
+npm run migrate
 
 # Seed the Supabase demo DB (usually unnecessary — demo already has data)
 npm run seed
 ```
 
+There is no `npm run verify` / `preflight` script — the verification bar is
+`python3 -m pytest` for the backend, and `npm run test:unit` + `npm run build`
+in `fratos/` for the frontend.
+
 ## 🤖 Guide for Future Agents
 
 When modifying this project, keep these core rules in mind:
-1.  **Follow the Canonical Package Shape**: New backend features should live in their own domain folder `api/<domain>/` with `router.py`, `schemas.py`, `services/`, and `db/` (see [Services README](services/README.md)).
+1.  **Follow the Canonical Package Shape**: New backend features should live in their own domain folder `api/<domain>/` with `api/<resource>.py`, `api/schemas.py`, `services/` and `core/` (see [Services README](services/README.md)). Database access comes from `api/platform/` — domains have no `db/` of their own.
 2.  **Integer Cents for Money**: Never use floats for currency. Use the `Money` primitive in `api/treasury/core/money.py`.
 3.  **Do Not Modify Applied Migrations**: If you need to change the DB schema, create a *new* migration file. Never edit existing ones.
 4.  **No Fabricated Business Logic**: If a behavior isn't implemented (like bylaws Q&A), return a `not_implemented` status explicitly.
