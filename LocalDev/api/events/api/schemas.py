@@ -99,10 +99,6 @@ class Completeness(BaseModel):
     items: list[CompletenessItem]
 
 
-class SupervisorSet(BaseModel):
-    member_id: str
-
-
 class SupervisorAdd(BaseModel):
     member_id: str
 
