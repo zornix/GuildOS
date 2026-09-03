@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { INITIAL_ANNOUNCEMENTS, INITIAL_RULES } from '../data/mockData';
 import { Announcement, ChapterRule, Member, SecurityAssignment } from '../types';
-import { api, ensureLogin, EventDto, TaskDto } from '../api';
+import { api, ensureLogin, optionalOfficerCall, EventDto, TaskDto } from '../api';
 import {
   adaptAnnouncements,
   adaptEvents,
@@ -102,10 +102,10 @@ export function useAppData() {
         const [me, memberRows, standingRows, scoreRows] = await Promise.all([
           api.getMe(),
           api.getMembers(),
-          api.getStandings(),
-          // Officer-only endpoint: a member session 403s, which just means no
-          // prior-shift counts rather than a failed load.
-          api.getScores().catch(() => [])
+          // Officer-gated: a member session 403s, which just means an empty
+          // standing/score section rather than a failed load.
+          optionalOfficerCall(api.getStandings(), []),
+          optionalOfficerCall(api.getScores(), [])
         ]);
         const rosterRows = adaptMembers(memberRows, standingRows, scoreRows);
 
@@ -114,10 +114,10 @@ export function useAppData() {
             api.getEvents(),
             api.getExcuses(),
             api.getFines(),
-            api.getTreasuryDashboard(),
+            optionalOfficerCall(api.getTreasuryDashboard(), null),
             api.getTasks(),
             api.getAnnouncements(),
-            api.getRecruits(),
+            optionalOfficerCall(api.getRecruits(), []),
             api.getInitiatives()
           ]);
 
@@ -146,7 +146,7 @@ export function useAppData() {
         })));
         attendance.setExcuses(adaptExcuses(excuseRows, rosterRows));
         finance.setFines(adaptFines(fineRows, rosterRows));
-        finance.setPayments(adaptPayments(treasury.recent_payments || [], rosterRows));
+        finance.setPayments(adaptPayments(treasury?.recent_payments || [], rosterRows));
         // No chapter-wide ledger read exists yet (statements are per member),
         // so the immutable-ledger view starts empty rather than faked.
         finance.setLedger([]);
