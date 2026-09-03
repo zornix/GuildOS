@@ -131,7 +131,7 @@ token — **never from a client payload**.
 All multi-row / financial / state-machine writes go through plpgsql RPCs called
 via `api/platform/rpc.py::call_rpc(name, params)`. RPC naming is prefixed
 per domain: `tr_*` (treasury), `ev_*` (events), `tk_*` (tasks), `rbac_*`,
-`in_*` (initiatives, planned). Every RPC body enforces, in this order:
+`in_*` (initiatives). Every RPC body enforces, in this order:
 
 1. **Tenant guard** — every row touched is filtered by `p_chapter_id`; a
    cross-tenant id behaves as "not found".
@@ -316,7 +316,7 @@ otherwise.
    `treasury:payment:verify`, `calendar:event:create`); services use
    `has_permission`.
 4. Per-row authority = membership tables (`event_supervisors`,
-   `initiative_chairs` planned), checked inside RPCs.
+   `initiative_chairs`), checked inside RPCs.
 5. Roles are seeded rows (`member_roles`), not enum code paths. Officer-ish
    roles include `officer`, `treasurer`, and the six chair roles in
    `api/events/auth.py::CHAIR_ROLES`.
@@ -327,13 +327,14 @@ otherwise.
 
 - **Plan docs:** feature work is planned in `docs/imp-*.md` (decision records
   D1, D2, … carry across phases) and executed by an implementer agent exactly
-  as written. Existing: `imp-ev-ph1/2/3.md` (Events V1), `imp-fe-remediation.md`
-  (frontend). `events-dev-status.md` tracks phase status. Phase 1 + 2 are
-  landed; Phase 3 (initiatives, migration 0144) is planned but not built.
-- **Seams:** grep for `PHASE3 SEAM` — deliberate extension points left in 0142
+  as written. Live: `imp-fe-remediation.md` (frontend). Shipped plans move to
+  `docs/archive/` — the four Events V1 phases (`imp-ev-ph1/2/3/4.md`) are all
+  there, landed in migrations 0141–0145. `events-dev-status.md` tracks phase
+  status.
+- **Seams:** grep for `PHASE3 SEAM` — extension points left in 0142
   (`tk_uncommit_task` event-start resolver) and
-  `api/tasks/services/approvals.py` (`can_approve_job`) for the initiatives
-  work.
+  `api/tasks/services/approvals.py` (`can_approve_job`), both resolved by the
+  initiatives work in 0144.
 - **Issue tracker:** GitHub issues on `zornix/GuildOS` via `gh` (see
   `docs/agents/issue-tracker.md` at the git root).
 - **Verification bar before committing backend work:** relevant
