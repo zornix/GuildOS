@@ -26,6 +26,7 @@ from fastapi import HTTPException
 
 from api.config import settings
 from api.platform.db import get_db
+from api.platform.rows import unwrap_row
 
 try:  # psycopg2 is the offline/local driver; guarded for supabase-only installs.
     from psycopg2 import errors as _pg_errors
@@ -92,14 +93,16 @@ def _session_for_link(sb, link: dict) -> dict | None:
 
       1. a session bound to THIS link governs it (the normal case: create_session
          opens the link, then records the session pointing at it);
-      2. otherwise, if the event has exactly one session and that session is
-         bound to no link at all, it governs (a link opened directly through
-         POST /events/{id}/checkin-link under a manual session);
+      2. otherwise, if the event has exactly one *still-open* session bound to no
+         link at all, it governs (links created before create_checkin_link
+         started binding the event's open session to them);
       3. otherwise None -- ambiguous, and a guess here would either kill a valid
          link or honor the wrong window.
 
-    The fallback deliberately ignores sessions bound to a *different* link, so an
-    old closed session cannot kill the fresh link an officer just opened.
+    The fallback ignores sessions bound to a *different* link, and sessions that
+    have already closed: neither has any claim on a link created after it. An
+    adopted closed unbound session was #34 -- one stale manual window made every
+    freshly generated link 410 on the first scan.
     """
     link_id = link.get("id")
     event_id = link.get("event_id")
@@ -120,16 +123,53 @@ def _session_for_link(sb, link: dict) -> dict | None:
         if bound:
             return None
 
-    unbound = [r for r in rows if not r.get("checkin_link_id")]
+    now = datetime.now(timezone.utc)
+    unbound = [
+        r for r in rows
+        if not r.get("checkin_link_id") and not _is_closed(r, now)
+    ]
     if len(unbound) == 1:
         return unbound[0]
     return None
 
 
+def _is_closed(session: dict, now: datetime) -> bool:
+    closes_at = _as_datetime(session.get("closes_at"))
+    return closes_at is not None and now > closes_at
+
+
+def _bind_open_sessions(sb, event_id: str, link_id: str, now: datetime) -> None:
+    """Point the event's still-open unbound sessions at the link just created.
+
+    Without this, a link made through POST /events/{id}/checkin-link records no
+    session at all and _session_for_link has to guess which window governs it.
+    Closed sessions are left alone -- binding one would hand the new link the
+    dead window it was generated to replace.
+
+    (One-row-at-a-time because the query builder has no IS NULL filter and these
+    are single-row, non-financial updates -- an event has one open session.)
+    """
+    rows = (
+        sb.table("attendance_sessions")
+        .select("id, closes_at, checkin_link_id")
+        .eq("event_id", event_id)
+        .execute()
+    ).data or []
+    for row in rows:
+        if row.get("checkin_link_id") or _is_closed(row, now):
+            continue
+        sb.table("attendance_sessions") \
+            .update({"checkin_link_id": link_id}) \
+            .eq("id", row["id"]) \
+            .execute()
+
+
 async def create_checkin_link(event_id: str, created_by: str) -> dict:
     """
     Create a new short-lived check-in link for an event.
-    Deactivates any existing active link for the same event.
+    Deactivates any existing active link for the same event, and binds the
+    event's still-open unbound sessions to the new link so the closes_at gate
+    knows which window governs it.
     """
     sb = get_db()
     now = datetime.now(timezone.utc)
@@ -144,25 +184,30 @@ async def create_checkin_link(event_id: str, created_by: str) -> dict:
     for _ in range(5):
         code = generate_short_code()
         try:
-            sb.table("checkin_links").insert({
+            inserted = unwrap_row(sb.table("checkin_links").insert({
                 "event_id": event_id,
                 "short_code": code,
                 "created_by": created_by,
                 "expires_at": expires_at.isoformat(),
                 "active": True,
-            }).execute()
-
-            return {
-                "short_code": code,
-                "url": f"{settings.BASE_URL}/c/{code}",
-                "expires_at": expires_at.isoformat(),
-                "event_id": event_id,
-            }
+            }).execute()) or {}
         except Exception as exc:
             if _is_duplicate_code(exc):
                 continue
             logger.exception("check-in link insert failed for event %s", event_id)
             raise HTTPException(500, "Could not generate check-in code") from exc
+
+        # Outside the retry try/except on purpose: the link exists now, and a
+        # binding failure must not be mistaken for a code collision.
+        if inserted.get("id"):
+            _bind_open_sessions(sb, event_id, inserted["id"], now)
+
+        return {
+            "short_code": code,
+            "url": f"{settings.BASE_URL}/c/{code}",
+            "expires_at": expires_at.isoformat(),
+            "event_id": event_id,
+        }
 
     logger.error(
         "check-in code generation exhausted 5 attempts for event %s -- a collision "

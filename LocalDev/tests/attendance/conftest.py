@@ -95,16 +95,16 @@ def session_factory(cursor):
     """Insert an attendance session, optionally bound to a link and already closed."""
 
     def _make(chapter_id: str, event_id: str, *, checkin_link_id: str | None = None,
-              closes_in_minutes: int | None = None) -> str:
+              closes_in_minutes: int | None = None, mode: str = "short_link") -> str:
         cursor.execute(
             """
             INSERT INTO attendance_sessions (chapter_id, event_id, mode, checkin_link_id, closes_at)
-            VALUES (%s, %s, 'short_link', %s,
+            VALUES (%s, %s, %s, %s,
                     CASE WHEN %s IS NULL THEN NULL
                          ELSE now() + make_interval(mins => %s) END)
             RETURNING id
             """,
-            (chapter_id, event_id, checkin_link_id, closes_in_minutes, closes_in_minutes),
+            (chapter_id, event_id, mode, checkin_link_id, closes_in_minutes, closes_in_minutes),
         )
         return str(cursor.fetchone()["id"])
 
