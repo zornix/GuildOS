@@ -93,8 +93,19 @@ def _refund_issued(p: dict) -> str:
 
 
 def _payment_reminder(p: dict) -> str:
-    total = _dollars(p, "unpaid_total_cents")
+    """A reminder for nothing owed is not a reminder.
+
+    Zero renders as the *truthy* string "$0.00", so a zero count or a zero total
+    used to sail past the guards below and demand payment of $0.00 (issue #35).
+    The producer no longer enqueues those (api/memberadmin/api/scores.py); a row
+    that reaches here anyway fails loudly instead of texting a member nonsense.
+    """
     count = p.get("unpaid_count")
+    total_cents = p.get("unpaid_total_cents")
+    if count == 0 or total_cents == 0:
+        raise TemplateError("nothing outstanding — no reminder to render")
+
+    total = _dollars(p, "unpaid_total_cents")
     if isinstance(count, int) and not isinstance(count, bool) and total:
         noun = "charge" if count == 1 else "charges"
         return f"Reminder: {count} unpaid {noun} totaling {total}. Log in to pay."
