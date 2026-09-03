@@ -145,7 +145,6 @@ export default function App() {
           currentMemberName={currentMemberName}
           onRecordPayment={finance.handleRecordPayment}
           onIssueFine={finance.handleIssueFine}
-          onPayDues={finance.handlePayDues}
           onApproveFinePayment={finance.handleApproveFinePayment}
           onPostLedgerCorrection={finance.handlePostLedgerCorrection}
         />
