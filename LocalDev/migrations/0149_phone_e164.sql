@@ -8,8 +8,9 @@
 -- member row held 9, so no combination could ever match.
 --
 -- This migration:
---   1. backfills members.phone / recruits.phone to E.164, NULLing anything that
---      cannot be parsed (an unparseable phone is not a phone);
+--   1. copies anything the parser cannot recognise into `phone_unparsed`, then
+--      backfills members.phone / recruits.phone to E.164, NULLing what is left
+--      (an unparseable phone is not a phone, but it is still evidence);
 --   2. pins the invariant with a CHECK constraint, added NOT VALID then
 --      VALIDATEd so the table is never long-locked.
 --
@@ -20,10 +21,62 @@
 -- function: a second callable normalizer is exactly how the two spellings
 -- diverged in the first place.
 --
--- Append-only migration rule: new file, nothing in 0001..0148 is edited.
+-- CORRECTED IN PLACE 2026-09-03 (issue #31). As written, the `ELSE NULL` below
+-- permanently erased every number the three parse branches do not recognise —
+-- notably any international number stored without a leading '+' ('442079460958',
+-- '0044 20 7946 0958') and any typo a human could have repaired. There was no
+-- backup column and no report. The quarantine copy into `phone_unparsed` is added
+-- ahead of each UPDATE; the E.164 UPDATE itself is unchanged. The edit is in place
+-- rather than a follow-up migration because a follow-up runs after the values are
+-- already gone. `schema_migrations` stores file names only, so a database that
+-- already ran 0149 will not re-run it: any database migrated BEFORE 2026-09-03
+-- got the original behaviour, and its wiped values are recoverable only from a
+-- PITR snapshot taken before that run (only the demo database is known to be in
+-- that state; its data is accepted as-is).
+--
+-- DRY RUN — before migrating prod, count what the backfill would discard (run for
+-- `recruits` too by swapping the table name; `would_null` is the number of rows
+-- that will land in phone_unparsed):
+--
+--   SELECT count(*) FILTER (WHERE CASE
+--              WHEN phone ~ '^\s*\+'
+--                   AND length(regexp_replace(phone, '\D', '', 'g')) BETWEEN 8 AND 15
+--                  THEN '+' || regexp_replace(phone, '\D', '', 'g')
+--              WHEN phone !~ '^\s*\+'
+--                   AND length(regexp_replace(phone, '\D', '', 'g')) = 10
+--                  THEN '+1' || regexp_replace(phone, '\D', '', 'g')
+--              WHEN phone !~ '^\s*\+'
+--                   AND length(regexp_replace(phone, '\D', '', 'g')) = 11
+--                   AND left(regexp_replace(phone, '\D', '', 'g'), 1) = '1'
+--                  THEN '+' || regexp_replace(phone, '\D', '', 'g')
+--              ELSE NULL
+--          END IS NULL) AS would_null,
+--          count(*) AS would_touch
+--     FROM members
+--    WHERE phone IS NOT NULL
+--      AND phone !~ '^\+[0-9]{8,15}$';
+--
+-- Append-only migration rule: this file's own numbering is unchanged and nothing
+-- in 0001..0148 is edited.
 
 -- ── 1. backfill members.phone ────────────────────────────────────────────────
 -- Rows already in E.164 are skipped by the WHERE, so a rerun is a no-op.
+
+-- Quarantine first: members rows no branch below recognises would otherwise be
+-- erased. The predicate is the negation of the three CASE branches (issue #31).
+
+ALTER TABLE members ADD COLUMN IF NOT EXISTS phone_unparsed TEXT;
+
+UPDATE members
+   SET phone_unparsed = phone
+ WHERE phone IS NOT NULL
+   AND phone !~ '^\+[0-9]{8,15}$'
+   AND NOT (
+       (phone ~ '^\s*\+'  AND length(regexp_replace(phone, '\D', '', 'g')) BETWEEN 8 AND 15)
+    OR (phone !~ '^\s*\+' AND length(regexp_replace(phone, '\D', '', 'g')) = 10)
+    OR (phone !~ '^\s*\+' AND length(regexp_replace(phone, '\D', '', 'g')) = 11
+        AND left(regexp_replace(phone, '\D', '', 'g'), 1) = '1')
+   );
 
 UPDATE members
    SET phone = CASE
@@ -43,6 +96,22 @@ UPDATE members
    AND phone !~ '^\+[0-9]{8,15}$';
 
 -- ── 2. backfill recruits.phone (same rules) ──────────────────────────────────
+
+-- Quarantine first: recruits rows no branch below recognises would otherwise be
+-- erased. The predicate is the negation of the three CASE branches (issue #31).
+
+ALTER TABLE recruits ADD COLUMN IF NOT EXISTS phone_unparsed TEXT;
+
+UPDATE recruits
+   SET phone_unparsed = phone
+ WHERE phone IS NOT NULL
+   AND phone !~ '^\+[0-9]{8,15}$'
+   AND NOT (
+       (phone ~ '^\s*\+'  AND length(regexp_replace(phone, '\D', '', 'g')) BETWEEN 8 AND 15)
+    OR (phone !~ '^\s*\+' AND length(regexp_replace(phone, '\D', '', 'g')) = 10)
+    OR (phone !~ '^\s*\+' AND length(regexp_replace(phone, '\D', '', 'g')) = 11
+        AND left(regexp_replace(phone, '\D', '', 'g'), 1) = '1')
+   );
 
 UPDATE recruits
    SET phone = CASE
