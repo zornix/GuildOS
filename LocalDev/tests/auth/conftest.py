@@ -68,28 +68,29 @@ def client(app_on_test_db):
 
 @pytest.fixture
 def as_member(app_on_test_db, cursor):
-    """Factory: a TestClient authenticated as the given member id."""
+    """Factory: a TestClient carrying a real bearer token for the given member.
+
+    Deliberately not a `dependency_overrides` entry: overrides install on the
+    shared `api.index.app` singleton, so an override here also silently
+    authenticated the `client` fixture above, which is supposed to run the real
+    get_current_user. A genuine token keeps the two clients independent.
+    """
     from fastapi.testclient import TestClient
 
-    from api.dependencies import get_current_user
-
-    app = app_on_test_db
+    from api.auth.api.auth import _issue_member_token
 
     def _factory(member_id: str):
-        cursor.execute("SELECT * FROM members WHERE id = %s", (member_id,))
-        member = {
-            k: (str(v) if isinstance(v, uuid.UUID) else v)
-            for k, v in dict(cursor.fetchone()).items()
-        }
+        cursor.execute("SELECT token_version FROM members WHERE id = %s", (member_id,))
+        token = _issue_member_token(member_id, cursor.fetchone()["token_version"] or 0)
+        return TestClient(
+            app_on_test_db,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "X-Forwarded-For": f"test-{uuid.uuid4()}",
+            },
+        )
 
-        async def _override():
-            return member
-
-        app.dependency_overrides[get_current_user] = _override
-        return TestClient(app, headers={"X-Forwarded-For": f"test-{uuid.uuid4()}"})
-
-    yield _factory
-    app.dependency_overrides.pop(get_current_user, None)
+    return _factory
 
 
 @pytest.fixture
@@ -127,6 +128,17 @@ def member_factory(cursor, chapter_id):
         return str(cursor.fetchone()["id"])
 
     return _make
+
+
+@pytest.fixture
+def unknown_email() -> str:
+    """An address no member holds, fresh per test.
+
+    Never a hardcoded literal: failed logins are rate-limited per email over a
+    15-minute window, and login_attempts rows outlive the pytest session, so a
+    shared literal trips 429 once the suite is run a few times in a row.
+    """
+    return f"nobody-{uuid.uuid4().hex}@example.com"
 
 
 @pytest.fixture

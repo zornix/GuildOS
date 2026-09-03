@@ -66,7 +66,31 @@ def db_url() -> str:
         # Stop the whole session before ANY test opens a connection — a test
         # run against prod would write permanent rows into append-only tables.
         pytest.exit(str(exc), returncode=1)
+    _require_migrated(url)
     return url
+
+
+def _require_migrated(url: str) -> None:
+    """Stop the session when the DB is behind migrations/ (issue #23).
+
+    A lagging DB fails tests in ways that look like product bugs; say so once,
+    up front, instead of leaving 80 red tests to be misdiagnosed.
+    """
+    conn = psycopg2.connect(url, connect_timeout=15)
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT name FROM schema_migrations")
+            applied = {r[0] for r in cur.fetchall()}
+    finally:
+        conn.close()
+    files = (_REPO_ROOT / "migrations").glob("*.sql")
+    pending = sorted(f.name for f in files if f.name not in applied)
+    if pending:
+        pytest.exit(
+            f"demo DB is {len(pending)} migrations behind "
+            f"(first: {pending[0]}) — run python3 scripts/migrate_db.py",
+            returncode=1,
+        )
 
 
 @pytest.fixture
