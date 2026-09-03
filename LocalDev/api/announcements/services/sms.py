@@ -37,6 +37,7 @@ from datetime import datetime, timezone
 from api.platform.rpc import call_rpc
 from api.announcements.services import twilio_client
 from api.platform.delivery import delivery_mode
+from api.rbac.services.permissions import is_officer
 
 logger = logging.getLogger(__name__)
 
@@ -58,11 +59,6 @@ class RecipientCountMismatch(Exception):
         super().__init__(
             f"recipient count changed: {recipient_count} SMS-reachable members now"
         )
-
-
-# Any granular role except plain 'member' marks an officer for the 'officers'
-# audience (president, vice_president, treasurer, secretary, chairs, ...).
-_NON_OFFICER_ROLE_KEYS = {"member"}
 
 
 def _now_iso() -> str:
@@ -105,21 +101,21 @@ def resolve_recipients(sb, *, chapter_id: str, audience: str) -> dict:
     ).data or []
 
     if audience == "officers":
-        # member_roles is the single source of truth (0147 backfilled every
-        # legacy members.role='officer' account into it), so no members.role
-        # compare and no ad-hoc union with it.
+        # rbac.is_officer, the same union authorization resolves from: an officer
+        # who holds only the legacy members.role is still on the blast. One
+        # chapter-wide fetch, then the shared rule per member.
         role_rows = (
             sb.table("member_roles")
             .select("member_id, role_key")
             .eq("chapter_id", chapter_id)
             .execute()
         ).data or []
-        officer_ids = {
-            r["member_id"]
-            for r in role_rows
-            if r["role_key"] not in _NON_OFFICER_ROLE_KEYS
-        }
-        members = [m for m in members if m["id"] in officer_ids]
+        keys_by_member: dict[str, set[str]] = {}
+        for r in role_rows:
+            keys_by_member.setdefault(r["member_id"], set()).add(r["role_key"])
+        members = [
+            m for m in members if is_officer(m, keys_by_member.get(m["id"], ()))
+        ]
     elif audience == "members_with_balance":
         accounts = (
             sb.table("member_finance_accounts")
