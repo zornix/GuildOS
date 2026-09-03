@@ -659,36 +659,6 @@ def remove_supervisor(sb, *, actor: dict, event_id: str, member_id: str,
     return _decorate_supervisors(sb, event)
 
 
-def set_supervisor(sb, *, actor: dict, event_id: str, member_id: str,
-                   idempotency_key: str | None = None) -> dict:
-    """DEPRECATED (see CONFORM_TODO.md): the single-supervisor endpoint, kept
-    honest — *set* replaces, it does not accumulate.
-
-    Adds the target, then drops every other supervisor, so the event ends up
-    supervised by this member. The one row that survives regardless is the
-    creator's: `ev_remove_supervisor` locks it (0141), and callers of this
-    legacy endpoint cannot override that invariant. Prefer
-    POST /{event_id}/supervisors (add_supervisor) for co-supervision.
-
-    The idempotency key covers the add; the follow-up removes pass none, since
-    replaying one key across several removals would suppress all but the first.
-    """
-    result = add_supervisor(
-        sb, actor=actor, event_id=event_id, member_id=member_id,
-        idempotency_key=idempotency_key,
-    )
-
-    stale = [
-        s for s in _supervisors_for_event(sb, event_id)
-        if s["member_id"] != str(member_id) and not s["is_creator"]
-    ]
-    for supervisor in stale:
-        result = remove_supervisor(
-            sb, actor=actor, event_id=event_id, member_id=supervisor["member_id"],
-        )
-    return result
-
-
 def add_organizer(sb, *, actor: dict, event_id: str, member_id: str | None = None,
                   idempotency_key: str | None = None) -> dict:
     """Self-volunteer (any member) or assign (calendar:event:update)."""

@@ -33,7 +33,6 @@ from .schemas import (
     EventUpdate,
     OrganizerAdd,
     SupervisorAdd,
-    SupervisorSet,
 )
 
 router = APIRouter()
@@ -146,25 +145,6 @@ async def delete_event(event_id: str, user=Depends(require_permission(EVENT_DELE
         .eq("chapter_id", user["chapter_id"]) \
         .execute()
     return {"deleted": True}
-
-
-@router.post("/{event_id}/supervisor")
-async def set_supervisor(
-    event_id: str,
-    body: SupervisorSet,
-    user=Depends(get_current_user),
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-):
-    """DEPRECATED (see CONFORM_TODO.md): now adds a co-supervisor. Use
-    POST /{event_id}/supervisors."""
-    with _map_domain_errors():
-        return svc.set_supervisor(
-            get_db(),
-            actor=user,
-            event_id=event_id,
-            member_id=body.member_id,
-            idempotency_key=idempotency_key,
-        )
 
 
 @router.post("/{event_id}/supervisors")

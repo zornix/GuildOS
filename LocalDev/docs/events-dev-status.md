@@ -229,8 +229,9 @@ with Phases 1–4 and B4FEND deployed it is wired end to end in
   where the linked-event start is resolved (initiatives add a second parent
   type) — **resolved in Phase 3** (migration 0144 replaces `tk_uncommit_task`/
   `tk_report_done` with versions that branch on `event_id` vs `initiative_id`).
-- `events.supervisor_member_id` and `POST /{event_id}/supervisor` are deprecated
-  in place (see `api/events/CONFORM_TODO.md`); reads moved to `event_supervisors`.
+- `events.supervisor_member_id` is deprecated; reads moved to `event_supervisors`.
+  `POST /{event_id}/supervisor` was removed (#33) — it replaced supervisors with a
+  non-atomic add-then-prune loop; use `POST/DELETE /{event_id}/supervisors`.
 - `message_outbox` JOB_* rows are written in the RPCs but not yet dispatched
   (delivery becomes user-visible in Phase 2/5); no events-domain `notifications.py`
   was added (that is Phase 2, for `EVENT_NOTIFY`).
