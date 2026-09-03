@@ -81,9 +81,8 @@ def test_preview_no_phone_exclusion(as_member, create_event, set_phone, user_fac
     set_phone(reachable["id"], "+15555550111")
 
     user_factory()  # phone NULL by default -> no_phone
-
-    blank_phone = user_factory()
-    set_phone(blank_phone["id"], "   ")  # whitespace-only counts as no phone
+    user_factory()  # ditto: since 0149 NULL is the only spelling of "no phone",
+    # so a whitespace-only phone can no longer be stored (members_phone_e164).
 
     resp = _preview(as_member(officer["id"]), ev["id"])
     assert resp.status_code == 200
