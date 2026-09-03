@@ -98,10 +98,10 @@ Db plumbing is not per-domain: `get_db`, `call_rpc`, `unwrap_row` and
 directory for those, and route files import `require_permission` from
 `api.rbac.auth` directly rather than through a domain re-export.
 
-**Legacy flat modules** (`api/routes/`, `api/services/`,
-`api/models/schemas.py`) hold pre-refactor code. Some domains are "conform
-shells" that delegate to them and carry a `CONFORM_TODO.md`. Put new code in
-the domain package, never in the flat modules.
+**There are no legacy flat modules.** `api/routes/`, `api/services/` and
+`api/models/` were removed once every handler, service and schema had moved
+into its domain package; nothing delegates to them and no domain carries a
+`CONFORM_TODO.md`.
 
 Route-handler error mapping convention: services raise domain exceptions or
 return status strings; handlers map to **403** (permission/authority), **404**

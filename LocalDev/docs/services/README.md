@@ -42,9 +42,9 @@ but never invent a different layout.
 | Bylaws | `api/bylaws/` | **New** (honest Q&A stub — no RAG, never fabricates answers) |
 | NL Controller | `api/nl_controller/` | **New** (approval-gated; no parser, no execution yet) |
 
-Conform shells contain a `CONFORM_TODO.md` listing what still lives in the
-legacy flat modules (`api/routes/`, `api/services/`, `api/models/schemas.py`)
-and the conditions for moving it safely.
+The conform pass is finished: the legacy flat modules (`api/routes/`,
+`api/services/`, `api/models/`) no longer exist and no domain carries a
+`CONFORM_TODO.md`.
 
 ## Hard rules (apply to every service)
 
