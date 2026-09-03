@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from api.platform.rpc import call_rpc
 from api.rbac.db.repositories.member_roles import list_member_role_keys
+from api.rbac.services.permissions import is_officer
 from api.platform.rows import unwrap_row
 
 # Audience values (0086 CHECK): 'chapter' reaches every active member,
@@ -13,9 +14,6 @@ from api.platform.rows import unwrap_row
 AUDIENCE_CHAPTER = "chapter"
 AUDIENCE_OFFICERS = "officers"
 AUDIENCE_MEMBERS_WITH_BALANCE = "members_with_balance"
-
-# Any granular role except plain 'member' marks an officer (sms.py mirrors this).
-_NON_OFFICER_ROLE_KEYS = {"member"}
 
 
 class AnnouncementNotFound(Exception):
@@ -125,13 +123,10 @@ def audiences_for_viewer(sb, *, chapter_id: str, viewer: dict) -> set[str]:
     """
     audiences = {AUDIENCE_CHAPTER}
 
-    # member_roles only: 0147 backfilled legacy members.role='officer' accounts
-    # into it, so officer-audience membership no longer reads members.role
-    # (matches sms.resolve_recipients).
-    role_keys = set(
-        list_member_role_keys(sb, chapter_id=chapter_id, member_id=viewer["id"])
-    )
-    if role_keys - _NON_OFFICER_ROLE_KEYS:
+    # rbac.is_officer, the same union authorization resolves from: an officer who
+    # holds only the legacy members.role reads officers-only notices in the feed.
+    role_keys = list_member_role_keys(sb, chapter_id=chapter_id, member_id=viewer["id"])
+    if is_officer(viewer, role_keys):
         audiences.add(AUDIENCE_OFFICERS)
 
     account = (
