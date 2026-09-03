@@ -64,7 +64,7 @@ def test_supervisor_sees_restricted_event(sb_client, user_factory, create_event,
     ev = create_event(officer, audience="officers")
     chair = user_factory()
     assign_role(chair["id"], "social_chair")  # social_chair lacks calendar:officer:view
-    svc.set_supervisor(sb_client, actor=officer, event_id=ev["id"], member_id=chair["id"])
+    svc.add_supervisor(sb_client, actor=officer, event_id=ev["id"], member_id=chair["id"])
 
     assert ev["id"] in _visible_ids(sb_client, chair)
     assert svc.get_event(sb_client, user=chair, event_id=ev["id"])["id"] == ev["id"]
