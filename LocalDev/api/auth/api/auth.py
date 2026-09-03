@@ -15,6 +15,7 @@ from .schemas import (
 )
 from api.members.api.schemas import UserProfile
 from api.platform.db import get_db
+from api.platform.rows import unwrap_row
 from api.config import settings
 
 router = APIRouter()
@@ -317,7 +318,7 @@ async def invite_members(
                 "status": "invited",
             }).execute()
             if result.data:
-                row = result.data[0] if isinstance(result.data, list) else result.data
+                row = unwrap_row(result)
                 code, _expires_at = _issue_setup_code(
                     sb, chapter_id=chapter_id, member_id=row["id"]
                 )

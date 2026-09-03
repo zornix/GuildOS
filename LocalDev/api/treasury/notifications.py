@@ -28,6 +28,7 @@ from __future__ import annotations
 from datetime import date
 
 from api.platform.delivery import delivery_mode
+from api.platform.rows import unwrap_row
 
 
 def _resolve_sb(sb):
@@ -83,7 +84,7 @@ def _enqueue(
         return None
 
     try:
-        inserted = (
+        result = (
             client.table("message_outbox")
             .insert(
                 {
@@ -99,13 +100,13 @@ def _enqueue(
                 }
             )
             .execute()
-        ).data
+        )
     except Exception:
         # Lost a race on the UNIQUE(dedup_key) backstop → another caller enqueued
         # it first. Still exactly-once.
         return None
 
-    row = inserted[0] if isinstance(inserted, list) else inserted
+    row = unwrap_row(result)
     # Nothing is dispatched inline: the row stays 'pending' until the drain
     # worker picks it up (api/cron/services/outbox_drain.py).
     return row

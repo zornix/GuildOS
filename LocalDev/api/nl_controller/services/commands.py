@@ -44,10 +44,9 @@ def review_command(
         .eq("status", "pending_approval")
         .execute()
     )
-    data = result.data
-    if not data:
+    if not result.data:
         return None
-    row = data[0] if isinstance(data, list) else data
+    row = unwrap_row(result)
     # TODO(nl_controller): on approval, execute proposed_actions by calling the
     # target services' public APIs (events/tasks/attendance/treasury/
     # announcements), then advance status to executed/failed. Deliberately not
