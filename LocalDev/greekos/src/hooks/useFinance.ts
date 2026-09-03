@@ -54,10 +54,21 @@ export function useFinance({ members, setMembers, currentMemberName, isOfficer, 
       ledgerRefId: ledgerId
     };
 
-    // Calculate balance after
-    const newBalanceCents = Math.max(0, balanceCentsOf(paymentData.memberId) - amountCents);
+    // Balance after, derived from the roster updater's `prev` rather than the
+    // `members` closure, so two payments in the same tick compose instead of
+    // both subtracting from the same stale balance.
+    let newBalanceCents = 0;
+    setMembers(prev => prev.map(m => {
+      if (m.id !== paymentData.memberId) return m;
+      newBalanceCents = Math.max(0, (m.duesBalanceCents || m.duesBalance * 100) - amountCents);
+      return { ...m, duesBalanceCents: newBalanceCents, duesBalance: newBalanceCents / 100 };
+    }));
 
-    const newLedgerEntry: LedgerEntry = {
+    setPayments(prev => [newPayment, ...prev]);
+    // Entry is built inside the updater so `balanceAfterCents` is the number the
+    // roster updater above produced (React runs that one first — roster state is
+    // declared earlier), keeping the ledger and the member row on one balance.
+    setLedger(prev => [{
       id: ledgerId,
       sequence: ledger.length + 1,
       timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
@@ -68,11 +79,7 @@ export function useFinance({ members, setMembers, currentMemberName, isOfficer, 
       balanceAfterCents: newBalanceCents,
       description: `Payment received via ${paymentData.paymentMethod} (Ref: ${paymentData.reference || 'DIRECT'})`,
       authorizedBy: `${currentMemberName} (${isOfficer ? 'Officer' : 'Self-Service Gateway'})`
-    };
-
-    setPayments(prev => [newPayment, ...prev]);
-    setLedger(prev => [newLedgerEntry, ...prev]);
-    setMemberBalance(paymentData.memberId, newBalanceCents);
+    }, ...prev]);
 
     showToast(`Payment of ${formatMoney(amountCents)} recorded to immutable ledger.`);
   };
