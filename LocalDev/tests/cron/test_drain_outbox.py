@@ -429,3 +429,75 @@ def test_drain_route_returns_counts(cron_client, auth_header, outbox_row, member
     counts = resp.json()
     assert set(counts) == {"processed", "sent", "simulated", "failed"}
     assert counts["simulated"] >= 1
+
+
+# ── Claiming (issue #32) ─────────────────────────────────────────────────────
+
+
+@pytest.fixture
+def claim(sb_client, chapter_id):
+    """outbox_claim_batch scoped to this test's chapter."""
+    from api.platform.rpc import call_rpc
+
+    def _claim(client=None, *, limit: int = 10) -> list:
+        return (
+            call_rpc(
+                "outbox_claim_batch",
+                {"p_limit": limit, "p_chapter_id": chapter_id},
+                sb=client or sb_client,
+            ).data
+            or []
+        )
+
+    return _claim
+
+
+def test_a_claimed_row_is_not_handed_to_a_second_worker(claim, db_url, outbox_row):
+    """The duplicate-SMS bug: two overlapping drains must not share a row."""
+    from api.platform.postgres import PostgresClient
+
+    row = outbox_row(event_type="JOB_APPROVED", payload={"title": "Setup crew"})
+
+    other_worker = PostgresClient(db_url)
+    try:
+        first = claim()
+        second = claim(other_worker)
+    finally:
+        other_worker.close()
+
+    assert [r["id"] for r in first] == [row["id"]]
+    assert [r["status"] for r in first] == ["sending"]
+    assert second == []
+
+
+def test_an_abandoned_claim_is_requeued_and_reclaimed(claim, cursor, outbox_row, read_outbox):
+    """A worker that died holding a row must not strand it forever."""
+    stale = outbox_row(event_type="JOB_APPROVED", status="sending", payload={"title": "Old"})
+    fresh = outbox_row(event_type="JOB_APPROVED", status="sending", payload={"title": "New"})
+    cursor.execute(
+        "UPDATE message_outbox SET claimed_at = now() - interval '16 minutes' WHERE id = %s",
+        (stale["id"],),
+    )
+    cursor.execute(
+        "UPDATE message_outbox SET claimed_at = now() WHERE id = %s", (fresh["id"],)
+    )
+
+    claimed = claim()
+
+    assert [r["id"] for r in claimed] == [stale["id"]]  # the fresh claim is still owned
+    assert read_outbox(stale["id"])["attempts"] == 1
+    assert read_outbox(fresh["id"])["status"] == "sending"
+
+
+def test_a_row_past_the_attempt_cap_is_failed_instead_of_claimed(
+    claim, cursor, outbox_row, read_outbox
+):
+    """With a reaper in place, a row that keeps killing the worker needs a floor."""
+    row = outbox_row(event_type="JOB_APPROVED", payload={"title": "Poison"})
+    cursor.execute("UPDATE message_outbox SET attempts = 5 WHERE id = %s", (row["id"],))
+
+    assert claim() == []
+
+    after = read_outbox(row["id"])
+    assert after["status"] == "failed"
+    assert "attempt cap" in after["last_error"]
