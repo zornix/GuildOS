@@ -26,13 +26,21 @@ export function useAttendance({ members, setEvents, refetchEvents, syncApi, show
   const handleRecordAttendance = (eventId: string, records: { memberId: string; status: 'Present' | 'Absent' | 'Excused' | 'Late' }[]) => {
     setEvents(prev => prev.map(e => e.id === eventId ? { ...e, attendanceTaken: true, checkedInCount: records.filter(r => r.status === 'Present').length } : e));
     syncApi(async () => {
-      for (const r of records) {
-        // 'Late' still counts as showing up — the API has no late state.
-        const status = r.status === 'Absent' ? 'absent' : r.status === 'Excused' ? 'excused' : 'present';
-        await api.markAttendance(eventId, r.memberId, status);
+      // Every member is attempted — one refusal must not drop the rest of the roster.
+      // 'Late' still counts as showing up — the API has no late state.
+      const results = await Promise.allSettled(records.map(r =>
+        api.markAttendance(eventId, r.memberId, r.status === 'Absent' ? 'absent' : r.status === 'Excused' ? 'excused' : 'present')
+      ));
+      const failed = records.filter((_, i) => results[i].status === 'rejected');
+      if (failed.length) {
+        const names = failed.map(r => members.find(m => m.id === r.memberId)?.name ?? r.memberId);
+        const listed = names.slice(0, 5).join(', ') + (names.length > 5 ? ` and ${names.length - 5} more` : '');
+        throw new Error(`${failed.length} of ${records.length} not recorded — re-enter ${listed}.`);
       }
-    }, refetchEvents);
-    showToast(`Recorded roll call attendance.`);
+    }, refetchEvents, {
+      onSuccess: () => showToast(`Recorded roll call attendance.`),
+      onError: err => showToast(`Roll call incomplete: ${(err as Error).message}`)
+    });
   };
 
   const handleSubmitExcuse = (excuseData: Omit<Excuse, 'id' | 'status' | 'submittedDate'>) => {
