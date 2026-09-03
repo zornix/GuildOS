@@ -120,7 +120,7 @@ def test_code_is_single_use(as_member, client, member_factory):
     "scenario", ["wrong-code", "expired", "already-used", "unknown-email"]
 )
 def test_redeem_failures_are_all_the_same_401(
-    client, member_factory, member_email, set_status, issue_code, scenario
+    client, member_factory, member_email, set_status, issue_code, unknown_email, scenario
 ):
     member = member_factory(role="member")
     email = member_email(member)
@@ -136,7 +136,7 @@ def test_redeem_failures_are_all_the_same_401(
         issue_code(member, "USEDCODE", used=True)
         payload = {"email": email, "code": "USEDCODE"}
     else:
-        payload = {"email": "nobody-at-all@example.com", "code": "ANYCODE1"}
+        payload = {"email": unknown_email, "code": "ANYCODE1"}
 
     res = client.post("/api/auth/redeem-setup-code", json=payload)
 

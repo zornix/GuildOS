@@ -68,7 +68,7 @@ def test_member_without_hash_gets_grace_token(client, member_factory, member_ema
 
 
 def test_unknown_email_and_wrong_password_are_identical(
-    client, member_factory, member_email, set_password_hash
+    client, member_factory, member_email, set_password_hash, unknown_email
 ):
     """The enumeration oracle: both responses must be byte-identical."""
     member = member_factory(role="member")
@@ -80,7 +80,7 @@ def test_unknown_email_and_wrong_password_are_identical(
     )
     unknown_email = client.post(
         "/api/auth/login",
-        json={"email": "nobody-at-all@example.com", "password": "not-the-password"},
+        json={"email": unknown_email, "password": "not-the-password"},
     )
 
     assert wrong_password.status_code == unknown_email.status_code == 401
@@ -89,7 +89,7 @@ def test_unknown_email_and_wrong_password_are_identical(
 
 
 def test_invited_member_cannot_login_by_email(
-    client, member_factory, member_email, set_status
+    client, member_factory, member_email, set_status, unknown_email
 ):
     """The invite-claim hole: an unredeemed invitee is not claimable by email."""
     member = member_factory(role="member")
@@ -97,7 +97,7 @@ def test_invited_member_cannot_login_by_email(
     set_status(member, "invited")
 
     res = client.post("/api/auth/login", json={"email": email})
-    unknown = client.post("/api/auth/login", json={"email": "nobody-at-all@example.com"})
+    unknown = client.post("/api/auth/login", json={"email": unknown_email})
 
     assert res.status_code == 401
     assert res.json() == unknown.json()
@@ -128,12 +128,14 @@ def test_rate_limit_allows_below_threshold(
     assert res.status_code == 200
 
 
-def test_failed_login_is_recorded(client, member_factory, member_email, cursor):
+def test_failed_login_is_recorded(
+    client, member_factory, member_email, cursor, unknown_email
+):
     member = member_factory(role="member")
     email = member_email(member)
 
     client.post("/api/auth/login", json={"email": email})  # success, no hash
-    client.post("/api/auth/login", json={"email": "nobody-at-all-2@example.com"})
+    client.post("/api/auth/login", json={"email": unknown_email})
 
     cursor.execute(
         "SELECT success FROM login_attempts WHERE email = %s ORDER BY created_at", (email,)

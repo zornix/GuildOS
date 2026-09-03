@@ -131,6 +131,17 @@ def member_factory(cursor, chapter_id):
 
 
 @pytest.fixture
+def unknown_email() -> str:
+    """An address no member holds, fresh per test.
+
+    Never a hardcoded literal: failed logins are rate-limited per email over a
+    15-minute window, and login_attempts rows outlive the pytest session, so a
+    shared literal trips 429 once the suite is run a few times in a row.
+    """
+    return f"nobody-{uuid.uuid4().hex}@example.com"
+
+
+@pytest.fixture
 def member_email(cursor):
     """Read a member's email (member_factory only hands back the id)."""
 
