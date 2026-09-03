@@ -15,5 +15,6 @@ they are no longer live work. See the product dashboard in the root
 | `imp-e2e-and-tooling-repairs.md` | E2e suite repair, dev-script paths, officer password login | commits `1ec54fa`/`003a359`/`4dbd0bf` |
 | `imp-tenant-guards.md` | Attendance tenant guards + prod fail-fast | migration 0146 |
 | `imp-one-gate.md` | All authority folded into the permission catalog (incl. `/scores` off `require_officer`) | migration 0147, commit `f3856e3` |
+| `MIGRATION_PLAN.md` | DDD conform pass — `api/routes/`, `api/services/`, `api/models/` folded into domain packages and deleted | — |
 
 The Events phases are also summarized in [`../events-dev-status.md`](../events-dev-status.md).

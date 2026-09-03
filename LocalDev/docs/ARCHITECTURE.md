@@ -37,7 +37,8 @@ The git root is `/home/mshi/GuildOS`, one level **above** this directory.
 - `Prod/` — sibling copy; `LocalDev/fratos` and `Prod/fratos` are duplicated
   frontends that **drift** (consolidation is a known open task — don't assume
   they match).
-- `GreekV1/`, `greekos-landing/` — older copy / marketing site.
+- `greekos-landing/` — marketing site. (The old `GreekV1/` copy is archived
+  under `docs/archive/GreekV1/` at the git root.)
 - `local-dev-scripts/` — tooling; `LocalDev/package.json` scripts shell out to
   `local-dev-scripts/scripts/local-dev.sh`.
 
