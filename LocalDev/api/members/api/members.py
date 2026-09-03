@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from api.dependencies import get_current_user
 from api.rbac.auth import require_permission
+from api.rbac.core.policy import LEGACY_ROLE_COMPAT
 from api.platform.db import get_db
+from api.platform.rpc import call_rpc
 
 ROLES_ASSIGN = "roles:assign"
 
@@ -35,7 +37,7 @@ async def update_role(
     role: str,
     officer=Depends(require_permission(ROLES_ASSIGN)),
 ):
-    """Change a member's legacy `members.role`.
+    """Promote or demote a member, keeping `members.role` and `member_roles` in step.
 
     The requested role is validated against the RBAC role catalog (ADR-0003) —
     the catalog is the single source of truth for role names, not a hardcoded
@@ -43,6 +45,10 @@ async def update_role(
     still only accepts 'officer'/'member'), so a catalog role the column cannot
     hold comes back as a 400 rather than a database error; stackable roles are
     assigned through the rbac_assign_role RPC, not here.
+
+    The write itself is the `mem_set_legacy_role` RPC (0154): permissions resolve
+    from member_roles unioned with the legacy column, so writing only one of the
+    two made demotion revoke nothing. One RPC keeps both sides atomic.
     """
     sb = get_db()
 
@@ -52,19 +58,27 @@ async def update_role(
     if not known:
         raise HTTPException(400, f"Unknown role: {role}")
 
-    try:
-        result = (
-            sb.table("members")
-            .update({"role": role})
-            .eq("id", member_id)
-            .eq("chapter_id", officer["chapter_id"])
-            .select("id, chapter_id, name, email, phone, role, status, created_at")
-            .execute()
-        )
-    except Exception as exc:  # legacy members.role CHECK constraint
+    # LEGACY_ROLE_COMPAT's keys ARE the legacy column's domain — the same pair the
+    # members_role_check constraint accepts. Checking here keeps the 400 for the
+    # one case that deserves it, so every other database failure stays a 500
+    # instead of a "bad role" reply carrying raw driver text.
+    if role not in LEGACY_ROLE_COMPAT:
         raise HTTPException(
-            400, f"Role '{role}' cannot be set on the legacy members.role column: {exc}"
+            400, f"Role '{role}' cannot be set on the legacy members.role column"
         )
-    if not result.data:
+
+    try:
+        return call_rpc(
+            "mem_set_legacy_role",
+            {
+                "p_chapter_id": officer["chapter_id"],
+                "p_member_id": member_id,
+                "p_role": role,
+                "p_actor_id": officer["id"],
+            },
+            sb=sb,
+        ).data
+    except Exception as exc:
+        if "is not in chapter" not in str(exc):  # the RPC's tenant guard
+            raise
         raise HTTPException(404, "Member not found")
-    return result.data[0]
