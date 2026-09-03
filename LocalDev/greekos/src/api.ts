@@ -42,9 +42,24 @@ async function request<T>(method: string, path: string, body?: unknown, retry = 
       const parsed = JSON.parse(text);
       detail = typeof parsed.detail === 'string' ? parsed.detail : text;
     } catch { /* non-JSON error body */ }
-    throw new Error(`${method} ${path} failed (${res.status}): ${detail.substring(0, 160)}`);
+    throw Object.assign(
+      new Error(`${method} ${path} failed (${res.status}): ${detail.substring(0, 160)}`),
+      { status: res.status }
+    );
   }
   return (text ? JSON.parse(text) : undefined) as T;
+}
+
+/** Officer-gated reads answer 403 for a member session, which means "this
+ *  section is empty for you", not "the backend is down". Only 403 is swallowed;
+ *  anything else propagates so a real outage still reads as one. */
+export async function optionalOfficerCall<T, F>(call: Promise<T>, fallback: F): Promise<T | F> {
+  try {
+    return await call;
+  } catch (err) {
+    if ((err as { status?: number }).status === 403) return fallback;
+    throw err;
+  }
 }
 
 // ----------------------------------------------------
