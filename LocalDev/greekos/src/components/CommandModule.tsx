@@ -9,6 +9,7 @@ import {
 import { Member, ChapterEvent, Task, PNM } from '../types';
 import Card from './ui/Card';
 import { formatMoney } from '../formatters';
+import { parseWhen } from '../lib/parseWhen';
 
 interface CommandModuleProps {
   members: Member[];
@@ -148,18 +149,29 @@ export default function CommandModule({
       const eventMatch = raw.match(/schedule\s+(.+?)(?:\s+on\s+(.+?))?(?:\s+at\s+(.+))?$/i);
       if (eventMatch) {
         const eventTitle = eventMatch[1].trim();
-        const dateDesc = eventMatch[2] ? eventMatch[2].trim() : '2026-07-17';
-        const timeDesc = eventMatch[3] ? eventMatch[3].trim() : '19:00';
+        // This books a real event, so an unreadable date is an error, never a default.
+        const when = parseWhen(eventMatch[2] || '', eventMatch[3] || '');
+        if (!when) {
+          setCommandHistory(prev => [{
+            input: raw,
+            timestamp,
+            status: 'Error',
+            summary: `Couldn't read a date/time from "${raw}"`
+          }, ...prev]);
+          return;
+        }
+        const [startHour, startMinute] = when.time.split(':');
+        const endTime = `${String((Number(startHour) + 2) % 24).padStart(2, '0')}:${startMinute}`;
 
         onExecuteCommand({
           type: 'EVENT',
           payload: {
             title: eventTitle,
             description: 'Scheduled via GreekOS Natural Language Command console.',
-            date: '2026-07-17',
-            startTime: '19:00',
-            endTime: '21:00',
-            time: '19:00 - 21:00',
+            date: when.date,
+            startTime: when.time,
+            endTime,
+            time: `${when.time} - ${endTime}`,
             location: 'Fraternity House',
             type: 'Brotherhood',
             audience: 'All Members',
@@ -177,14 +189,14 @@ export default function CommandModule({
               }
             ]
           },
-          summary: `Scheduled "${eventTitle}" for July 17 at ${timeDesc}`
+          summary: `Scheduled "${eventTitle}" for ${when.date} at ${when.time}`
         });
 
         setCommandHistory(prev => [{
           input: raw,
           timestamp,
           status: 'Executed',
-          summary: `Scheduled chapter event "${eventTitle}"`
+          summary: `Scheduled chapter event "${eventTitle}" for ${when.date} at ${when.time}`
         }, ...prev]);
 
         setCommandInput('');
@@ -228,7 +240,6 @@ export default function CommandModule({
           title: 'Executive Chapter Alert',
           content: annText,
           author: currentMemberName,
-          date: '2026-07-11',
           priority: 'Mandatory',
           channels: ['Calendar', 'SMS', 'Push']
         },
@@ -295,6 +306,7 @@ export default function CommandModule({
           </div>
           <p className="text-xs text-slate-500 mt-1">
             Execute operations, assess fines, assign house chores, schedule events, and blast announcements by typing plain English instructions.
+            Commands are saved to the live chapter record &mdash; a scheduled event lands on the real calendar.
           </p>
         </div>
       </div>

@@ -31,12 +31,13 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'finance', label: 'Treasury', icon: DollarSign },
   { id: 'tasks', label: 'Jobs', icon: ClipboardList },
   { id: 'roster', label: 'Roster', icon: Users },
-  { id: 'recruitment', label: 'Recruitment', icon: UserPlus, officerOnly: true }
+  { id: 'recruitment', label: 'Recruitment', icon: UserPlus, officerOnly: true },
+  // Not a demo: every command it runs is a real write (fines, jobs, events, blasts).
+  { id: 'command', label: 'Command console', icon: Terminal, officerOnly: true }
 ];
 
 /** Prototype surfaces with no backend — collapsed at the bottom of the nav. */
 export const DEMO_NAV_ITEMS: NavItem[] = [
-  { id: 'command', label: 'Command console', icon: Terminal, demo: true },
   { id: 'rules', label: 'Bylaws', icon: BookOpen, demo: true },
   { id: 'outbox', label: 'Message outbox', icon: Send, demo: true }
 ];
