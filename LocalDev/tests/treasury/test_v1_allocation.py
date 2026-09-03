@@ -233,7 +233,7 @@ def test_allocation_rows_block_update_and_delete(sb_client, cursor, chapter_id, 
 # ── endpoints: verify-v1 / reject-v1 / reallocate / allocations ──────────────
 def test_verify_v1_endpoint_gating(api, sb_client, cursor, chapter_id, member_factory):
     member = member_factory()
-    officer = member_factory(role="officer")
+    plain = member_factory()
     treasurer = member_factory()
     finance = member_factory()
     assign_role(cursor, chapter_id, treasurer, "treasurer")
@@ -243,8 +243,9 @@ def test_verify_v1_endpoint_gating(api, sb_client, cursor, chapter_id, member_fa
     sub1 = _balance_submission(sb_client, chapter_id, member, 500)
     sub2 = _balance_submission(sb_client, chapter_id, member, 500, method="zelle")
 
-    # generic officer lacks treasury:payment:verify → 403
-    resp = api(make_user(officer, chapter_id, role="officer")).post(
+    # A plain member lacks treasury:payment:verify → 403. (Not a generic officer:
+    # 0147 grants the officer role that key, preserving pre-one-gate access.)
+    resp = api(make_user(plain, chapter_id)).post(
         f"/api/treasury/payments/submissions/{sub1['id']}/verify-v1",
         headers={"Authorization": "Bearer x"},
     )

@@ -82,9 +82,12 @@ def test_missed_endpoint_surfaces_unexcused_and_already_fined(
 def test_missed_endpoint_requires_fines_issue_permission(
     api, sb_client, cursor, chapter_id, member_factory
 ):
-    officer = member_factory(role="officer")
+    # A plain member holds no treasury key. (Not a generic officer: 0147 grants
+    # the officer role treasury:fines:issue outright, preserving the access it
+    # had through the deleted require_officer gate.)
+    plain = member_factory()
     event_id = _make_event(cursor, chapter_id, hours_ago=30)
-    resp = api(make_user(officer, chapter_id, role="officer")).get(
+    resp = api(make_user(plain, chapter_id)).get(
         f"/api/fines/missed/{event_id}", headers={"Authorization": "Bearer x"}
     )
     assert resp.status_code == 403
@@ -225,10 +228,10 @@ def test_issue_refused_for_non_required_event(api, sb_client, cursor, chapter_id
 
 
 def test_issue_requires_permission(api, sb_client, cursor, chapter_id, member_factory):
-    officer = member_factory(role="officer")
+    plain = member_factory()  # no treasury:fines:issue (see the missed-endpoint test)
     missed = member_factory()
     event_id = _make_event(cursor, chapter_id, hours_ago=30)
-    resp = api(make_user(officer, chapter_id, role="officer")).post(
+    resp = api(make_user(plain, chapter_id)).post(
         "/api/fines/issue",
         json={"event_id": event_id, "member_ids": [missed]},
         headers={"Authorization": "Bearer x"},
@@ -237,10 +240,18 @@ def test_issue_requires_permission(api, sb_client, cursor, chapter_id, member_fa
 
 
 # ── automatic fines are dead ──────────────────────────────────────────────────
-def test_cron_process_fines_is_disabled(api, sb_client, chapter_id, member_factory):
+def test_cron_process_fines_is_disabled(
+    api, sb_client, chapter_id, member_factory, monkeypatch
+):
+    # Since 0150 every /api/cron route is gated by CRON_SECRET, not by a member
+    # session, so the caller here is the cron runner rather than a logged-in user.
+    from api.config import settings
+
+    monkeypatch.setattr(settings, "CRON_SECRET", "test-cron-secret")
     member = member_factory()
     resp = api(make_user(member, chapter_id)).get(
-        "/api/cron/process-fines", headers={"Authorization": "Bearer x"}
+        "/api/cron/process-fines",
+        headers={"Authorization": "Bearer test-cron-secret"},
     )
     assert resp.status_code == 200
     body = resp.json()
