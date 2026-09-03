@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
+from api.platform.rows import unwrap_row
 from api.treasury.core.clock import Clock, SystemClock
 
 
@@ -61,7 +62,7 @@ class LedgerWriter:
             "reverses_entry_id": reverses,
         }
         result = self._sb.table("big_ledger").insert(row).execute()
-        data = result.data[0] if isinstance(result.data, list) else result.data
+        data = unwrap_row(result)
         return LedgerEntry(
             id=str(data["id"]),
             chapter_id=str(data["chapter_id"]),

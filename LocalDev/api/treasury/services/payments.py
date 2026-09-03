@@ -10,6 +10,7 @@ approval notification (never on an idempotent replay).
 from __future__ import annotations
 
 from api.treasury.core.balance import BalanceEngine
+from api.platform.rows import unwrap_row
 from api.platform.rpc import call_rpc
 from api.treasury.notifications import notify_payment_approved, notify_payment_rejected
 
@@ -233,7 +234,7 @@ def add_evidence(
         raise ValueError("evidence payload is empty")
     if len(data) > MAX_EVIDENCE_BYTES:
         raise ValueError(f"evidence exceeds the {MAX_EVIDENCE_BYTES} byte limit")
-    inserted = (
+    result = (
         sb.table("payment_evidence")
         .insert(
             {
@@ -245,8 +246,8 @@ def add_evidence(
             }
         )
         .execute()
-    ).data
-    row = inserted[0] if isinstance(inserted, list) else inserted
+    )
+    row = unwrap_row(result)
     return {k: v for k, v in row.items() if k != "data"}
 
 
