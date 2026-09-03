@@ -7,8 +7,19 @@
 -- ON CONFLICT DO NOTHING).
 --
 -- Numbering note: the plan calls this 0146; 0146 was taken by
--- 0146_attendance_tenant_guards.sql, so this lands at 0147. No migration in the
--- 0147+ range has been applied anywhere yet.
+-- 0146_attendance_tenant_guards.sql, so this lands at 0147.
+--
+-- CORRECTED IN PLACE 2026-09-03 (issue #26). As written, §5 granted the full
+-- `treasurer` role to anyone holding any single legacy write capability, and
+-- then dropped `treasury_grants` — destroying the evidence of what each member
+-- actually held. Both are fixed below: write-capability holders get
+-- `treasury_viewer`, and the table is renamed to `treasury_grants_archived_0147`.
+-- The edit is deliberate rather than a follow-up migration, because a follow-up
+-- cannot reconstruct a table this file had already dropped. `schema_migrations`
+-- stores file names only, so a database that already ran 0147 will not re-run it:
+-- any database migrated BEFORE 2026-09-03 received the original behaviour and
+-- needs the manual remediation described in issue #26 (only the demo database is
+-- known to be in that state; its data is accepted as-is).
 
 -- ── 1. New permission keys ───────────────────────────────────────────────────
 INSERT INTO permissions (key, description) VALUES
@@ -102,12 +113,12 @@ WHERE role = 'officer'
   AND status = 'active'
 ON CONFLICT DO NOTHING;
 
--- ── 5. Migrate then drop treasury_grants ─────────────────────────────────────
+-- ── 5. Migrate then archive treasury_grants ─────────────────────────────────────
 -- Prior-migration audit for `treasury_grants` readers:
---   0005 — CREATE TABLE (+ indexes)                       → dropped below
+--   0005 — CREATE TABLE (+ indexes)                       → renamed below
 --   0006 — treasury_has_capability() reads it; officer     → function replaced
---          default-grant INSERT; treasury_grants RLS policy   below (policy dies
---                                                              with the table)
+--          default-grant INSERT; treasury_grants RLS policy   below (policy follows
+--                                                              the renamed table)
 --   0081 — idempotent officer default-grant INSERT (no trigger, no function)
 -- `treasury_has_capability(chapter, capability)` is the ONE live function body
 -- that reads the table, and it is still called by RLS policies seeded in 0006,
@@ -167,40 +178,28 @@ AS $$
     );
 $$;
 
--- Data migration: read-only grant holders become treasury_viewer.
+-- Data migration: every treasury_grants holder becomes treasury_viewer.
+--
+-- Read-only holders keep exactly what they had. Write-capability holders are
+-- deliberately UNDER-granted: this catalog has no narrow role that carries a
+-- single treasury write key (the roles are officer / treasurer / finance_board /
+-- treasury_viewer), and inventing per-capability roles here would smuggle a
+-- catalog change into a data migration. The earlier version of this file granted
+-- the full `treasurer` role instead, so one legacy `expense:create` row bought
+-- treasury:invoice:void — the exact power §3 above keeps off the officer role
+-- (0121 decision #5). Under-granting is recoverable; over-granting is not.
+--
+-- An officer must therefore re-grant treasurer / finance_board deliberately, from
+-- treasury_grants_archived_0147 (below), which records what each member held.
 INSERT INTO member_roles (chapter_id, member_id, role_key)
-SELECT g.chapter_id, g.member_id, 'treasury_viewer'
+SELECT DISTINCT g.chapter_id, g.member_id, 'treasury_viewer'
 FROM treasury_grants g
-GROUP BY g.chapter_id, g.member_id
-HAVING bool_and(g.capability = 'treasury:read')
-ON CONFLICT DO NOTHING;
-
--- Data migration: holders of any WRITE capability that no role of theirs already
--- resolves to become treasurer. Officers are already covered by step 3/4, so
--- they fall out of this NOT EXISTS.
-INSERT INTO member_roles (chapter_id, member_id, role_key)
-SELECT DISTINCT g.chapter_id, g.member_id, 'treasurer'
-FROM treasury_grants g
-WHERE g.capability <> 'treasury:read'
-  AND NOT EXISTS (
-      SELECT 1
-      FROM member_roles mr
-      JOIN role_permissions rp ON rp.role_key = mr.role_key
-      WHERE mr.member_id = g.member_id
-        AND mr.chapter_id = g.chapter_id
-        AND rp.permission_key = CASE g.capability
-            WHEN 'invoice:create'    THEN 'treasury:invoice:create'
-            WHEN 'payment:review'    THEN 'treasury:payment:verify'
-            WHEN 'expense:create'    THEN 'treasury:expense:create'
-            WHEN 'adjustment:create' THEN 'treasury:adjustment:create'
-            WHEN 'refund:create'     THEN 'treasury:refund:create'
-            WHEN 'rebuild:run'       THEN 'treasury:rebuild:run'
-        END
-  )
 ON CONFLICT DO NOTHING;
 
 -- The 0081-era default grants were a plain idempotent INSERT — there is no
 -- trigger or function to drop (verified by grepping every prior migration).
--- treasury_grants is a plain authorization table, not append-only: no ledger
--- concern, and its RLS policy drops with it.
-DROP TABLE IF EXISTS treasury_grants;
+-- The table is renamed rather than dropped so the pre-migration authority set
+-- stays auditable (issue #26): it is the only record of who held which write
+-- capability, and the grant above deliberately does not reproduce those. Its RLS
+-- policy and indexes follow the rename, so the archive stays tenant-guarded.
+ALTER TABLE IF EXISTS treasury_grants RENAME TO treasury_grants_archived_0147;
