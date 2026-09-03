@@ -205,3 +205,20 @@ def test_treasury_invoice_void_stays_off_the_officer_role():
         ") AS x(perm)", 1
     )[0]
     assert "treasury:invoice:void" not in officer_block
+
+
+def test_treasury_grants_backfill_does_not_hand_out_treasurer():
+    """#26: one legacy write capability must not buy the full treasurer role.
+
+    The catalog has no narrow per-capability treasury role, so 0147 grants
+    treasury_viewer and archives the grants table an officer re-grants from.
+    """
+    sql = MIGRATION.read_text()
+    backfill = sql.split(
+        "INSERT INTO member_roles (chapter_id, member_id, role_key)\nSELECT DISTINCT", 1
+    )[1].split(";", 1)[0]
+
+    assert "'treasury_viewer'" in backfill
+    assert "'treasurer'" not in backfill
+    assert "DROP TABLE" not in sql
+    assert "RENAME TO treasury_grants_archived_0147" in sql
