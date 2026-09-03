@@ -30,16 +30,17 @@ import logging
 from datetime import datetime, timezone
 
 from api.announcements.services import twilio_client
-from api.config import settings
 from api.cron.core import templates
+from api.platform.delivery import delivery_mode
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_BATCH_LIMIT = 100
 
-# The two real dispatch modes. `message_outbox.delivery_mode` also holds channel
-# labels written by the RPCs ('sms'), which are not dispatch modes — a row value
-# only overrides the global setting when it names one of these.
+# The two real dispatch modes. `message_outbox.delivery_mode` is NOT one of these
+# knobs: it is a snapshot of the mode at enqueue time (0070 defaults it to
+# 'dry_run' and the plpgsql producers never set it), so the live setting decides
+# how a row is delivered — see _global_mode.
 DRY_RUN = "dry_run"
 TWILIO = "twilio"
 _DISPATCH_MODES = (DRY_RUN, TWILIO)
@@ -68,7 +69,14 @@ def _resolve_sb(sb):
 
 
 def _global_mode() -> str:
-    mode = settings.MESSAGE_DELIVERY_MODE or DRY_RUN
+    """The mode every row is delivered in: the live setting, not the row's.
+
+    `message_outbox.delivery_mode` records what the mode was when the row was
+    enqueued; treating it as an override pinned every row queued before the
+    twilio flip — and every plpgsql-produced row, which takes 0070's 'dry_run'
+    column default — to a simulated delivery forever.
+    """
+    mode = delivery_mode()
     if mode not in _DISPATCH_MODES:
         # Fail the whole run loudly: a typo in the Vercel env var must not
         # silently simulate (or silently skip) every message (checklist 2.2).
@@ -76,11 +84,6 @@ def _global_mode() -> str:
             f"Unknown MESSAGE_DELIVERY_MODE {mode!r}; expected 'dry_run' or 'twilio'"
         )
     return mode
-
-
-def _row_mode(row: dict, default: str) -> str:
-    candidate = (row.get("delivery_mode") or "").strip()
-    return candidate if candidate in _DISPATCH_MODES else default
 
 
 def _enrich(sb, row: dict) -> dict:
@@ -135,7 +138,7 @@ def _close_row(sb, row: dict, *, status: str, last_error: str | None) -> None:
     sb.table("message_outbox").update(patch).eq("id", row["id"]).execute()
 
 
-def _deliver_row(sb, row: dict, *, default_mode: str) -> str:
+def _deliver_row(sb, row: dict, *, mode: str) -> str:
     """Deliver one row. Returns its terminal status; never raises."""
     try:
         if not row.get("member_id"):
@@ -147,7 +150,6 @@ def _deliver_row(sb, row: dict, *, default_mode: str) -> str:
 
         payload = _enrich(sb, row)
         body = templates.render(row["event_type"], payload)
-        mode = _row_mode(row, default_mode)
 
         if mode == DRY_RUN:
             _close_row(sb, row, status="simulated", last_error=None)
@@ -185,7 +187,7 @@ def drain_outbox(
     Returns {"processed", "sent", "simulated", "failed"}.
     """
     client = _resolve_sb(sb)
-    default_mode = _global_mode()
+    mode = _global_mode()
 
     query = client.table("message_outbox").select("*").eq("status", "pending")
     if chapter_id:
@@ -194,7 +196,7 @@ def drain_outbox(
 
     counts = {"processed": 0, "sent": 0, "simulated": 0, "failed": 0}
     for row in pending:
-        status = _deliver_row(client, row, default_mode=default_mode)
+        status = _deliver_row(client, row, mode=mode)
         counts["processed"] += 1
         counts[status] = counts.get(status, 0) + 1
 
