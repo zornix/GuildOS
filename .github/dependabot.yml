@@ -1,0 +1,34 @@
+# Grouped weekly updates. Without grouping this repo's transitive tree
+# produces dozens of separate PRs, which is how the alert list reached 133
+# before anyone looked at it.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directories:
+      - /LocalDev/fratos
+      - /LocalDev/greekos
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: pip
+    directory: /LocalDev
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      pip-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
