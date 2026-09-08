@@ -50,7 +50,7 @@ export function useAppData() {
   // Demo-only tabs still live in localStorage.
   const [rules] = usePersistentState<ChapterRule[]>('g_rules', INITIAL_RULES);
 
-  const { toastMessage, showToast } = useToast();
+  const { toastMessage, showToast, dismissToast } = useToast();
   const { loading, setLoading, backendDown, setBackendDown, syncApi } = useBackend(showToast);
   const outbox = useOutbox();
   const { enqueueOutbox } = outbox;
@@ -288,6 +288,7 @@ export function useAppData() {
     backendDown,
     toastMessage,
     showToast,
+    dismissToast,
     outbox,
     roster,
     events,

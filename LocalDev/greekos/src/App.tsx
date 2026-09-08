@@ -33,6 +33,7 @@ export default function App() {
       setCurrentMemberName={app.setCurrentMemberName}
       members={roster.members}
       toastMessage={app.toastMessage}
+      onDismissToast={app.dismissToast}
       loading={app.loading}
       backendDown={app.backendDown}
     >
