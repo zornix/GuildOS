@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { INITIAL_ANNOUNCEMENTS, INITIAL_RULES } from '../data/mockData';
-import { Announcement, ChapterRule, Member, SecurityAssignment } from '../types';
+import { Announcement, ChapterEvent, ChapterRule, Member, SecurityAssignment } from '../types';
 import { api, ensureLogin, optionalOfficerCall, EventDto, TaskDto } from '../api';
+import { isoDay } from '../formatters';
 import { isOfficerView } from '../lib/session';
 import {
   adaptAnnouncements,
+  adaptEventDetail,
   adaptEvents,
   adaptExcuses,
   adaptFines,
@@ -27,6 +29,7 @@ import { useFinance } from './useFinance';
 import { useAttendance } from './useAttendance';
 import { useTasks } from './useTasks';
 import { useRecruitment } from './useRecruitment';
+import { useContribution } from './useContribution';
 
 /** Composes the domain hooks, runs the single initial backend load, and owns the
  *  few cross-domain bits (session identity, announcements, NL command execution). */
@@ -72,6 +75,7 @@ export function useAppData() {
   });
   const tasks = useTasks({ members, syncApi, showToast });
   const recruitment = useRecruitment({ syncApi, showToast, enqueueOutbox });
+  const contribution = useContribution(currentMemberName, events.events, initiatives.initiatives);
 
   /** Stamp the job rows onto whichever event/initiative owns each one. The chip
    *  counts live on the event rows, so restamp those in the same update when
@@ -129,19 +133,30 @@ export function useAppData() {
             api.getInitiatives()
           ]);
 
-        // Security rosters are per event, so only upcoming events are worth a
-        // request; a failing one just leaves that event's shift list empty.
+        // Security rosters, organizer/supervisor names and the door link are
+        // all per event, so only upcoming events get the extra requests; a
+        // failing one just leaves that event's row with the list data.
         const adaptedEvents = adaptEvents(eventRows);
         const membersById = new Map(rosterRows.map(m => [m.id, m]));
-        const today = new Date().toISOString().substring(0, 10);
+        const today = isoDay();
         const securityByEvent = new Map<string, SecurityAssignment[]>();
+        const detailByEvent = new Map<string, Partial<ChapterEvent>>();
         await Promise.all(
           adaptedEvents.filter(e => e.date >= today).map(async e => {
             try {
-              const rows = await api.listSecurity(e.id);
+              const [rows, detail, link] = await Promise.all([
+                api.listSecurity(e.id),
+                api.getEvent(e.id),
+                api.getCheckInLink(e.id)
+              ]);
               securityByEvent.set(e.id, rows.map(row => adaptSecurityAssignment(row, membersById)));
+              detailByEvent.set(e.id, {
+                ...adaptEventDetail(detail, rosterRows),
+                checkInToken: link.short_code,
+                checkInLinkActive: !!link.short_code
+              });
             } catch (err) {
-              console.error(`Security load failed for event ${e.id}`, err);
+              console.error(`Upcoming-event load failed for event ${e.id}`, err);
             }
           })
         );
@@ -153,6 +168,7 @@ export function useAppData() {
         setIsOfficer(isOfficerView(permissionSet));
         events.setEvents(adaptedEvents.map(e => ({
           ...e,
+          ...(detailByEvent.get(e.id) || {}),
           securityAssignments: securityByEvent.get(e.id) || e.securityAssignments
         })));
         attendance.setExcuses(adaptExcuses(excuseRows, rosterRows));
@@ -254,6 +270,7 @@ export function useAppData() {
     permissions,
     sessionIsOfficer,
     sessionName,
+    contribution,
     setIsOfficer,
     currentMemberName,
     setCurrentMemberName,
