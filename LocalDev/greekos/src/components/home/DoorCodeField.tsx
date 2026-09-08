@@ -17,16 +17,19 @@ export default function DoorCodeField({ onSelfCheckIn, compact = false }: DoorCo
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    const result = await onSelfCheckIn(code);
-    setBusy(false);
-    setFeedback(result);
-    if (result.ok) setCode('');
+    try {
+      const result = await onSelfCheckIn(code);
+      setFeedback(result);
+      if (result.ok) setCode('');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <form onSubmit={submit} className={compact ? 'flex flex-wrap items-end gap-2' : 'space-y-4'}>
       <div className={compact ? '' : 'text-center'}>
-        <label htmlFor={id} className="text-xs font-bold text-slate-700 block mb-1">
+        <label htmlFor={id} className={`text-xs font-bold block mb-1 ${compact ? 'text-slate-200' : 'text-slate-700'}`}>
           Door code
         </label>
         <input
@@ -48,7 +51,9 @@ export default function DoorCodeField({ onSelfCheckIn, compact = false }: DoorCo
       <button
         type="submit"
         disabled={busy || !code.trim()}
-        className={`bg-navy text-gold hover:bg-slate-800 font-bold min-h-11 rounded-lg text-xs transition-all cursor-pointer disabled:opacity-50 ${compact ? 'px-4' : 'w-full py-3'}`}
+        className={`font-bold min-h-11 rounded-lg text-xs transition-all cursor-pointer disabled:opacity-50 ${
+          compact ? 'bg-gold hover:bg-[#c5a02b] text-navy px-4' : 'bg-navy hover:bg-slate-800 text-gold w-full py-3'
+        }`}
       >
         {busy ? 'Checking in…' : 'Check in'}
       </button>

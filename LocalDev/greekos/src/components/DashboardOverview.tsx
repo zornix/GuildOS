@@ -61,6 +61,7 @@ export default function DashboardOverview({
   const today = isoDay();
   const upcomingEvents = safeEvents.filter(e => e.date >= today).sort((a, b) => a.date.localeCompare(b.date)).slice(0, TILE_LIMIT);
   const pendingJobSignOffs = safeEvents.flatMap(e => (e.jobs || []).filter(j => j.status === 'Done Reported'));
+  const openTasks = safeTasks.filter(t => t.status !== 'Completed');
 
   return (
     <div className="space-y-6">
@@ -160,8 +161,8 @@ export default function DashboardOverview({
         {/* Jobs */}
         <Card className="p-5 space-y-3">
           <TileHeader icon={<CheckSquare className="w-4 h-4 text-gold" />} title="Jobs" onAll={() => onNavigateTab('tasks')} allLabel="All jobs" />
-          {safeTasks.length === 0 && <p className="text-xs text-slate-500">No jobs yet.</p>}
-          {safeTasks.filter(t => t.status !== 'Completed').slice(0, TILE_LIMIT).map(task => (
+          {openTasks.length === 0 && <p className="text-xs text-slate-500">No jobs yet.</p>}
+          {openTasks.slice(0, TILE_LIMIT).map(task => (
             <div key={task.id} className="p-2.5 rounded-lg border border-slate-100 bg-slate-50 flex items-center justify-between text-xs gap-2">
               <div>
                 <div className="font-bold text-slate-800">{task.title}</div>
