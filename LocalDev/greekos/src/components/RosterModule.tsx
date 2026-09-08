@@ -9,6 +9,7 @@ import {
 import { Member } from '../types';
 import Modal from './ui/Modal';
 import Card from './ui/Card';
+import ConfirmDialog from './ui/ConfirmDialog';
 import { formatMoney } from '../formatters';
 
 interface RosterModuleProps {
@@ -29,6 +30,7 @@ export default function RosterModule({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [pendingStanding, setPendingStanding] = useState<{ member: Member; standing: Member['standing'] } | null>(null);
 
   // New Member Form State
   const [name, setName] = useState('');
@@ -197,7 +199,7 @@ export default function RosterModule({
                       {isOfficer && (
                         <select
                           value={mem.standing}
-                          onChange={e => onUpdateStanding(mem.id, e.target.value as any)}
+                          onChange={e => setPendingStanding({ member: mem, standing: e.target.value as Member['standing'] })}
                           className="text-xs border border-slate-200 rounded p-1 bg-white cursor-pointer"
                         >
                           <option value="Good Standing">Good Standing</option>
@@ -324,6 +326,17 @@ export default function RosterModule({
               </button>
             </form>
         </Modal>
+      )}
+
+      {pendingStanding && (
+        <ConfirmDialog
+          title="Change standing?"
+          tone="danger"
+          body={<p><strong>{pendingStanding.member.name}</strong>: {pendingStanding.member.standing} &rarr; <strong>{pendingStanding.standing}</strong>. Standing affects what they may do in the chapter.</p>}
+          confirmLabel="Change standing"
+          onCancel={() => setPendingStanding(null)}
+          onConfirm={() => { onUpdateStanding(pendingStanding.member.id, pendingStanding.standing); setPendingStanding(null); }}
+        />
       )}
     </div>
   );

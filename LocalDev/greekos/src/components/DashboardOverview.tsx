@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Users,
   Calendar,
@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { ChapterEvent, Member, Task, Fine, Initiative, Announcement, LedgerEntry } from '../types';
 import Card from './ui/Card';
+import ConfirmDialog from './ui/ConfirmDialog';
 import { formatMoney, isoDay } from '../formatters';
 
 interface DashboardOverviewProps {
@@ -55,6 +56,8 @@ export default function DashboardOverview({
   const safeLedger = ledger || [];
 
   const currentMember = safeMembers.find(m => m.name === currentMemberName);
+
+  const [pendingDelete, setPendingDelete] = useState<Announcement | null>(null);
 
   // Computations
   const totalReceivablesCents = safeMembers.reduce((sum, m) => sum + (m.duesBalanceCents || Math.round((m.duesBalance || 0) * 100)), 0);
@@ -360,7 +363,7 @@ export default function DashboardOverview({
                       </span>
                       {isOfficer && (
                         <button
-                          onClick={() => onDeleteAnnouncement(a.id)}
+                          onClick={() => setPendingDelete(a)}
                           title="Remove from calendar"
                           aria-label={`Remove announcement "${a.title}" from calendar`}
                           className="text-blue-400 hover:text-red-600 cursor-pointer"
@@ -416,6 +419,17 @@ export default function DashboardOverview({
         </div>
 
       </div>
+
+      {pendingDelete && (
+        <ConfirmDialog
+          title="Remove announcement?"
+          tone="danger"
+          body={<p>"<strong>{pendingDelete.title}</strong>" comes off the calendar for everyone. Already-sent messages are not recalled.</p>}
+          confirmLabel="Remove"
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={() => { onDeleteAnnouncement(pendingDelete.id); setPendingDelete(null); }}
+        />
+      )}
     </div>
   );
 }
