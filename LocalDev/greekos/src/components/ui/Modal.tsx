@@ -29,8 +29,11 @@ export default function Modal({
   const titleId = useId();
   const panel = useRef<HTMLDivElement>(null);
 
+  // Mount only. Call sites pass an inline `onClose`, so a focus() keyed on it
+  // would re-run on every keystroke in a modal form and yank focus off the input.
+  useEffect(() => { panel.current?.focus(); }, []);
+
   useEffect(() => {
-    panel.current?.focus();
     if (!onClose) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
