@@ -314,6 +314,7 @@ export default function CommandModule({
             <span className="absolute left-4 text-gold font-mono font-black text-base select-none">&gt;</span>
             <input
               type="text"
+              aria-label="Command"
               value={commandInput}
               onChange={e => setCommandInput(e.target.value)}
               placeholder="e.g. fine Cody Jenkins $25 for missing chapter meeting..."

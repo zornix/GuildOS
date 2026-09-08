@@ -125,6 +125,7 @@ export default function RosterModule({
           <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
           <input
             type="text"
+            aria-label="Search roster"
             placeholder="Search roster..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
