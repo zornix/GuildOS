@@ -38,6 +38,7 @@ demo database as Jake. Clear that key to force a fresh token.
 ## Checks
 
 ```bash
+npm test              # node:test via tsx — src/**/*.test.ts
 npm run lint          # tsc --noEmit
 npm run build         # vite build
 npx tsx src/selfcheck.ts   # adapter/contract self-check
