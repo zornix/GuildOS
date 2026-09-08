@@ -85,11 +85,20 @@ both:
   answers the real question: officer marks attendance in one context, member
   sees it in another, same run, same preview, same demo chapter.
 
-Limits, from Playwright's own page: emulation is browser-level only —
-"pre-configured devices assume a specific platform", and the emulated Chromium
-is still Chromium. It will not catch iOS Safari layout bugs, real touch
-scrolling, on-screen keyboards, notch/safe-area insets, or slow-network
-behaviour on a real phone.
+Limits. Playwright never states an "emulation is not a real device" caveat
+outright; the honest citation is two steps. First, emulation only claims to
+"simulate the browser behavior such as `userAgent`, `screenSize`, `viewport`
+and if it `hasTouch` enabled", and "pre-configured devices assume a specific
+platform" ([emulation](https://playwright.dev/docs/emulation)). Second — the
+one that matters for a member-facing phone UI — `devices['iPhone 15']` does
+**not** run Mobile Safari: "Playwright doesn't work with the branded version of
+Safari since it relies on patches. Instead, you can test using the most recent
+WebKit build", and "for the closest-to-Safari experience you should run WebKit
+on mac" ([browsers](https://playwright.dev/docs/browsers)).
+
+So: an emulated iPhone catches layout and viewport regressions, not real
+Mobile Safari quirks, real touch scrolling, on-screen keyboards, safe-area
+insets, or a slow phone on campus wifi. Those need option B.
 
 - **Cost**: $0 beyond what is installed.
 - **Effort**: small — a `greekos/playwright.config.ts` and a login fixture.
@@ -120,7 +129,7 @@ DB story, not the preview story, and it has no HTTPS.
 
 Rented real devices, driven either interactively or from Playwright.
 
-- **Cost**: entry paid tiers, see §5 for figures.
+- **Cost**: from $12.50/month; see §5 for the table.
 - **Effort**: account setup, then a driver/endpoint change in the config.
 - **When it earns its keep**: a real-iOS-Safari bug you cannot reproduce, or a
   device you do not own. Not for "check the roster renders on a phone" — that
@@ -309,7 +318,7 @@ already does.
 |---|---|---|---|---|
 | A. Playwright vs preview | $0 (already installed) | Half a day: config + login fixture + bypass secret | Yes | No — emulated Chromium only |
 | B. Your own devices | $0 | Minutes, once a preview URL exists | No | Yes |
-| C. Device cloud | See below | A few hours incl. signup | Yes | Yes |
+| C. Device cloud | From $12.50/mo | An hour incl. signup | Yes | Yes |
 | D. Shared demo chapter | $0 | None — seeded already | n/a | n/a |
 | CI smoke job | $0 within the plan's allowance | An hour of workflow YAML | Yes | No |
 
@@ -317,17 +326,41 @@ Recurring costs that are real regardless of choice: Vercel Pro at $20/month
 *if* the commercial-use line applies (§3.5), and Actions minutes past the plan
 allowance (§4).
 
-**Device-cloud figures.** BrowserStack's own pricing page lists Live (manual,
-interactive) at $29/month Desktop and $39/month Desktop & Mobile, and Automate
-(Selenium/Playwright) from $59/month for the Chrome plan — all "billed
-annually", so monthly billing is higher
-([BrowserStack pricing](https://www.browserstack.com/pricing)). LambdaTest and
-Sauce Labs sit in the same band. Treat $40-60/month as the realistic floor for
-one parallel session.
+**Device-cloud figures** (all seen 2026-09-08, all annual billing unless
+noted):
 
-Against that: the phones already in the room cost $0 and are *actual* iOS
-Safari, not a rented one. For a closed pilot of two to five chapters, a device
-cloud is renting hardware you already own.
+| Vendor | Cheapest useful tier | Price |
+|---|---|---|
+| BrowserStack Live | **Freelancer** — 1 user, **100 min/month** of real desktop + mobile | **$12.50/mo** ($19 month-to-month) |
+| BrowserStack Live | Desktop & Mobile, unlimited minutes | $39/mo |
+| BrowserStack Automate (Playwright) | Chrome, 1 parallel | $59/mo |
+| Sauce Labs Live | 1 parallel, unlimited minutes | $39/mo ($49 monthly) |
+| TestMu AI (ex-LambdaTest) | Real Device Plus Live | $39/mo; free tier exists but caps Live sessions at 2 min |
+| Azure Playwright Workspaces | pay-per-minute cloud browsers | $0.01/Linux test-minute |
+
+Sources: [BrowserStack pricing](https://www.browserstack.com/pricing),
+[Sauce Labs pricing](https://saucelabs.com/pricing),
+[TestMu AI pricing](https://www.testmuai.com/pricing/),
+[Azure App Testing](https://azure.microsoft.com/en-us/pricing/details/app-testing/).
+(BrowserStack also runs an [open-source program](https://www.browserstack.com/open-source)
+granting 5 users and 5 parallels free, but it is application-gated and this
+repo is private, so assume it does not apply.)
+
+Two things worth knowing before ruling C out for good:
+
+- **No tunnel is needed.** Local Testing / UnderPass exists for hosts that are
+  not publicly routable ([BrowserStack local
+  testing](https://www.browserstack.com/docs/live/local-testing)). A Vercel
+  preview is publicly routable and merely returns a 401 challenge, so the
+  bypass query param (§3.2) is enough for any of these tools — no tunnel, no
+  header configuration.
+- **The real floor is $12.50/month, not $40.** That is cheap enough that "we
+  might need real iOS Safari someday" is not a reason to buy now — it is a
+  reason not to worry about it.
+
+Against all of it: the phones already in the room cost $0 and are *actual*
+Mobile Safari, which is precisely the thing Playwright cannot give you. For a
+closed pilot of two to five chapters, a device cloud rents hardware you own.
 
 ---
 
@@ -364,8 +397,10 @@ testing. In order:
    three or four specs, on `deployment_status`. Two browser contexts in one
    spec cover the officer/member handoff.
 6. **Revisit a device cloud only** when a real iOS-Safari bug appears that you
-   cannot reproduce on a phone you own. That is a "when it bites" purchase, not
-   a setup step.
+   cannot reproduce on a phone you own. BrowserStack Live Freelancer is
+   $12.50/month for 100 minutes of real devices and needs no tunnel — a
+   same-afternoon purchase if that day comes, which is exactly why it is not a
+   setup step now.
 
 Steps 2 and 3 are separate tickets — they are product work, not test work, and
 they are what actually unblocks #41's "testable online from several devices at
