@@ -149,8 +149,11 @@ export default function App() {
           ledger={finance.ledger}
           isOfficer={isOfficer}
           currentMemberName={currentMemberName}
+          myBalance={app.myBalance}
+          balanceCentsOf={finance.balanceCentsOf}
           onRecordPayment={finance.handleRecordPayment}
           onIssueFine={finance.handleIssueFine}
+          onPostInvoice={finance.handlePostInvoice}
           onApproveFinePayment={finance.handleApproveFinePayment}
           onPostLedgerCorrection={finance.handlePostLedgerCorrection}
         />
