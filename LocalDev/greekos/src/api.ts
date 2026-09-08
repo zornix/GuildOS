@@ -67,6 +67,9 @@ export async function optionalOfficerCall<T, F>(call: Promise<T>, fallback: F): 
 // ----------------------------------------------------
 export interface MeDto { id: string; name: string; email: string; role: string; chapter_id: string; }
 
+/** GET /api/rbac/me/permissions — the only source of authority in the UI. */
+export interface MyPermissionsDto { permissions: string[]; roles: string[]; }
+
 export interface MemberDto { id: string; name: string; email: string; role: string; status: string; }
 
 export interface StandingDto {
@@ -257,6 +260,7 @@ export const api = {
   del: <T>(path: string) => request<T>('DELETE', path),
 
   getMe: () => request<MeDto>('GET', '/api/auth/me'),
+  getMyPermissions: () => request<MyPermissionsDto>('GET', '/api/rbac/me/permissions'),
 
   getMembers: () => request<MemberDto[]>('GET', '/api/members/'),
   getStandings: () => request<StandingDto[]>('GET', '/api/standing/'),

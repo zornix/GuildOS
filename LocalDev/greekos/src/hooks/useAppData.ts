@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { INITIAL_ANNOUNCEMENTS, INITIAL_RULES } from '../data/mockData';
 import { Announcement, ChapterRule, Member, SecurityAssignment } from '../types';
 import { api, ensureLogin, optionalOfficerCall, EventDto, TaskDto } from '../api';
+import { isOfficerView } from '../lib/session';
 import {
   adaptAnnouncements,
   adaptEvents,
@@ -30,7 +31,12 @@ import { useRecruitment } from './useRecruitment';
 /** Composes the domain hooks, runs the single initial backend load, and owns the
  *  few cross-domain bits (session identity, announcements, NL command execution). */
 export function useAppData() {
-  // Access level & impersonation state
+  // The real session (from /me + /rbac/me/permissions) …
+  const [permissions, setPermissions] = useState<Set<string>>(new Set());
+  const [sessionName, setSessionName] = useState<string>('');
+  const sessionIsOfficer = isOfficerView(permissions);
+  // … and the *view*, which the Demo "view as" switcher may override. Starts
+  // as officer so the backend-down mock data still shows the full prototype.
   const [isOfficer, setIsOfficer] = useState<boolean>(true);
   const [currentMemberName, setCurrentMemberName] = useState<string>('Alexander Mercer');
 
@@ -99,14 +105,16 @@ export function useAppData() {
     (async () => {
       try {
         await ensureLogin();
-        const [me, memberRows, standingRows, scoreRows] = await Promise.all([
+        const [me, perms, memberRows, standingRows, scoreRows] = await Promise.all([
           api.getMe(),
+          api.getMyPermissions(),
           api.getMembers(),
           // Officer-gated: a member session 403s, which just means an empty
           // standing/score section rather than a failed load.
           optionalOfficerCall(api.getStandings(), []),
           optionalOfficerCall(api.getScores(), [])
         ]);
+        const permissionSet = new Set(perms.permissions);
         const rosterRows = adaptMembers(memberRows, standingRows, scoreRows);
 
         const [eventRows, excuseRows, fineRows, treasury, taskRows, annRows, recruitRows, initRows] =
@@ -139,7 +147,10 @@ export function useAppData() {
         );
 
         setMembers(rosterRows);
+        setPermissions(permissionSet);
+        setSessionName(me.name);
         setCurrentMemberName(me.name);
+        setIsOfficer(isOfficerView(permissionSet));
         events.setEvents(adaptedEvents.map(e => ({
           ...e,
           securityAssignments: securityByEvent.get(e.id) || e.securityAssignments
@@ -240,6 +251,9 @@ export function useAppData() {
 
   return {
     isOfficer,
+    permissions,
+    sessionIsOfficer,
+    sessionName,
     setIsOfficer,
     currentMemberName,
     setCurrentMemberName,
