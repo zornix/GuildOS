@@ -18,7 +18,7 @@ interface Deps {
   enqueueOutbox: EnqueueOutbox;
 }
 
-/** Fines, payments and the immutable audit ledger. Balances live on the member
+/** Fines, payments and the chapter ledger. Balances live on the member
  *  rows, so this hook writes into the roster state too. */
 export function useFinance({ members, setMembers, currentMemberName, isOfficer, syncApi, showToast, enqueueOutbox }: Deps) {
   const [fines, setFines] = useState<Fine[]>(INITIAL_FINES);
@@ -81,7 +81,7 @@ export function useFinance({ members, setMembers, currentMemberName, isOfficer, 
       authorizedBy: `${currentMemberName} (${isOfficer ? 'Officer' : 'Self-Service Gateway'})`
     }, ...prev]);
 
-    showToast(`Payment of ${formatMoney(amountCents)} recorded to immutable ledger.`);
+    showToast(`Recorded ${formatMoney(amountCents)} payment from ${paymentData.memberName}.`);
   };
 
   const handleIssueFine = (fineData: Omit<Fine, 'id' | 'status' | 'date'>) => {
@@ -132,12 +132,33 @@ export function useFinance({ members, setMembers, currentMemberName, isOfficer, 
     showToast(`Assessed ${formatMoney(amountCents)} fine to ${fineData.memberName}.`);
   };
 
+  // ponytail: client-local invoice for the design lab. The real path is
+  // POST /api/treasury/invoices; wire it when the form shape has survived a browser test.
+  const handlePostInvoice = (inv: { memberId: string; memberName: string; amountCents: number; description: string }) => {
+    const ledgerId = 'led_' + (1000 + ledger.length);
+    const newBalanceCents = balanceCentsOf(inv.memberId) + inv.amountCents;
+    setLedger(prev => [{
+      id: ledgerId,
+      sequence: ledger.length + 1,
+      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      memberId: inv.memberId,
+      memberName: inv.memberName,
+      type: 'DUES_CHARGE',
+      amountCents: inv.amountCents,
+      balanceAfterCents: newBalanceCents,
+      description: inv.description || 'Invoice',
+      authorizedBy: `${currentMemberName} (Officer)`
+    }, ...prev]);
+    setMemberBalance(inv.memberId, newBalanceCents);
+    showToast(`Invoiced ${formatMoney(inv.amountCents)} to ${inv.memberName}.`);
+  };
+
   const handleApproveFinePayment = (fineId: string) => {
     setFines(prev => prev.map(f => f.id === fineId ? { ...f, status: 'Paid' } : f));
     showToast(`Cleared fine citation.`);
   };
 
-  const handlePostLedgerCorrection = (corr: { memberId: string; amountCents: number; description: string; correctsEntryId: string }) => {
+  const handlePostLedgerCorrection = (corr: { memberId: string; amountCents: number; description: string; correctsEntryId?: string }) => {
     const ledgerId = 'led_' + (1000 + ledger.length);
     const targetMem = members.find(m => m.id === corr.memberId);
     const newBalanceCents = Math.max(0, balanceCentsOf(corr.memberId) + corr.amountCents);
@@ -152,14 +173,14 @@ export function useFinance({ members, setMembers, currentMemberName, isOfficer, 
       amountCents: Math.abs(corr.amountCents),
       balanceAfterCents: newBalanceCents,
       description: corr.description,
-      authorizedBy: `${currentMemberName} (Executive Correction)`,
+      authorizedBy: `${currentMemberName} (Adjustment)`,
       correctsEntryId: corr.correctsEntryId
     };
 
     setLedger(prev => [entry, ...prev]);
     setMemberBalance(corr.memberId, newBalanceCents);
 
-    showToast(`Linked audit correction committed to ledger.`);
+    showToast(`Adjustment recorded.`);
   };
 
   return {
@@ -169,8 +190,10 @@ export function useFinance({ members, setMembers, currentMemberName, isOfficer, 
     setPayments,
     ledger,
     setLedger,
+    balanceCentsOf,
     handleRecordPayment,
     handleIssueFine,
+    handlePostInvoice,
     handleApproveFinePayment,
     handlePostLedgerCorrection
   };
