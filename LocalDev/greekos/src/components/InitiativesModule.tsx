@@ -216,12 +216,12 @@ export default function InitiativesModule({
                 </div>
               </div>
 
-              {/* Lead Chairs Section (Never Zero Chairs) */}
+              {/* Chairs Section (Never Zero Chairs) */}
               <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/70 space-y-1.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                     <Users className="w-3.5 h-3.5 text-gold" />
-                    Assigned Lead Chairs
+                    Chairs
                   </span>
                   <span className="text-xs text-slate-500">
                     {selectedInit.leadChairs.length} Chair{selectedInit.leadChairs.length > 1 ? 's' : ''} (Minimum 1 Required)
@@ -235,7 +235,7 @@ export default function InitiativesModule({
                     </span>
                   ))}
                 </div>
-                <p className="text-xs text-slate-500">Lead chairs approve work reported by brothers on this initiative.</p>
+                <p className="text-xs text-slate-500">Chairs approve work reported by brothers on this initiative.</p>
               </div>
             </Card>
 
@@ -373,14 +373,7 @@ export default function InitiativesModule({
 
       {/* MODAL: Create Initiative */}
       {showCreateModal && (
-        <Modal maxWidth="max-w-lg">
-            <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
-              <h3 className="font-display font-extrabold text-base text-slate-900 flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-gold" />
-                Launch Chair-Led Initiative
-              </h3>
-              <button onClick={() => setShowCreateModal(false)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
-            </div>
+        <Modal maxWidth="max-w-lg" title="Launch Chair-Led Initiative" onClose={() => setShowCreateModal(false)}>
 
             <form onSubmit={handleCreateSubmit} className="space-y-4">
               <div>
@@ -425,7 +418,7 @@ export default function InitiativesModule({
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1">Lead Chair (Creator)</label>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">Chair (Creator)</label>
                   <input
                     type="text"
                     value={leadChairs.join(', ')}
@@ -470,14 +463,7 @@ export default function InitiativesModule({
 
       {/* MODAL: Add Job to Initiative */}
       {showAddJobModal && selectedInit && (
-        <Modal>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-display font-bold text-base text-slate-900 flex items-center gap-2">
-                <Plus className="w-5 h-5 text-gold" />
-                Add job to initiative
-              </h3>
-              <button onClick={() => setShowAddJobModal(false)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
-            </div>
+        <Modal title="Add job to initiative" onClose={() => setShowAddJobModal(false)}>
 
             <form onSubmit={handleAddJobSubmit} className="space-y-4">
               <div>

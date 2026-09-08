@@ -76,7 +76,7 @@ export default function OutboxModule({
           <div className="flex items-center gap-2">
             <Send className="w-6 h-6 text-gold" />
             <h2 className="text-2xl font-display font-extrabold text-slate-900 tracking-tight">
-              Transactional Outbox & SMS Log
+              Message outbox
             </h2>
             <span className="text-xs font-bold bg-navy text-gold px-2 py-0.5 rounded-full">
               Real-time Queue
@@ -147,6 +147,7 @@ export default function OutboxModule({
           <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
           <input
             type="text"
+            aria-label="Search messages"
             placeholder="Search recipient or message..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}

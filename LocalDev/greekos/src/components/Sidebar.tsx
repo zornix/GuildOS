@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { ChevronDown, Shield, User } from 'lucide-react';
 import { MemberRole } from '../types';
 import { DEMO_NAV_ITEMS, NAV_ITEMS, NavItem } from '../config/navigation';
+import { can } from '../lib/session';
 
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   isOfficer: boolean;
+  permissions: Set<string>;
   setIsOfficer: (val: boolean) => void;
   currentMemberName: string;
   setCurrentMemberName: (name: string) => void;
@@ -20,6 +22,7 @@ export default function Sidebar({
   activeTab,
   setActiveTab,
   isOfficer,
+  permissions,
   setIsOfficer,
   currentMemberName,
   setCurrentMemberName,
@@ -75,13 +78,13 @@ export default function Sidebar({
         </div>
         <div>
           <h1 className="font-display font-bold text-base tracking-tight text-white">GreekOS</h1>
-          <p className="text-xs text-slate-400 font-sans">Alpha Chapter Operations</p>
+          <p className="text-xs text-slate-400 font-sans">Alpha Chapter</p>
         </div>
       </div>
 
       {/* Navigation items */}
       <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto">
-        {NAV_ITEMS.filter(item => isOfficer || !item.officerOnly).map(navRow)}
+        {NAV_ITEMS.filter(item => !item.permission || can(permissions, item.permission)).map(navRow)}
 
         <details className="mt-3 pt-3 border-t border-[#1e2d42]">
           <summary className="px-3 py-2 text-xs text-slate-400 hover:text-slate-200 cursor-pointer">
@@ -112,6 +115,9 @@ export default function Sidebar({
 
         {switcherOpen && (
           <div className="px-3.5 pb-3.5 space-y-2.5">
+            <p className="text-xs font-bold text-amber-300 bg-amber-900/40 border border-amber-700/60 rounded-lg px-2.5 py-1.5">
+              Demo: view as — changes only what this screen shows
+            </p>
             <div className="grid grid-cols-2 gap-1 p-0.5 bg-[#09101d] rounded-lg border border-[#1e2d42]">
               <button
                 onClick={() => setIsOfficer(true)}
@@ -139,7 +145,7 @@ export default function Sidebar({
 
             <div>
               <label htmlFor="view-as-member" className="text-xs text-slate-400 block mb-1">
-                View as
+                Demo: view as member
               </label>
               <select
                 id="view-as-member"

@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { INITIAL_ANNOUNCEMENTS, INITIAL_RULES } from '../data/mockData';
-import { Announcement, ChapterRule, Member, SecurityAssignment } from '../types';
+import { Announcement, ChapterEvent, ChapterRule, Member, SecurityAssignment } from '../types';
 import { api, ensureLogin, optionalOfficerCall, EventDto, TaskDto } from '../api';
+import { isoDay } from '../formatters';
+import { MemberBalance, adaptMemberBalance } from '../lib/balance';
+import { isOfficerView } from '../lib/session';
 import {
   adaptAnnouncements,
+  adaptEventDetail,
   adaptEvents,
   adaptExcuses,
   adaptFines,
@@ -26,11 +30,18 @@ import { useFinance } from './useFinance';
 import { useAttendance } from './useAttendance';
 import { useTasks } from './useTasks';
 import { useRecruitment } from './useRecruitment';
+import { useContribution } from './useContribution';
 
 /** Composes the domain hooks, runs the single initial backend load, and owns the
  *  few cross-domain bits (session identity, announcements, NL command execution). */
 export function useAppData() {
-  // Access level & impersonation state
+  // The real session (from /me + /rbac/me/permissions) …
+  const [permissions, setPermissions] = useState<Set<string>>(new Set());
+  const [sessionName, setSessionName] = useState<string>('');
+  const [myBalance, setMyBalance] = useState<MemberBalance | null>(null);
+  const sessionIsOfficer = isOfficerView(permissions);
+  // … and the *view*, which the Demo "view as" switcher may override. Starts
+  // as officer so the backend-down mock data still shows the full prototype.
   const [isOfficer, setIsOfficer] = useState<boolean>(true);
   const [currentMemberName, setCurrentMemberName] = useState<string>('Alexander Mercer');
 
@@ -39,7 +50,7 @@ export function useAppData() {
   // Demo-only tabs still live in localStorage.
   const [rules] = usePersistentState<ChapterRule[]>('g_rules', INITIAL_RULES);
 
-  const { toastMessage, showToast } = useToast();
+  const { toastMessage, showToast, dismissToast } = useToast();
   const { loading, setLoading, backendDown, setBackendDown, syncApi } = useBackend(showToast);
   const outbox = useOutbox();
   const { enqueueOutbox } = outbox;
@@ -48,7 +59,7 @@ export function useAppData() {
   const { members, setMembers } = roster;
 
   // Jobs live on the same `tasks` table for both parents, so one refetch restamps
-  // both boards. The ref breaks the cycle: the domain hooks call refetchJobs, but
+  // all three boards. The ref breaks the cycle: the domain hooks call refetchJobs, but
   // it can only be built from the setters those same hooks return.
   const refetchJobsRef = useRef<() => Promise<void>>(async () => {});
   const refetchJobs = () => refetchJobsRef.current();
@@ -64,14 +75,26 @@ export function useAppData() {
     showToast,
     enqueueOutbox
   });
-  const tasks = useTasks({ members, syncApi, showToast });
+  const tasks = useTasks({
+    syncApi,
+    showToast,
+    refetchJobs
+  });
   const recruitment = useRecruitment({ syncApi, showToast, enqueueOutbox });
+  const contribution = useContribution(currentMemberName, events.events, initiatives.initiatives);
 
   /** Stamp the job rows onto whichever event/initiative owns each one. The chip
    *  counts live on the event rows, so restamp those in the same update when
    *  fresh ones are supplied (rows are patched, never re-adapted, to keep the
    *  per-event security shifts already in state). */
-  const applyJobs = (taskRows: TaskDto[], rosterRows: Member[], eventRows?: EventDto[]) => {
+  const applyJobs = (
+    taskRows: TaskDto[], rosterRows: Member[], eventRows?: EventDto[],
+    titles = {
+      events: new Map<string, string>((eventRows ?? events.events).map(e => [e.id, e.title])),
+      initiatives: new Map<string, string>(initiatives.initiatives.map(i => [i.id, i.title]))
+    }
+  ) => {
+    tasks.setTasks(adaptTasks(taskRows, rosterRows, titles));
     const membersById = new Map(rosterRows.map(m => [m.id, m]));
     const { byEvent, byInitiative } = groupJobsByParent(taskRows, membersById);
     const countsById = new Map((eventRows ?? []).map(row => [row.id, row]));
@@ -99,17 +122,19 @@ export function useAppData() {
     (async () => {
       try {
         await ensureLogin();
-        const [me, memberRows, standingRows, scoreRows] = await Promise.all([
+        const [me, perms, memberRows, standingRows, scoreRows] = await Promise.all([
           api.getMe(),
+          api.getMyPermissions(),
           api.getMembers(),
           // Officer-gated: a member session 403s, which just means an empty
           // standing/score section rather than a failed load.
           optionalOfficerCall(api.getStandings(), []),
           optionalOfficerCall(api.getScores(), [])
         ]);
+        const permissionSet = new Set(perms.permissions);
         const rosterRows = adaptMembers(memberRows, standingRows, scoreRows);
 
-        const [eventRows, excuseRows, fineRows, treasury, taskRows, annRows, recruitRows, initRows] =
+        const [eventRows, excuseRows, fineRows, treasury, taskRows, annRows, recruitRows, initRows, myBalanceRow] =
           await Promise.all([
             api.getEvents(),
             api.getExcuses(),
@@ -118,44 +143,66 @@ export function useAppData() {
             api.getTasks(),
             api.getAnnouncements(),
             optionalOfficerCall(api.getRecruits(), []),
-            api.getInitiatives()
+            api.getInitiatives(),
+            api.getMemberTreasuryDashboard(me.id).then(adaptMemberBalance).catch(err => {
+              console.error('Member balance load failed', err);
+              return null;
+            })
           ]);
 
-        // Security rosters are per event, so only upcoming events are worth a
-        // request; a failing one just leaves that event's shift list empty.
+        // Security rosters, organizer/supervisor names and the door code are
+        // all per event, so only upcoming events get the extra requests; a
+        // failing one just leaves that event's row with the list data.
         const adaptedEvents = adaptEvents(eventRows);
         const membersById = new Map(rosterRows.map(m => [m.id, m]));
-        const today = new Date().toISOString().substring(0, 10);
+        const today = isoDay();
         const securityByEvent = new Map<string, SecurityAssignment[]>();
+        const detailByEvent = new Map<string, Partial<ChapterEvent>>();
         await Promise.all(
           adaptedEvents.filter(e => e.date >= today).map(async e => {
             try {
-              const rows = await api.listSecurity(e.id);
+              const [rows, detail, link] = await Promise.all([
+                api.listSecurity(e.id),
+                api.getEvent(e.id),
+                api.getCheckInLink(e.id)
+              ]);
               securityByEvent.set(e.id, rows.map(row => adaptSecurityAssignment(row, membersById)));
+              detailByEvent.set(e.id, {
+                ...adaptEventDetail(detail, rosterRows),
+                checkInToken: link.short_code,
+                checkInLinkActive: !!link.short_code
+              });
             } catch (err) {
-              console.error(`Security load failed for event ${e.id}`, err);
+              console.error(`Upcoming-event load failed for event ${e.id}`, err);
             }
           })
         );
 
         setMembers(rosterRows);
+        setPermissions(permissionSet);
+        setSessionName(me.name);
+        setMyBalance(myBalanceRow);
         setCurrentMemberName(me.name);
+        setIsOfficer(isOfficerView(permissionSet));
         events.setEvents(adaptedEvents.map(e => ({
           ...e,
+          ...(detailByEvent.get(e.id) || {}),
           securityAssignments: securityByEvent.get(e.id) || e.securityAssignments
         })));
         attendance.setExcuses(adaptExcuses(excuseRows, rosterRows));
         finance.setFines(adaptFines(fineRows, rosterRows));
         finance.setPayments(adaptPayments(treasury?.recent_payments || [], rosterRows));
         // No chapter-wide ledger read exists yet (statements are per member),
-        // so the immutable-ledger view starts empty rather than faked.
+        // so the chapter-ledger view starts empty rather than faked.
         finance.setLedger([]);
-        tasks.setTasks(adaptTasks(taskRows, rosterRows));
         setAnnouncements(adaptAnnouncements(annRows, rosterRows));
         recruitment.setPnms(adaptRecruits(recruitRows));
         initiatives.setInitiatives(adaptInitiatives(initRows, rosterRows));
         // Queued after both setters above, so it restamps the freshly adapted rows.
-        applyJobs(taskRows, rosterRows);
+        applyJobs(taskRows, rosterRows, eventRows, {
+          events: new Map(adaptedEvents.map(e => [e.id, e.title])),
+          initiatives: new Map(initRows.map(i => [i.id, i.title]))
+        });
       } catch (err) {
         console.error('Backend load failed', err);
         setBackendDown(true);
@@ -240,6 +287,11 @@ export function useAppData() {
 
   return {
     isOfficer,
+    permissions,
+    sessionIsOfficer,
+    sessionName,
+    contribution,
+    myBalance,
     setIsOfficer,
     currentMemberName,
     setCurrentMemberName,
@@ -249,6 +301,7 @@ export function useAppData() {
     backendDown,
     toastMessage,
     showToast,
+    dismissToast,
     outbox,
     roster,
     events,

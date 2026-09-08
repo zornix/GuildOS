@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   UserCheck,
   Check,
@@ -10,6 +10,8 @@ import {
 import { ChapterEvent, Member, Excuse } from '../types';
 import Modal from './ui/Modal';
 import Card from './ui/Card';
+import { RollStatus, markRemainingPresent, rollCallSummary } from '../lib/rollCall';
+import DoorCodeField from './home/DoorCodeField';
 
 interface AttendanceModuleProps {
   events: ChapterEvent[];
@@ -17,6 +19,8 @@ interface AttendanceModuleProps {
   excuses: Excuse[];
   isOfficer: boolean;
   currentMemberName: string;
+  /** Officers land on roll call; members land on the door code. */
+  initialTab: 'roster_check' | 'excuses' | 'self_pin';
   onRecordAttendance: (eventId: string, records: { memberId: string; status: 'Present' | 'Absent' | 'Excused' | 'Late' }[]) => void;
   onSubmitExcuse: (excuse: Omit<Excuse, 'id' | 'status' | 'submittedDate'>) => void;
   onReviewExcuse: (excuseId: string, status: 'Approved' | 'Rejected', reviewedBy: string) => void;
@@ -30,6 +34,7 @@ export default function AttendanceModule({
   excuses,
   isOfficer,
   currentMemberName,
+  initialTab,
   onRecordAttendance,
   onSubmitExcuse,
   onReviewExcuse,
@@ -40,13 +45,8 @@ export default function AttendanceModule({
   const safeExcuses = excuses || [];
 
   const [selectedEventId, setSelectedEventId] = useState<string>(safeEvents[0]?.id || '');
-  const [activeTab, setActiveTab] = useState<'roster_check' | 'excuses' | 'self_pin'>('roster_check');
+  const [activeTab, setActiveTab] = useState<'roster_check' | 'excuses' | 'self_pin'>(initialTab);
   const [showExcuseModal, setShowExcuseModal] = useState(false);
-
-  // Door-code check-in state
-  const [enteredCode, setEnteredCode] = useState('');
-  const [codeFeedback, setCodeFeedback] = useState<{ success?: boolean; msg?: string } | null>(null);
-  const [checkingIn, setCheckingIn] = useState(false);
 
   // Excuse Form State
   const [excuseEventId, setExcuseEventId] = useState(safeEvents[0]?.id || '');
@@ -56,24 +56,23 @@ export default function AttendanceModule({
   const selectedEvent = safeEvents.find(e => e.id === selectedEventId) || safeEvents[0];
   const currentMember = safeMembers.find(m => m.name === currentMemberName);
 
-  // Local attendance state for the roll call sheet
-  const [attendanceRecords, setAttendanceRecords] = useState<Record<string, 'Present' | 'Absent' | 'Excused' | 'Late'>>({});
+  // Local attendance state for the roll call sheet. Marks belong to one event,
+  // so switching the selector starts a fresh sheet rather than carrying them over.
+  const [attendanceRecords, setAttendanceRecords] = useState<Record<string, RollStatus>>({});
+  useEffect(() => setAttendanceRecords({}), [selectedEventId]);
 
-  const handleStatusChange = (memberId: string, status: 'Present' | 'Absent' | 'Excused' | 'Late') => {
+  const handleStatusChange = (memberId: string, status: RollStatus) => {
     setAttendanceRecords(prev => ({
       ...prev,
       [memberId]: status
     }));
   };
 
-  const handleSaveAttendance = () => {
-    if (!selectedEvent) return;
-    const formattedRecords = safeMembers.map(m => ({
-      memberId: m.id,
-      status: attendanceRecords[m.id] || 'Present'
-    }));
+  const summary = rollCallSummary(safeMembers, attendanceRecords);
 
-    onRecordAttendance(selectedEvent.id, formattedRecords);
+  const handleSaveAttendance = () => {
+    if (!selectedEvent || summary.marked.length === 0) return;
+    onRecordAttendance(selectedEvent.id, summary.marked);
   };
 
   const handleExcuseSubmit = (e: React.FormEvent) => {
@@ -94,15 +93,6 @@ export default function AttendanceModule({
 
     setExcuseReason('');
     setShowExcuseModal(false);
-  };
-
-  const handleCodeCheckInSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCheckingIn(true);
-    const result = await onSelfCheckIn(enteredCode);
-    setCheckingIn(false);
-    setCodeFeedback({ success: result.ok, msg: result.message });
-    if (result.ok) setEnteredCode('');
   };
 
   return (
@@ -127,7 +117,7 @@ export default function AttendanceModule({
             className="bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-xs flex items-center gap-2 transition-all cursor-pointer"
           >
             <FileText className="w-4 h-4 text-gold" />
-            Submit Excuse Request
+            Request excuse
           </button>
         </div>
       </div>
@@ -143,7 +133,7 @@ export default function AttendanceModule({
           }`}
         >
           <UserCheck className="w-4 h-4" />
-          Roll Call Sheet
+          Roll call
         </button>
 
         <button
@@ -155,7 +145,7 @@ export default function AttendanceModule({
           }`}
         >
           <KeyRound className="w-4 h-4" />
-          Live Door Check-In
+          Door code
         </button>
 
         <button
@@ -167,11 +157,11 @@ export default function AttendanceModule({
           }`}
         >
           <FileText className="w-4 h-4" />
-          Excuse Approvals ({safeExcuses.filter(e => e.status === 'Pending').length} Pending)
+          Excuses ({safeExcuses.filter(e => e.status === 'Pending').length} pending)
         </button>
       </div>
 
-      {/* TAB 1: Roll Call Sheet */}
+      {/* TAB 1: Roll call */}
       {activeTab === 'roster_check' && (
         <Card className="p-6 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
@@ -191,13 +181,29 @@ export default function AttendanceModule({
             </div>
 
             {isOfficer && (
-              <button
-                onClick={handleSaveAttendance}
-                className="bg-navy hover:bg-slate-800 text-gold font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg transition-all cursor-pointer flex items-center gap-2 shadow-xs"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                Commit Attendance to Roster
-              </button>
+              <div className="flex flex-col sm:items-end gap-2">
+                <div className="flex gap-2">
+                  {summary.unmarked > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setAttendanceRecords(markRemainingPresent(safeMembers, attendanceRecords))}
+                      className="bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-xs cursor-pointer"
+                    >
+                      Mark remaining present ({summary.unmarked})
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleSaveAttendance}
+                    disabled={summary.marked.length === 0}
+                    className="bg-navy hover:bg-slate-800 text-gold font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg transition-all cursor-pointer flex items-center gap-2 shadow-xs disabled:opacity-50"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    Save roll call
+                  </button>
+                </div>
+                <p role="status" className="text-xs text-slate-600">{summary.label || 'Nothing marked yet'}</p>
+              </div>
             )}
           </div>
 
@@ -215,7 +221,7 @@ export default function AttendanceModule({
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {safeMembers.map(mem => {
-                  const status = attendanceRecords[mem.id] || 'Present';
+                  const status = attendanceRecords[mem.id];
 
                   return (
                     <tr key={mem.id} className="hover:bg-slate-50/60">
@@ -233,6 +239,7 @@ export default function AttendanceModule({
                         </td>
                       )}
                       <td className="py-3 px-3 text-right">
+                        {!status && <span className="text-xs text-slate-400 mr-2">Unmarked</span>}
                         <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 text-xs font-semibold">
                           {(['Present', 'Late', 'Excused', 'Absent'] as const).map(st => {
                             const isCur = status === st;
@@ -268,7 +275,7 @@ export default function AttendanceModule({
         </Card>
       )}
 
-      {/* TAB 2: Live Door Check-In */}
+      {/* TAB 2: Door code */}
       {activeTab === 'self_pin' && (
         <Card className="p-6 max-w-lg mx-auto text-center space-y-6">
           <div className="space-y-1">
@@ -276,56 +283,24 @@ export default function AttendanceModule({
               <KeyRound className="w-6 h-6" />
             </div>
             <h3 className="font-display font-extrabold text-slate-900 text-lg">
-              Live Door Check-In
+              Door code
             </h3>
             <p className="text-xs text-slate-500">
-              Enter the door code an officer is showing in Live Door Mode. The code decides
-              which event you are checked into, so no event picker here.
+              Enter the door code an officer is showing. The code decides which event you are checked into.
             </p>
           </div>
 
-          <form onSubmit={handleCodeCheckInSubmit} className="space-y-4">
-            <div>
-              <label className="text-xs font-bold text-slate-700 block mb-2">
-                Door code
-              </label>
-              <input
-                type="text"
-                maxLength={6}
-                value={enteredCode}
-                onChange={e => setEnteredCode(e.target.value)}
-                placeholder="A7x9Kp"
-                className="w-48 mx-auto text-center text-3xl font-mono font-black tracking-widest py-3 border-2 border-slate-300 rounded-xl focus:outline-none focus:border-gold"
-                required
-              />
-            </div>
-
-            {codeFeedback && (
-              <div className={`p-3 rounded-lg text-xs font-semibold ${
-                codeFeedback.success ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'
-              }`}>
-                {codeFeedback.msg}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={checkingIn || !enteredCode.trim()}
-              className="w-full bg-navy text-gold hover:bg-slate-800 font-bold py-3 min-h-11 rounded-lg text-xs transition-all cursor-pointer disabled:opacity-50"
-            >
-              {checkingIn ? 'Checking in…' : 'Verify Attendance Check-In'}
-            </button>
-          </form>
+          <DoorCodeField onSelfCheckIn={onSelfCheckIn} />
         </Card>
       )}
 
-      {/* TAB 3: Excuse Approvals */}
+      {/* TAB 3: Excuses */}
       {activeTab === 'excuses' && (
         <Card className="p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-display font-bold text-slate-900 text-base">Submitted Excuse Requests</h3>
-              <p className="text-xs text-slate-500">Executive board review for academic, medical, and family obligations.</p>
+              <p className="text-xs text-slate-500">Officers review these.</p>
             </div>
           </div>
 
@@ -387,14 +362,7 @@ export default function AttendanceModule({
 
       {/* MODAL: Submit Excuse */}
       {showExcuseModal && (
-        <Modal>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-display font-bold text-base text-slate-900 flex items-center gap-2">
-                <FileText className="w-5 h-5 text-gold" />
-                Submit Absence Excuse Request
-              </h3>
-              <button onClick={() => setShowExcuseModal(false)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
-            </div>
+        <Modal title="Request an excuse" onClose={() => setShowExcuseModal(false)}>
 
             <form onSubmit={handleExcuseSubmit} className="space-y-4">
               <div>
@@ -428,7 +396,7 @@ export default function AttendanceModule({
                 type="submit"
                 className="w-full bg-navy text-gold hover:bg-slate-800 font-bold py-3 min-h-11 rounded-lg text-xs transition-all"
               >
-                Submit for Executive Review
+                Submit request
               </button>
             </form>
         </Modal>

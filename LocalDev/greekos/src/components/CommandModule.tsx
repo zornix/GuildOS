@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Member, ChapterEvent, Task, PNM } from '../types';
 import Card from './ui/Card';
+import ConfirmDialog from './ui/ConfirmDialog';
 import { formatMoney } from '../formatters';
 import { parseWhen } from '../lib/parseWhen';
 
@@ -39,20 +40,8 @@ export default function CommandModule({
     status: 'Executed' | 'Error' | 'Permission Denied';
     summary: string;
     details?: string;
-  }>>([
-    {
-      input: 'fine Cody Jenkins $50 for missing ritual',
-      timestamp: '2026-07-05 19:30',
-      status: 'Executed',
-      summary: 'Assessed $50.00 fine to Cody Jenkins for ritual absence'
-    },
-    {
-      input: 'assign Kitchen Sweep to Lucas Wright',
-      timestamp: '2026-07-10 12:00',
-      status: 'Executed',
-      summary: 'Created task "Kitchen Sweep" assigned to Lucas Wright'
-    }
-  ]);
+  }>>([]);
+  const [pendingCommand, setPendingCommand] = useState<string | null>(null);
 
   const quickTemplates = [
     'fine Cody Jenkins $25 for missing chapter',
@@ -237,7 +226,7 @@ export default function CommandModule({
       onExecuteCommand({
         type: 'ANNOUNCEMENT',
         payload: {
-          title: 'Executive Chapter Alert',
+          title: 'Chapter announcement',
           content: annText,
           author: currentMemberName,
           priority: 'Mandatory',
@@ -298,15 +287,11 @@ export default function CommandModule({
           <div className="flex items-center gap-2">
             <Terminal className="w-6 h-6 text-gold" />
             <h2 className="text-2xl font-display font-extrabold text-slate-900 tracking-tight">
-              Natural Language Command Console
+              Command console
             </h2>
-            <span className="text-xs font-bold bg-navy text-gold px-2 py-0.5 rounded-full">
-              GreekOS NLP Engine
-            </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Execute operations, assess fines, assign house chores, schedule events, and blast announcements by typing plain English instructions.
-            Commands are saved to the live chapter record &mdash; a scheduled event lands on the real calendar.
+            Type an instruction in plain English. Every command is a real write to the chapter record.
           </p>
         </div>
       </div>
@@ -324,11 +309,12 @@ export default function CommandModule({
         </div>
 
         {/* Console Command Input Box */}
-        <form onSubmit={(e) => { e.preventDefault(); handleRunCommand(commandInput); }} className="space-y-3">
+        <form onSubmit={(e) => { e.preventDefault(); if (commandInput.trim()) setPendingCommand(commandInput.trim()); }} className="space-y-3">
           <div className="relative flex items-center">
             <span className="absolute left-4 text-gold font-mono font-black text-base select-none">&gt;</span>
             <input
               type="text"
+              aria-label="Command"
               value={commandInput}
               onChange={e => setCommandInput(e.target.value)}
               placeholder="e.g. fine Cody Jenkins $25 for missing chapter meeting..."
@@ -347,15 +333,12 @@ export default function CommandModule({
 
         {/* Quick Suggestion Chips */}
         <div className="space-y-1.5 pt-2">
-          <span className="text-xs text-slate-400 font-bold block">Quick Command Templates:</span>
+          <span className="text-xs text-slate-400 font-bold block">Templates (fill the box, then Execute):</span>
           <div className="flex flex-wrap gap-2">
             {quickTemplates.map((t, idx) => (
               <button
                 key={idx}
-                onClick={() => {
-                  setCommandInput(t);
-                  handleRunCommand(t);
-                }}
+                onClick={() => setCommandInput(t)}
                 className="text-xs font-mono bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white px-2.5 py-1 rounded-md border border-slate-700 transition-all cursor-pointer text-left"
               >
                 {t}
@@ -371,9 +354,9 @@ export default function CommandModule({
           <div>
             <h3 className="font-display font-extrabold text-slate-900 text-base flex items-center gap-2">
               <History className="w-4 h-4 text-gold" />
-              Command Execution Log & Audit Trail
+              Command log
             </h3>
-            <p className="text-xs text-slate-500">Every command executed is parsed, verified against member standing, and committed to the audit ledger.</p>
+            <p className="text-xs text-slate-500">Commands run in this session.</p>
           </div>
         </div>
 
@@ -406,6 +389,17 @@ export default function CommandModule({
           ))}
         </div>
       </Card>
+
+      {pendingCommand && (
+        <ConfirmDialog
+          title="Run this command?"
+          tone="danger"
+          body={<><p className="font-mono bg-slate-100 rounded p-2 text-slate-900">{pendingCommand}</p><p>This writes to the live chapter record (fines, jobs, events, texts).</p></>}
+          confirmLabel="Run"
+          onCancel={() => setPendingCommand(null)}
+          onConfirm={() => { handleRunCommand(pendingCommand); setPendingCommand(null); }}
+        />
+      )}
     </div>
   );
 }

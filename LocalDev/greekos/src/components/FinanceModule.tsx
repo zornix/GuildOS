@@ -13,7 +13,11 @@ import {
 import { Member, Fine, Payment, LedgerEntry } from '../types';
 import Modal from './ui/Modal';
 import Card from './ui/Card';
+import ConfirmDialog from './ui/ConfirmDialog';
+import AddTransactionModal from './finance/AddTransactionModal';
 import { formatMoney } from '../formatters';
+import type { MemberBalance } from '../lib/balance';
+import type { TransactionDraft, TransactionPreview } from '../lib/transaction';
 
 interface FinanceModuleProps {
   members: Member[];
@@ -22,10 +26,14 @@ interface FinanceModuleProps {
   ledger: LedgerEntry[];
   isOfficer: boolean;
   currentMemberName: string;
+  myBalance: MemberBalance | null;
+  /** The one balance reader, from useFinance. */
+  balanceCentsOf: (memberId: string) => number;
   onRecordPayment: (payment: Omit<Payment, 'id' | 'date'>) => void;
   onIssueFine: (fine: Omit<Fine, 'id' | 'status' | 'date'>) => void;
+  onPostInvoice: (inv: { memberId: string; memberName: string; amountCents: number; description: string }) => void;
   onApproveFinePayment: (fineId: string) => void;
-  onPostLedgerCorrection: (correction: { memberId: string; amountCents: number; description: string; correctsEntryId: string }) => void;
+  onPostLedgerCorrection: (correction: { memberId: string; amountCents: number; description: string; correctsEntryId?: string }) => void;
 }
 
 export default function FinanceModule({
@@ -35,8 +43,11 @@ export default function FinanceModule({
   ledger,
   isOfficer,
   currentMemberName,
+  myBalance,
+  balanceCentsOf,
   onRecordPayment,
   onIssueFine,
+  onPostInvoice,
   onApproveFinePayment,
   onPostLedgerCorrection
 }: FinanceModuleProps) {
@@ -46,21 +57,18 @@ export default function FinanceModule({
   const safeLedger = ledger || [];
 
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'fines' | 'ledger' | 'payments'>('overview');
-  const [showIssueFineModal, setShowIssueFineModal] = useState(false);
+  const [showAddTransaction, setShowAddTransaction] = useState(false);
   const [showPayModal, setShowPayModal] = useState(false);
   const [showCorrectionModal, setShowCorrectionModal] = useState<LedgerEntry | null>(null);
+  const [pendingMarkPaid, setPendingMarkPaid] = useState<{ member: Member; balanceCents: number } | null>(null);
+  const [pendingFinePaid, setPendingFinePaid] = useState<Fine | null>(null);
 
   // Search & Filter
   const [searchMember, setSearchMember] = useState('');
   const [ledgerFilter, setLedgerFilter] = useState('ALL');
 
-  // Issue Fine Form
-  const [selectedMemberId, setSelectedMemberId] = useState(safeMembers[0]?.id || '');
-  const [fineAmount, setFineAmount] = useState('25');
-  const [fineReason, setFineReason] = useState('');
-
   // Payment Form
-  const [payAmount, setPayAmount] = useState('150');
+  const [payAmount, setPayAmount] = useState('');
   const [payMethod, setPayMethod] = useState<'Card' | 'Venmo' | 'Bank Transfer'>('Venmo');
 
   // Correction Form
@@ -74,23 +82,30 @@ export default function FinanceModule({
 
   const currentMember = safeMembers.find(m => m.name === currentMemberName);
 
-  const handleIssueFineSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const mem = safeMembers.find(m => m.id === selectedMemberId);
-    if (!mem) return;
-
-    const amountDollars = parseFloat(fineAmount) || 25;
-    onIssueFine({
-      memberId: mem.id,
-      memberName: mem.name,
-      amount: amountDollars,
-      amountCents: Math.round(amountDollars * 100),
-      reason: fineReason,
-      issuedBy: currentMemberName
-    });
-
-    setFineReason('');
-    setShowIssueFineModal(false);
+  /** One dispatcher for the four kinds; each lands on an existing handler. */
+  const submitTransaction = (draft: TransactionDraft, preview: TransactionPreview) => {
+    switch (draft.kind) {
+      case 'Payment':
+        onRecordPayment({
+          memberId: draft.memberId, memberName: draft.memberName,
+          amount: preview.amountCents / 100, amountCents: preview.amountCents,
+          type: 'Dues', paymentMethod: 'Cash', reference: draft.memo || 'IN_PERSON'
+        });
+        break;
+      case 'Fine':
+        onIssueFine({
+          memberId: draft.memberId, memberName: draft.memberName,
+          amount: preview.amountCents / 100, amountCents: preview.amountCents,
+          reason: draft.memo || 'Fine', issuedBy: currentMemberName
+        });
+        break;
+      case 'Invoice':
+        onPostInvoice({ memberId: draft.memberId, memberName: draft.memberName, amountCents: preview.amountCents, description: draft.memo });
+        break;
+      case 'Adjustment':
+        onPostLedgerCorrection({ memberId: draft.memberId, amountCents: preview.deltaCents, description: draft.memo || 'Adjustment' });
+        break;
+    }
   };
 
   const handlePaySubmit = (e: React.FormEvent) => {
@@ -156,21 +171,22 @@ export default function FinanceModule({
         <div className="flex gap-2">
           {!isOfficer && (
             <button
-              onClick={() => setShowPayModal(true)}
+              onClick={() => { setPayAmount(myBalance ? (myBalance.outstandingCents / 100).toFixed(2) : ''); setShowPayModal(true); }}
               className="bg-gold hover:bg-[#c5a02b] text-navy font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer"
             >
               <CreditCard className="w-4 h-4" />
-              Pay My Dues / Fines
+              Pay balance
             </button>
           )}
 
           {isOfficer && (
             <button
-              onClick={() => setShowIssueFineModal(true)}
-              className="bg-red-700 hover:bg-red-800 text-white font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer"
+              type="button"
+              onClick={() => setShowAddTransaction(true)}
+              className="bg-gold hover:bg-[#c5a02b] text-navy font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              Issue Fine Citation
+              Add transaction
             </button>
           )}
         </div>
@@ -179,15 +195,15 @@ export default function FinanceModule({
       {/* KPI Cards Ribbon */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card className="p-5 space-y-1">
-          <span className="text-xs font-bold text-slate-500">Total Chapter Receivables</span>
+          <span className="text-xs font-bold text-slate-500">Outstanding (demo ledger)</span>
           <div className="text-2xl font-display font-black text-slate-900">
             {formatMoney(totalReceivablesCents)}
           </div>
-          <span className="text-xs text-slate-500">Outstanding brother dues balances</span>
+          <span className="text-xs text-slate-500">Unpaid fines plus demo transactions</span>
         </Card>
 
         <Card className="p-5 space-y-1">
-          <span className="text-xs font-bold text-emerald-700">Collected This Semester</span>
+          <span className="text-xs font-bold text-emerald-700">Collected</span>
           <div className="text-2xl font-display font-black text-emerald-600">
             {formatMoney(totalPaidCents)}
           </div>
@@ -195,11 +211,11 @@ export default function FinanceModule({
         </Card>
 
         <Card className="p-5 space-y-1">
-          <span className="text-xs font-bold text-red-700">Unpaid Fines Outstanding</span>
+          <span className="text-xs font-bold text-red-700">Unpaid fines</span>
           <div className="text-2xl font-display font-black text-red-600">
             {formatMoney(totalUnpaidFinesCents)}
           </div>
-          <span className="text-xs text-red-700/80">{fines.filter(f => f.status === 'Unpaid').length} active citations</span>
+          <span className="text-xs text-red-700/80">{fines.filter(f => f.status === 'Unpaid').length} unpaid</span>
         </Card>
       </div>
 
@@ -214,7 +230,7 @@ export default function FinanceModule({
           }`}
         >
           <Receipt className="w-4 h-4" />
-          Member Balances & Dues
+          Balances
         </button>
 
         <button
@@ -226,7 +242,7 @@ export default function FinanceModule({
           }`}
         >
           <ShieldCheck className="w-4 h-4" />
-          Append-Only Audit Ledger
+          Chapter ledger
         </button>
 
         <button
@@ -238,7 +254,7 @@ export default function FinanceModule({
           }`}
         >
           <AlertCircle className="w-4 h-4" />
-          Fines & Infractions ({fines.length})
+          Fines ({fines.length})
         </button>
 
         <button
@@ -250,7 +266,7 @@ export default function FinanceModule({
           }`}
         >
           <History className="w-4 h-4" />
-          Payment Transactions ({payments.length})
+          Payments ({payments.length})
         </button>
       </div>
 
@@ -259,14 +275,15 @@ export default function FinanceModule({
         <Card className="p-5 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h3 className="font-display font-bold text-slate-900 text-base">Active Brotherhood Receivables</h3>
-              <p className="text-xs text-slate-500">Breakdown of member balances, payment standing, and semester dues status.</p>
+              <h3 className="font-display font-bold text-slate-900 text-base">Balances</h3>
+              <p className="text-xs text-slate-500">Starts from unpaid fines; demo transactions adjust it locally.</p>
             </div>
 
             <div className="relative w-full sm:w-64">
               <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
               <input
                 type="text"
+                aria-label="Search members"
                 placeholder="Search brother..."
                 value={searchMember}
                 onChange={e => setSearchMember(e.target.value)}
@@ -282,13 +299,13 @@ export default function FinanceModule({
                   <th className="py-2.5 px-3">Brother</th>
                   <th className="py-2.5 px-3">Standing</th>
                   <th className="py-2.5 px-3">Pledge Class</th>
-                  <th className="py-2.5 px-3 text-right">Outstanding Balance</th>
+                  <th className="py-2.5 px-3 text-right">Balance</th>
                   <th className="py-2.5 px-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredMembers.map(mem => {
-                  const balanceCents = mem.duesBalanceCents !== undefined ? mem.duesBalanceCents : mem.duesBalance * 100;
+                  const balanceCents = balanceCentsOf(mem.id);
                   const isDelinquent = balanceCents > 50000; // >$500
 
                   return (
@@ -317,17 +334,7 @@ export default function FinanceModule({
                       <td className="py-3 px-3 text-right">
                         {balanceCents > 0 && isOfficer && (
                           <button
-                            onClick={() => {
-                              onRecordPayment({
-                                memberId: mem.id,
-                                memberName: mem.name,
-                                amount: balanceCents / 100,
-                                amountCents: balanceCents,
-                                type: 'Dues',
-                                paymentMethod: 'Cash',
-                                reference: 'IN_PERSON_CASH'
-                              });
-                            }}
+                            onClick={() => setPendingMarkPaid({ member: mem, balanceCents })}
                             className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold px-2 py-1 rounded transition-all cursor-pointer"
                           >
                             Mark Paid
@@ -350,10 +357,10 @@ export default function FinanceModule({
             <div>
               <h3 className="font-display font-bold text-slate-900 text-base flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-emerald-600" />
-                Immutable Chapter Financial Ledger (`big_ledger`)
+                Chapter ledger
               </h3>
               <p className="text-xs text-slate-500">
-                Permanent, append-only record. Entries cannot be edited or deleted. Corrections are recorded as linked offsetting adjustment transactions.
+                Demo ledger: rows are recorded in this browser and reset on reload. Corrections are added as adjustment rows, never edits.
               </p>
             </div>
 
@@ -430,7 +437,7 @@ export default function FinanceModule({
                               setCorrectionAmountCents(-entry.amountCents);
                             }}
                             className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded transition-all cursor-pointer flex items-center gap-1 ml-auto"
-                            title="Post linked offsetting correction to immutable ledger"
+                            title="Add an adjustment row for this entry"
                           >
                             <RotateCcw className="w-3 h-3" />
                             Correct
@@ -451,8 +458,8 @@ export default function FinanceModule({
         <Card className="p-5 space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-display font-bold text-slate-900 text-base">Disciplinary Fines & Violations</h3>
-              <p className="text-xs text-slate-500">Issued for unexcused attendance or house rule infractions.</p>
+              <h3 className="font-display font-bold text-slate-900 text-base">Fines</h3>
+              <p className="text-xs text-slate-500">Issued for unexcused absences and rule violations.</p>
             </div>
           </div>
 
@@ -479,10 +486,10 @@ export default function FinanceModule({
 
                   {isOfficer && f.status === 'Unpaid' && (
                     <button
-                      onClick={() => onApproveFinePayment(f.id)}
+                      onClick={() => setPendingFinePaid(f)}
                       className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-lg transition-all cursor-pointer"
                     >
-                      Clear / Settle
+                      Mark paid
                     </button>
                   )}
                 </div>
@@ -497,8 +504,8 @@ export default function FinanceModule({
         <Card className="p-5 space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-display font-bold text-slate-900 text-base">Payment Gateway Records</h3>
-              <p className="text-xs text-slate-500">Real-time incoming ACH, card, and Venmo dues settlement receipts.</p>
+              <h3 className="font-display font-bold text-slate-900 text-base">Payments</h3>
+              <p className="text-xs text-slate-500">Verified payments from the backend, plus demo payments recorded here.</p>
             </div>
           </div>
 
@@ -531,79 +538,23 @@ export default function FinanceModule({
         </Card>
       )}
 
-      {/* MODAL: Issue Fine */}
-      {showIssueFineModal && (
-        <Modal>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-display font-bold text-base text-red-900 flex items-center gap-2">
-                <AlertCircle className="w-5 h-5 text-red-600" />
-                Issue Fine Citation
-              </h3>
-              <button onClick={() => setShowIssueFineModal(false)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
-            </div>
-
-            <form onSubmit={handleIssueFineSubmit} className="space-y-4">
-              <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">Select Brother</label>
-                <select
-                  value={selectedMemberId}
-                  onChange={e => setSelectedMemberId(e.target.value)}
-                  className="w-full text-xs border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-red-500"
-                >
-                  {members.map(m => (
-                    <option key={m.id} value={m.id}>{m.name} ({m.role})</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">Fine Amount ($)</label>
-                <input
-                  type="number"
-                  value={fineAmount}
-                  onChange={e => setFineAmount(e.target.value)}
-                  className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-red-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">Reason & Bylaw Clause</label>
-                <textarea
-                  value={fineReason}
-                  onChange={e => setFineReason(e.target.value)}
-                  placeholder="e.g. Unexcused absence from Chapter Meeting (Bylaw II.C.4)"
-                  rows={2}
-                  className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-red-500"
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 min-h-11 rounded-lg text-xs transition-all"
-              >
-                Assess Fine to Member Ledger
-              </button>
-            </form>
-        </Modal>
+      {showAddTransaction && (
+        <AddTransactionModal
+          members={safeMembers}
+          balanceCentsOf={balanceCentsOf}
+          onSubmit={submitTransaction}
+          onClose={() => setShowAddTransaction(false)}
+        />
       )}
 
       {/* MODAL: Pay Dues (Member) */}
       {showPayModal && currentMember && (
-        <Modal>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-display font-bold text-base text-slate-900 flex items-center gap-2">
-                <CreditCard className="w-5 h-5 text-gold" />
-                Settle Dues / Fines Balance
-              </h3>
-              <button onClick={() => setShowPayModal(false)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
-            </div>
+        <Modal title="Pay balance" onClose={() => setShowPayModal(false)}>
 
             <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs mb-4">
-              <div className="text-amber-900 font-bold">Current Outstanding Balance:</div>
+              <div className="text-amber-900 font-bold">Balance owed</div>
               <div className="text-xl font-display font-black text-amber-900">
-                {formatMoney(currentMember.duesBalanceCents || currentMember.duesBalance * 100)}
+                {myBalance ? formatMoney(myBalance.outstandingCents) : 'Balance unavailable'}
               </div>
             </div>
 
@@ -626,9 +577,9 @@ export default function FinanceModule({
                   onChange={e => setPayMethod(e.target.value as any)}
                   className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-gold"
                 >
-                  <option value="Venmo">Venmo Gateway</option>
-                  <option value="Card">Debit / Credit Card</option>
-                  <option value="Bank Transfer">ACH Bank Transfer</option>
+                  <option value="Venmo">Venmo</option>
+                  <option value="Card">Card</option>
+                  <option value="Bank Transfer">Bank transfer</option>
                 </select>
               </div>
 
@@ -636,22 +587,19 @@ export default function FinanceModule({
                 type="submit"
                 className="w-full bg-gold hover:bg-[#c5a02b] text-navy font-bold py-3 min-h-11 rounded-lg text-xs transition-all"
               >
-                Submit Payment Authorization
+                Record payment (demo)
               </button>
+
+              <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                Demo: this is recorded in your browser only and resets on reload.
+              </p>
             </form>
         </Modal>
       )}
 
-      {/* MODAL: Post Immutable Ledger Linked Correction */}
+      {/* MODAL: Add adjustment */}
       {showCorrectionModal && (
-        <Modal>
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="font-display font-bold text-base text-slate-900 flex items-center gap-2">
-                <RotateCcw className="w-5 h-5 text-purple-600" />
-                Post Linked Ledger Correction
-              </h3>
-              <button onClick={() => setShowCorrectionModal(null)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
-            </div>
+        <Modal title="Add adjustment" onClose={() => setShowCorrectionModal(null)}>
 
             <p className="text-xs text-slate-600 mb-3">
               Creating linked correction for Sequence #{showCorrectionModal.sequence} ({showCorrectionModal.description}).
@@ -659,7 +607,7 @@ export default function FinanceModule({
 
             <form onSubmit={handleCorrectionSubmit} className="space-y-4">
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">Adjustment Amount in Cents (e.g. -5000 for -$50.00)</label>
+                <label className="text-xs font-semibold text-slate-700 block mb-1">Adjustment in cents (negative reduces the balance)</label>
                 <input
                   type="number"
                   value={correctionAmountCents}
@@ -685,10 +633,36 @@ export default function FinanceModule({
                 type="submit"
                 className="w-full bg-purple-700 hover:bg-purple-800 text-white font-bold py-3 min-h-11 rounded-lg text-xs transition-all"
               >
-                Commit Linked Audit Adjustment
+                Record adjustment
               </button>
             </form>
         </Modal>
+      )}
+
+      {pendingMarkPaid && (
+        <ConfirmDialog
+          title="Mark paid?"
+          body={<p>Record a cash payment of <strong>{formatMoney(pendingMarkPaid.balanceCents)}</strong> from <strong>{pendingMarkPaid.member.name}</strong>. Their balance becomes $0.00.</p>}
+          confirmLabel="Mark paid"
+          onCancel={() => setPendingMarkPaid(null)}
+          onConfirm={() => {
+            onRecordPayment({
+              memberId: pendingMarkPaid.member.id, memberName: pendingMarkPaid.member.name,
+              amount: pendingMarkPaid.balanceCents / 100, amountCents: pendingMarkPaid.balanceCents,
+              type: 'Dues', paymentMethod: 'Cash', reference: 'IN_PERSON_CASH'
+            });
+            setPendingMarkPaid(null);
+          }}
+        />
+      )}
+      {pendingFinePaid && (
+        <ConfirmDialog
+          title="Mark fine paid?"
+          body={<p><strong>{pendingFinePaid.memberName}</strong>'s {formatMoney(pendingFinePaid.amountCents || pendingFinePaid.amount * 100)} fine for "{pendingFinePaid.reason}" will show as paid.</p>}
+          confirmLabel="Mark paid"
+          onCancel={() => setPendingFinePaid(null)}
+          onConfirm={() => { onApproveFinePayment(pendingFinePaid.id); setPendingFinePaid(null); }}
+        />
       )}
     </div>
   );

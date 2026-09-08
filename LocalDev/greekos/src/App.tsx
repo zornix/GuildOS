@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useAppData } from './hooks/useAppData';
 import AppShell from './components/layout/AppShell';
 import DashboardOverview from './components/DashboardOverview';
@@ -13,25 +13,35 @@ import RecruitmentModule from './components/RecruitmentModule';
 import RulesModule from './components/RulesModule';
 import CommandModule from './components/CommandModule';
 import OutboxModule from './components/OutboxModule';
+import EventsBar from './components/EventsBar';
+import { useEventsChrome } from './hooks/useEventsChrome';
+import { filterEventsByType } from './lib/events';
+import { balanceForMember } from './lib/balance';
+import { can } from './lib/session';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
-  // The events screen shows the same data as a list or on the calendar.
-  const [eventsView, setEventsView] = useState<'list' | 'calendar'>('list');
+  const chrome = useEventsChrome();
   const app = useAppData();
   const { roster, events, initiatives, finance, attendance, tasks, recruitment, outbox } = app;
   const { isOfficer, currentMemberName } = app;
+  const currentMember = roster.members.find(member => member.name === currentMemberName);
+  const viewedBalance = balanceForMember(app.myBalance, currentMember?.id);
 
   return (
     <AppShell
       activeTab={activeTab}
       setActiveTab={setActiveTab}
       isOfficer={isOfficer}
+      permissions={app.permissions}
       setIsOfficer={app.setIsOfficer}
       currentMemberName={currentMemberName}
       setCurrentMemberName={app.setCurrentMemberName}
+      sessionName={app.sessionName}
+      sessionIsOfficer={app.sessionIsOfficer}
       members={roster.members}
       toastMessage={app.toastMessage}
+      onDismissToast={app.dismissToast}
       loading={app.loading}
       backendDown={app.backendDown}
     >
@@ -40,70 +50,75 @@ export default function App() {
           members={roster.members}
           events={events.events}
           tasks={tasks.tasks}
-          fines={finance.fines}
           initiatives={initiatives.initiatives}
           announcements={app.announcements}
-          ledger={finance.ledger}
           isOfficer={isOfficer}
           currentMemberName={currentMemberName}
+          contribution={app.contribution}
+          myBalance={viewedBalance}
           onNavigateTab={setActiveTab}
+          onOpenEvent={id => { chrome.openEvent(id); setActiveTab('events'); }}
+          onScheduleEvent={() => { chrome.openCreate(); setActiveTab('events'); }}
           onVolunteerOrganizer={events.handleVolunteerOrganizer}
-          onPayDuesQuick={() => setActiveTab('finance')}
+          onSelfCheckIn={attendance.handleSelfCheckIn}
           onDeleteAnnouncement={app.handleDeleteAnnouncement}
         />
       )}
 
       {activeTab === 'events' && (
-        <div className="flex items-center gap-1 p-0.5 bg-slate-100 rounded-lg w-fit">
-          {(['list', 'calendar'] as const).map(view => (
-            <button
-              key={view}
-              onClick={() => setEventsView(view)}
-              className={`px-3 py-2 rounded-md text-xs font-medium capitalize transition-all cursor-pointer ${
-                eventsView === view ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              {view}
-            </button>
-          ))}
-        </div>
-      )}
+        <>
+          <EventsBar
+            view={chrome.view}
+            onViewChange={chrome.setView}
+            filterType={chrome.filterType}
+            onFilterChange={chrome.setFilterType}
+            isOfficer={isOfficer}
+            onCreate={chrome.openCreate}
+          />
 
-      {activeTab === 'events' && eventsView === 'calendar' && (
-        <CalendarModule
-          events={events.events}
-          initiatives={initiatives.initiatives}
-          announcements={app.announcements}
-          currentMemberName={currentMemberName}
-          onVolunteerOrganizer={events.handleVolunteerOrganizer}
-        />
-      )}
+          {chrome.view === 'calendar' && (
+            <CalendarModule
+              events={filterEventsByType(events.events, chrome.filterType)}
+              initiatives={initiatives.initiatives}
+              announcements={app.announcements}
+              currentMemberName={currentMemberName}
+              onVolunteerOrganizer={events.handleVolunteerOrganizer}
+              onOpenEvent={chrome.openEvent}
+            />
+          )}
 
-      {activeTab === 'events' && eventsView === 'list' && (
-        <EventsModule
-          events={events.events}
-          members={roster.members}
-          isOfficer={isOfficer}
-          currentMemberName={currentMemberName}
-          onSelectEvent={events.handleSelectEvent}
-          onAddEvent={events.handleAddEvent}
-          onUpdateEvent={events.handleUpdateEvent}
-          onVolunteerOrganizer={events.handleVolunteerOrganizer}
-          onClaimJob={events.handleClaimJob}
-          onUnclaimJob={events.handleUnclaimJob}
-          onReportJobDone={events.handleReportJobDone}
-          onApproveJob={events.handleApproveJob}
-          onRejectJob={events.handleRejectJob}
-          onAddJobToEvent={events.handleAddJobToEvent}
-          onEditJob={events.handleEditJob}
-          onDeleteJob={events.handleDeleteJob}
-          onSendEventNotifyBlast={events.handleSendEventNotifyBlast}
-          onToggleCheckInLink={events.handleToggleCheckInLink}
-          onAssignSecurity={events.handleAssignSecurity}
-          onRequestSecuritySwap={events.handleRequestSecuritySwap}
-          onRespondSecuritySwap={events.handleRespondSecuritySwap}
-          onCancelSecuritySwap={events.handleCancelSecuritySwap}
-        />
+          {chrome.view === 'list' && (
+            <EventsModule
+              events={events.events}
+              members={roster.members}
+              isOfficer={isOfficer}
+              currentMemberName={currentMemberName}
+              filterType={chrome.filterType}
+              createOpen={chrome.createOpen}
+              onCreateOpenChange={chrome.setCreateOpen}
+              selectedEventId={chrome.selectedEventId}
+              onSelectEventId={chrome.setSelectedEventId}
+              onSelectEvent={events.handleSelectEvent}
+              onAddEvent={events.handleAddEvent}
+              onUpdateEvent={events.handleUpdateEvent}
+              onVolunteerOrganizer={events.handleVolunteerOrganizer}
+              onClaimJob={events.handleClaimJob}
+              onUnclaimJob={events.handleUnclaimJob}
+              onReportJobDone={events.handleReportJobDone}
+              onApproveJob={events.handleApproveJob}
+              onRejectJob={events.handleRejectJob}
+              onAddJobToEvent={events.handleAddJobToEvent}
+              onEditJob={events.handleEditJob}
+              onDeleteJob={events.handleDeleteJob}
+              onSendEventNotifyBlast={events.handleSendEventNotifyBlast}
+              onToggleCheckInLink={events.handleToggleCheckInLink}
+              onAssignSecurity={events.handleAssignSecurity}
+              onRequestSecuritySwap={events.handleRequestSecuritySwap}
+              onRespondSecuritySwap={events.handleRespondSecuritySwap}
+              onCancelSecuritySwap={events.handleCancelSecuritySwap}
+            />
+          )}
+        </>
       )}
 
       {activeTab === 'initiatives' && (
@@ -128,6 +143,7 @@ export default function App() {
           excuses={attendance.excuses}
           isOfficer={isOfficer}
           currentMemberName={currentMemberName}
+          initialTab={isOfficer ? 'roster_check' : 'self_pin'}
           onRecordAttendance={attendance.handleRecordAttendance}
           onSubmitExcuse={attendance.handleSubmitExcuse}
           onReviewExcuse={attendance.handleReviewExcuse}
@@ -136,18 +152,24 @@ export default function App() {
       )}
 
       {activeTab === 'finance' && (
-        <FinanceModule
-          members={roster.members}
-          fines={finance.fines}
-          payments={finance.payments}
-          ledger={finance.ledger}
-          isOfficer={isOfficer}
-          currentMemberName={currentMemberName}
-          onRecordPayment={finance.handleRecordPayment}
-          onIssueFine={finance.handleIssueFine}
-          onApproveFinePayment={finance.handleApproveFinePayment}
-          onPostLedgerCorrection={finance.handlePostLedgerCorrection}
-        />
+        // Reset open forms when Demo view-as changes the payment recipient.
+        <Fragment key={currentMember?.id ?? currentMemberName}>
+          <FinanceModule
+            members={roster.members}
+            fines={finance.fines}
+            payments={finance.payments}
+            ledger={finance.ledger}
+            isOfficer={isOfficer}
+            currentMemberName={currentMemberName}
+            myBalance={viewedBalance}
+            balanceCentsOf={finance.balanceCentsOf}
+            onRecordPayment={finance.handleRecordPayment}
+            onIssueFine={finance.handleIssueFine}
+            onPostInvoice={finance.handlePostInvoice}
+            onApproveFinePayment={finance.handleApproveFinePayment}
+            onPostLedgerCorrection={finance.handlePostLedgerCorrection}
+          />
+        </Fragment>
       )}
 
       {activeTab === 'roster' && (
@@ -174,7 +196,7 @@ export default function App() {
       {activeTab === 'recruitment' && (
         <RecruitmentModule
           pnms={recruitment.pnms}
-          isOfficer={isOfficer}
+          canUpdate={can(app.permissions, 'recruitment:pipeline:update')}
           onAddPNM={recruitment.handleAddPNM}
           onVotePNM={recruitment.handleVotePNM}
           onExtendBid={recruitment.handleExtendBid}

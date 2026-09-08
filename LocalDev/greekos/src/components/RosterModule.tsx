@@ -9,6 +9,7 @@ import {
 import { Member } from '../types';
 import Modal from './ui/Modal';
 import Card from './ui/Card';
+import ConfirmDialog from './ui/ConfirmDialog';
 import { formatMoney } from '../formatters';
 
 interface RosterModuleProps {
@@ -29,6 +30,7 @@ export default function RosterModule({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [pendingStanding, setPendingStanding] = useState<{ member: Member; standing: Member['standing'] } | null>(null);
 
   // New Member Form State
   const [name, setName] = useState('');
@@ -123,6 +125,7 @@ export default function RosterModule({
           <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
           <input
             type="text"
+            aria-label="Search roster"
             placeholder="Search roster..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
@@ -142,7 +145,7 @@ export default function RosterModule({
                 <th className="py-3 px-4">Academic Standing</th>
                 {/* Attendance rates are for the member themself and officers only. */}
                 {isOfficer && <th className="py-3 px-4">Attendance</th>}
-                <th className="py-3 px-4">Dues Balance</th>
+                <th className="py-3 px-4">Unpaid fines</th>
                 <th className="py-3 px-4">Risk Shifts</th>
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
@@ -197,7 +200,7 @@ export default function RosterModule({
                       {isOfficer && (
                         <select
                           value={mem.standing}
-                          onChange={e => onUpdateStanding(mem.id, e.target.value as any)}
+                          onChange={e => setPendingStanding({ member: mem, standing: e.target.value as Member['standing'] })}
                           className="text-xs border border-slate-200 rounded p-1 bg-white cursor-pointer"
                         >
                           <option value="Good Standing">Good Standing</option>
@@ -217,14 +220,7 @@ export default function RosterModule({
 
       {/* MODAL: Add Member */}
       {showAddModal && (
-        <Modal>
-            <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
-              <h3 className="font-display font-extrabold text-base text-slate-900 flex items-center gap-2">
-                <Users className="w-5 h-5 text-gold" />
-                Enroll New Brother on Roster
-              </h3>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
-            </div>
+        <Modal title="Enroll New Brother on Roster" onClose={() => setShowAddModal(false)}>
 
             <form onSubmit={handleAddSubmit} className="space-y-4">
               <div>
@@ -324,6 +320,17 @@ export default function RosterModule({
               </button>
             </form>
         </Modal>
+      )}
+
+      {pendingStanding && (
+        <ConfirmDialog
+          title="Change standing?"
+          tone="danger"
+          body={<p><strong>{pendingStanding.member.name}</strong>: {pendingStanding.member.standing} &rarr; <strong>{pendingStanding.standing}</strong>. Standing affects what they may do in the chapter.</p>}
+          confirmLabel="Change standing"
+          onCancel={() => setPendingStanding(null)}
+          onConfirm={() => { onUpdateStanding(pendingStanding.member.id, pendingStanding.standing); setPendingStanding(null); }}
+        />
       )}
     </div>
   );

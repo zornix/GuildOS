@@ -33,6 +33,8 @@ export interface Member {
   standing: MemberStanding;
   major?: string;
   gpa: number;
+  // ponytail: field name kept while every UI label says "Unpaid fines" (D12);
+  // renaming it is churn across seven files. Rename when it earns its keep.
   duesBalanceCents: number; // Integer cents end to end
   duesBalance: number; // in dollars for display convenience
   attendanceRate: number;
@@ -126,7 +128,7 @@ export interface AttendanceRecord {
   memberId: string;
   status: 'Present' | 'Absent' | 'Excused' | 'Late';
   markedAt?: string;
-  method?: 'Door Link' | 'Officer Roll' | 'PIN Check-in';
+  method?: 'Door code' | 'Officer Roll' | 'PIN Check-in';
 }
 
 export interface Fine {
@@ -167,7 +169,7 @@ export interface LedgerEntry {
   balanceAfterCents: number;
   description: string;
   authorizedBy: string;
-  correctsEntryId?: string; // If this is an immutable correction referencing an earlier entry
+  correctsEntryId?: string; // If this adjustment row offsets an earlier entry
 }
 
 export interface Excuse {
@@ -190,11 +192,17 @@ export interface Task {
   id: string;
   title: string;
   description: string;
-  assignedTo: string; // Member name
+  assignedTo: string; // Claimant names, falling back to the assigned member
   assignedToId?: string;
+  /** Absent only on local demo/draft tasks; API rows always carry these. */
+  claimants?: EventJob['claimants'];
+  peopleNeeded?: number;
+  claimedCount?: number;
   dueDate: string;
   priority: 'Low' | 'Medium' | 'High' | 'Urgent';
-  status: 'To Do' | 'In Progress' | 'Completed' | 'Pending';
+  status: 'To Do' | 'In Progress' | 'Completed' | 'Pending' | 'Done Reported' | 'Approved' | 'Cancelled' | 'Unknown';
+  /** Which event or initiative the job belongs to; absent for a standalone job. */
+  parent?: { kind: 'event' | 'initiative'; title: string };
   category?: 'House Chore' | 'Officer Project' | 'Maintenance' | 'Ritual Prep';
 }
 

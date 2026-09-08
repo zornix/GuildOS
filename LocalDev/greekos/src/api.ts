@@ -67,6 +67,9 @@ export async function optionalOfficerCall<T, F>(call: Promise<T>, fallback: F): 
 // ----------------------------------------------------
 export interface MeDto { id: string; name: string; email: string; role: string; chapter_id: string; }
 
+/** GET /api/rbac/me/permissions — the only source of authority in the UI. */
+export interface MyPermissionsDto { permissions: string[]; roles: string[]; }
+
 export interface MemberDto { id: string; name: string; email: string; role: string; status: string; }
 
 export interface StandingDto {
@@ -192,6 +195,30 @@ export interface TreasuryDashboardDto {
   recent_payments: VerifiedPaymentDto[];
 }
 
+/** GET /api/treasury/members/{id}/dashboard — readable by the member themself. */
+export interface MemberTreasuryDashboardDto {
+  member_id: string;
+  balance: {
+    outstanding_balance_cents: number;
+    current_balance_cents: number;
+    total_owed_cents: number;
+    total_paid_cents: number;
+  };
+  pending_cents: number;
+  pending_submissions: unknown[];
+  open_invoices: {
+    id: string;
+    description: string | null;
+    amount_cents: number;
+    remaining_cents: number;
+    due_at: string | null;
+    overdue: boolean;
+    source: string | null;
+    status: string;
+  }[];
+  recent_activity: unknown[];
+}
+
 export interface TaskDto {
   id: string;
   title: string;
@@ -257,6 +284,7 @@ export const api = {
   del: <T>(path: string) => request<T>('DELETE', path),
 
   getMe: () => request<MeDto>('GET', '/api/auth/me'),
+  getMyPermissions: () => request<MyPermissionsDto>('GET', '/api/rbac/me/permissions'),
 
   getMembers: () => request<MemberDto[]>('GET', '/api/members/'),
   getStandings: () => request<StandingDto[]>('GET', '/api/standing/'),
@@ -323,6 +351,8 @@ export const api = {
     request<unknown>('POST', '/api/fines/issue', { event_id: eventId, member_ids: memberIds }),
 
   getTreasuryDashboard: () => request<TreasuryDashboardDto>('GET', '/api/treasury/dashboard'),
+  getMemberTreasuryDashboard: (memberId: string) =>
+    request<MemberTreasuryDashboardDto>('GET', `/api/treasury/members/${memberId}/dashboard`),
 
   getTasks: () => request<TaskDto[]>('GET', '/api/tasks/'),
   createTask: (body: Record<string, unknown>) => request<TaskDto>('POST', '/api/tasks/', body),

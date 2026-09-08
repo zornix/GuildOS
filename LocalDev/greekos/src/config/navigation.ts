@@ -19,8 +19,8 @@ export interface NavItem {
   icon: LucideIcon;
   /** No backend behind this tab yet — the shell gates it behind a demo notice. */
   demo?: boolean;
-  /** Hidden from the nav while the session is in member view. */
-  officerOnly?: boolean;
+  /** Shown when the session holds this module's permission key. */
+  permission?: string;
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -31,9 +31,9 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'finance', label: 'Treasury', icon: DollarSign },
   { id: 'tasks', label: 'Jobs', icon: ClipboardList },
   { id: 'roster', label: 'Roster', icon: Users },
-  { id: 'recruitment', label: 'Recruitment', icon: UserPlus, officerOnly: true },
+  { id: 'recruitment', label: 'Recruitment', icon: UserPlus, permission: 'recruitment:pipeline:view' },
   // Not a demo: every command it runs is a real write (fines, jobs, events, blasts).
-  { id: 'command', label: 'Command console', icon: Terminal, officerOnly: true }
+  { id: 'command', label: 'Command console', icon: Terminal, permission: 'nl_controller:execute' }
 ];
 
 /** Prototype surfaces with no backend — collapsed at the bottom of the nav. */

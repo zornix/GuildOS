@@ -18,6 +18,8 @@ interface CalendarModuleProps {
   announcements: Announcement[];
   currentMemberName: string;
   onVolunteerOrganizer: (eventId: string, memberName: string) => void;
+  /** Jump to the list/detail view for one event. */
+  onOpenEvent: (eventId: string) => void;
 }
 
 export default function CalendarModule({
@@ -25,7 +27,8 @@ export default function CalendarModule({
   initiatives,
   announcements,
   currentMemberName,
-  onVolunteerOrganizer
+  onVolunteerOrganizer,
+  onOpenEvent
 }: CalendarModuleProps) {
   const today = isoDay();
   const [selectedDateStr, setSelectedDateStr] = useState<string>(today);
@@ -75,7 +78,7 @@ export default function CalendarModule({
         {/* Legend */}
         <div className="flex flex-wrap items-center gap-3 text-xs">
           <span className="flex items-center gap-1 text-slate-700 font-semibold">
-            <span className="w-2.5 h-2.5 rounded-full bg-gold"></span> Chapter Events
+            <span className="w-2.5 h-2.5 rounded-full bg-gold"></span> Events
           </span>
           <span className="flex items-center gap-1 text-slate-700 font-semibold">
             <span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span> Initiatives
@@ -226,7 +229,7 @@ export default function CalendarModule({
             {/* Events for this day */}
             <div className="space-y-3">
               <span className="text-xs font-bold text-slate-500 block">
-                Chapter Events ({dayEvents.length})
+                Events ({dayEvents.length})
               </span>
 
               {dayEvents.length === 0 ? (
@@ -247,6 +250,13 @@ export default function CalendarModule({
                           </div>
                           <span className="text-xs text-slate-600 font-medium">{e.type}</span>
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => onOpenEvent(e.id)}
+                          className="text-xs font-semibold text-navy hover:text-gold-muted cursor-pointer shrink-0"
+                        >
+                          Open &rarr;
+                        </button>
                       </div>
 
                       <div className="text-xs text-slate-500 space-y-0.5">
@@ -278,11 +288,11 @@ export default function CalendarModule({
             {/* Announcements for this day */}
             <div className="space-y-3 pt-3 border-t border-slate-100">
               <span className="text-xs font-bold text-slate-500 block">
-                Broadcast Announcements ({dayAnnouncements.length})
+                Announcements ({dayAnnouncements.length})
               </span>
 
               {dayAnnouncements.length === 0 ? (
-                <p className="text-xs text-slate-500 italic">No executive broadcasts on this day.</p>
+                <p className="text-xs text-slate-500 italic">No announcements on this day.</p>
               ) : (
                 dayAnnouncements.map(a => (
                   <div key={a.id} className="p-3 rounded-xl border border-blue-200 bg-blue-50/50 space-y-1">

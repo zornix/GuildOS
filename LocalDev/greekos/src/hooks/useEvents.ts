@@ -47,7 +47,7 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
   // adaptEvents rebuilds rows with empty jobs, security and leader lists.
   // refetchJobs restamps the boards below; security shifts and everything that
   // only the detail endpoint carries (supervisors, organizers, notify stamp,
-  // door link) load per event, so those are carried across rather than blanked.
+  // door code) load per event, so those are carried across rather than blanked.
   const refetchEvents = async () => {
     const rows = adaptEvents(await api.getEvents());
     setEvents(prev => {
@@ -69,7 +69,7 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
     await refetchJobs();
   };
 
-  /** Supervisors, organizers, the notify stamp and the live door link exist only
+  /** Supervisors, organizers, the notify stamp and the door code exist only
    *  on the per-event endpoints, so the selected event's row is patched here. */
   const refetchEventDetail = async (eventId: string) => {
     const [detail, link] = await Promise.all([api.getEvent(eventId), api.getCheckInLink(eventId)]);
@@ -359,7 +359,7 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
     enqueueOutbox({
       type: 'EVENT_NOTIFY',
       recipient: 'All Active Chapter Brothers (10)',
-      message: `[GreekOS Broadcast] ${ev.title} on ${ev.date} at ${ev.time} (${ev.location}). Open jobs are ready for sign-up!`,
+      message: `[GreekOS Announcement] ${ev.title} on ${ev.date} at ${ev.time} (${ev.location}). Open jobs are ready for sign-up!`,
       channel: 'SMS'
     });
     syncApi(async () => {

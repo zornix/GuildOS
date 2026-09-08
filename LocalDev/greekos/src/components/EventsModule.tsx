@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { ChapterEvent, EventJob, Member, EventType } from '../types';
 import { hasStarted, isoDay, isWithin36Hours } from '../formatters';
+import { filterEventsByType } from '../lib/events';
 import Modal from './ui/Modal';
 import Card from './ui/Card';
 
@@ -27,7 +28,13 @@ interface EventsModuleProps {
   members: Member[];
   isOfficer: boolean;
   currentMemberName: string;
-  /** Loads the selected event's supervisors, organizers and door link. */
+  /** Chrome owned by useEventsChrome — the bar above this module sets them. */
+  filterType: string;
+  createOpen: boolean;
+  onCreateOpenChange: (open: boolean) => void;
+  selectedEventId: string | null;
+  onSelectEventId: (eventId: string) => void;
+  /** Loads the selected event's supervisors, organizers and door code. */
   onSelectEvent: (eventId: string) => void;
   onAddEvent: (event: Omit<ChapterEvent, 'id' | 'attendanceTaken' | 'checkedInCount'>) => void;
   onUpdateEvent: (event: ChapterEvent) => void;
@@ -53,6 +60,11 @@ export default function EventsModule({
   members,
   isOfficer,
   currentMemberName,
+  filterType,
+  createOpen,
+  onCreateOpenChange,
+  selectedEventId,
+  onSelectEventId,
   onSelectEvent,
   onAddEvent,
   onUpdateEvent,
@@ -72,9 +84,6 @@ export default function EventsModule({
   onRespondSecuritySwap,
   onCancelSecuritySwap
 }: EventsModuleProps) {
-  const [selectedEventId, setSelectedEventId] = useState<string>(events[0]?.id || '');
-  const [filterType, setFilterType] = useState<string>('All');
-  const [showAddForm, setShowAddForm] = useState(false);
   const [showAddJobModal, setShowAddJobModal] = useState(false);
   const [editJobId, setEditJobId] = useState<string | null>(null);
   const [showRejectModal, setShowRejectModal] = useState<{ eventId: string; jobId: string } | null>(null);
@@ -143,7 +152,7 @@ export default function EventsModule({
     setTitle('');
     setDescription('');
     setLocation('');
-    setShowAddForm(false);
+    onCreateOpenChange(false);
   };
 
   // One form serves both "add job" and "edit job" — editJobId picks the target.
@@ -221,7 +230,7 @@ export default function EventsModule({
 
   const safeEvents = events || [];
   const safeMembers = members || [];
-  const filteredEvents = safeEvents.filter(e => filterType === 'All' || e.type === filterType);
+  const filteredEvents = filterEventsByType(safeEvents, filterType);
   // Security picker order (D17): fewest prior shifts first — that's who to pick.
   const securityPickerMembers = [...safeMembers].sort(
     (a, b) => (a.priorSecurityShifts || 0) - (b.priorSecurityShifts || 0)
@@ -242,16 +251,6 @@ export default function EventsModule({
             Plan events, assign supervisors, and publish claimable jobs.
           </p>
         </div>
-
-        {isOfficer && (
-          <button
-            onClick={() => setShowAddForm(true)}
-            className="bg-gold hover:bg-[#c5a02b] text-navy font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer w-full sm:w-auto justify-center"
-          >
-            <Plus className="w-4 h-4" />
-            Create Chapter Event
-          </button>
-        )}
       </div>
 
       {/* Main Grid: Left Event List (1 col), Right Detailed Event View (2 cols) */}
@@ -259,29 +258,6 @@ export default function EventsModule({
         
         {/* Left Column: Events Directory */}
         <div className="space-y-4">
-          {/* Category Filter */}
-          <div className="bg-white rounded-xl border border-slate-200/80 p-3 shadow-xs">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-slate-700">Filter Events</span>
-              <span className="text-xs text-slate-500">{filteredEvents.length} items</span>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {['All', 'Chapter Meeting', 'Philanthropy', 'Brotherhood', 'Social', 'Pledge Education'].map(t => (
-                <button
-                  key={t}
-                  onClick={() => setFilterType(t)}
-                  className={`text-xs px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer ${
-                    filterType === t 
-                      ? 'bg-navy text-gold shadow-xs' 
-                      : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-                  }`}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Event Cards */}
           <div className="space-y-3 max-h-[75vh] overflow-y-auto pr-1">
             {filteredEvents.map(e => {
@@ -294,7 +270,7 @@ export default function EventsModule({
               return (
                 <div
                   key={e.id}
-                  onClick={() => setSelectedEventId(e.id)}
+                  onClick={() => onSelectEventId(e.id)}
                   className={`p-4 rounded-xl border transition-all cursor-pointer ${
                     isSelected 
                       ? 'bg-white border-gold shadow-md ring-2 ring-gold/20' 
@@ -392,7 +368,7 @@ export default function EventsModule({
                     className="bg-navy hover:bg-slate-800 text-gold font-bold text-xs px-3.5 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                   >
                     <QrCode className="w-4 h-4" />
-                    Live Door Mode
+                    Show door code
                   </button>
 
                   {isOfficer && (
@@ -405,7 +381,7 @@ export default function EventsModule({
                       }`}
                     >
                       <KeyRound className="w-3.5 h-3.5" />
-                      {selectedEvent.checkInLinkActive ? 'Check-in open' : 'Enable door link'}
+                      {selectedEvent.checkInLinkActive ? 'Close door code' : 'Open door code'}
                     </button>
                   )}
                 </div>
@@ -506,7 +482,7 @@ export default function EventsModule({
                   <div>
                     <h4 className="text-xs font-bold text-gold flex items-center gap-1.5">
                       <Send className="w-3.5 h-3.5" />
-                      Notify Members Gate (SMS & Broadcast)
+                      Notify Members Gate (SMS & Push)
                     </h4>
                     <p className="text-xs text-slate-300">
                       Blast stays locked until the event is fully planned with supervisors, organizers, and jobs.
@@ -910,21 +886,8 @@ export default function EventsModule({
       </div>
 
       {/* MODAL: Create New Event */}
-      {showAddForm && (
-        <Modal maxWidth="max-w-lg">
-            <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
-              <h3 className="font-display font-extrabold text-base text-slate-900 flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-gold" />
-                Schedule Chapter Operation Event
-              </h3>
-              <button 
-                onClick={() => setShowAddForm(false)}
-                className="text-slate-500 hover:text-slate-600 font-bold"
-              >
-                ✕
-              </button>
-            </div>
-            
+      {createOpen && (
+        <Modal maxWidth="max-w-lg" title="Create event" onClose={() => onCreateOpenChange(false)}>
             <form onSubmit={handleCreateEvent} className="space-y-4">
               <div>
                 <label className="text-xs font-semibold text-slate-700 block mb-1">Event Title</label>
@@ -1048,15 +1011,7 @@ export default function EventsModule({
 
       {/* MODAL: Add / Edit Job on Event */}
       {(showAddJobModal || editJobId) && selectedEvent && (
-        <Modal>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-display font-bold text-base text-slate-900 flex items-center gap-2">
-                {editJobId ? <Pencil className="w-5 h-5 text-gold" /> : <Plus className="w-5 h-5 text-gold" />}
-                {editJobId ? 'Edit Claimable Job / Shift' : 'Add Claimable Job / Shift'}
-              </h3>
-              <button onClick={closeJobForm} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
-            </div>
-            
+        <Modal title={editJobId ? 'Edit Claimable Job / Shift' : 'Add Claimable Job / Shift'} onClose={closeJobForm}>
             <form onSubmit={handleAddJobSubmit} className="space-y-4">
               <div>
                 <label className="text-xs font-semibold text-slate-700 block mb-1">Job Title</label>
@@ -1107,11 +1062,7 @@ export default function EventsModule({
 
       {/* MODAL: Reject Job with Reason */}
       {showRejectModal && (
-        <Modal>
-            <h3 className="font-display font-extrabold text-base text-red-900 flex items-center gap-2 mb-2">
-              <XCircle className="w-5 h-5 text-red-600" />
-              Reject Job Completion
-            </h3>
+        <Modal title="Reject Job Completion" onClose={() => setShowRejectModal(null)}>
             <p className="text-xs text-slate-600 mb-4">
               Work is never silently undone. State the exact reason why this job was rejected so claimants receive the notice in their SMS / push outbox.
             </p>
@@ -1145,14 +1096,7 @@ export default function EventsModule({
 
       {/* MODAL: Assign Security Member from Stats Table */}
       {showSecurityAssignModal && selectedEvent && (
-        <Modal maxWidth="max-w-lg">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-display font-bold text-base text-slate-900 flex items-center gap-2">
-                <Shield className="w-5 h-5 text-blue-600" />
-                Assign Member to Security Shift
-              </h3>
-              <button onClick={() => setShowSecurityAssignModal(false)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
-            </div>
+        <Modal maxWidth="max-w-lg" title="Assign Member to Security Shift" onClose={() => setShowSecurityAssignModal(false)}>
 
             <form onSubmit={handleConfirmSecurityAssign} className="space-y-4">
               <div>
@@ -1185,11 +1129,7 @@ export default function EventsModule({
 
       {/* MODAL: Request Security Shift Swap */}
       {showSwapModal && (
-        <Modal>
-            <h3 className="font-display font-bold text-base text-slate-900 flex items-center gap-2 mb-2">
-              <ArrowLeftRight className="w-5 h-5 text-amber-600" />
-              Propose Security Shift Swap
-            </h3>
+        <Modal title="Propose Security Shift Swap" onClose={() => setShowSwapModal(null)}>
             <p className="text-xs text-slate-600 mb-4">
               Select an active brother to take your shift. The brother will be notified via outbox and can accept or decline.
             </p>
@@ -1223,14 +1163,10 @@ export default function EventsModule({
         </Modal>
       )}
 
-      {/* MODAL: Live Door Mode & QR Code View */}
+      {/* MODAL: Door code & QR Code View */}
       {showLiveQRModal && selectedEvent && (
-        <Modal maxWidth="max-w-sm" className="text-center space-y-4" overlayClassName="bg-slate-900/70">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-              <span className="text-xs font-bold text-slate-500">Live Door Mode</span>
-              <button onClick={() => setShowLiveQRModal(false)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
-            </div>
-
+        <Modal maxWidth="max-w-sm" className="text-center space-y-4" overlayClassName="bg-slate-900/70"
+          title="Door code" onClose={() => setShowLiveQRModal(false)}>
             <div className="space-y-1">
               <h3 className="font-display font-extrabold text-lg text-slate-900">{selectedEvent.title}</h3>
               <p className="text-xs text-slate-500">{selectedEvent.location} &bull; {selectedEvent.time}</p>
@@ -1244,20 +1180,20 @@ export default function EventsModule({
               <span className="text-xs text-slate-500">QR rendering is demo art — read out the code below</span>
             </div>
 
-            {/* Live door code (backend check-in link) */}
+            {/* Door code (backend check-in link) */}
             {selectedEvent.checkInToken ? (
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1">
-                <span className="text-xs text-amber-800 font-bold">Live Door Code</span>
+                <span className="text-xs text-amber-800 font-bold">Door code</span>
                 <div className="text-2xl font-mono font-extrabold tracking-widest text-slate-900">
                   {selectedEvent.checkInToken}
                 </div>
                 <p className="text-xs text-amber-800">
-                  Brothers enter it under Attendance &rarr; Door Check-In. Expires shortly.
+                  Members enter it on Home or under Attendance &rarr; Door code. Expires shortly.
                 </p>
               </div>
             ) : (
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500">
-                No door link is open. Use <strong>Enable Door Link</strong> on the event to open one.
+                No door code is open. Use <strong>Open door code</strong> on the event.
               </div>
             )}
 
@@ -1265,7 +1201,7 @@ export default function EventsModule({
               onClick={() => setShowLiveQRModal(false)}
               className="w-full bg-navy text-white font-bold py-2.5 rounded-lg text-xs"
             >
-              Close Door View
+              Close
             </button>
         </Modal>
       )}

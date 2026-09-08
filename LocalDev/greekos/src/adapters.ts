@@ -248,19 +248,36 @@ const TASK_STATUS: Record<string, Task['status']> = {
   committed: 'Pending',
   in_progress: 'In Progress',
   done: 'Completed',
-  cancelled: 'Completed'
+  done_reported: 'Done Reported',
+  approved: 'Approved',
+  cancelled: 'Cancelled'
 };
 
-export function adaptTasks(rows: TaskDto[], members: Member[]): Task[] {
-  return rows.map(row => ({
+export function adaptTasks(
+  rows: TaskDto[],
+  members: Member[],
+  titles: { events?: Map<string, string>; initiatives?: Map<string, string> } = {}
+): Task[] {
+  // Security shifts live on the event's Security panel, never on the jobs board.
+  return rows.filter(row => row.kind !== 'security').map(row => ({
     id: row.id,
     title: row.title,
     description: row.description || '',
-    assignedTo: row.assigned_member_id ? nameOf(members, row.assigned_member_id) : 'Unassigned',
+    assignedTo: row.claimants?.length
+      ? row.claimants.map(id => nameOf(members, id)).join(', ')
+      : row.assigned_member_id ? nameOf(members, row.assigned_member_id) : 'Unassigned',
     assignedToId: row.assigned_member_id || undefined,
+    claimants: (row.claimants ?? []).map(memberId => ({ memberId, memberName: nameOf(members, memberId), claimedAt: '' })),
+    peopleNeeded: row.people_needed ?? 1,
+    claimedCount: row.claimed_count ?? row.claimants?.length ?? 0,
     dueDate: day(row.due_at),
     priority: row.required ? 'High' : 'Medium',
-    status: TASK_STATUS[row.status] || 'To Do'
+    status: TASK_STATUS[row.status] || 'Unknown',
+    parent: row.event_id
+      ? { kind: 'event', title: titles.events?.get(row.event_id) || 'Event' }
+      : row.initiative_id
+        ? { kind: 'initiative', title: titles.initiatives?.get(row.initiative_id) || 'Initiative' }
+        : undefined
   }));
 }
 
