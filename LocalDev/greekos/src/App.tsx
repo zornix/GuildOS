@@ -46,15 +46,17 @@ export default function App() {
           members={roster.members}
           events={events.events}
           tasks={tasks.tasks}
-          fines={finance.fines}
           initiatives={initiatives.initiatives}
           announcements={app.announcements}
-          ledger={finance.ledger}
           isOfficer={isOfficer}
           currentMemberName={currentMemberName}
+          contribution={app.contribution}
+          myBalance={app.myBalance}
           onNavigateTab={setActiveTab}
+          onOpenEvent={id => { chrome.openEvent(id); setActiveTab('events'); }}
+          onScheduleEvent={() => { chrome.openCreate(); setActiveTab('events'); }}
           onVolunteerOrganizer={events.handleVolunteerOrganizer}
-          onPayDuesQuick={() => setActiveTab('finance')}
+          onSelfCheckIn={attendance.handleSelfCheckIn}
           onDeleteAnnouncement={app.handleDeleteAnnouncement}
         />
       )}
