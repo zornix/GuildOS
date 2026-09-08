@@ -3,9 +3,16 @@
 Organization management system for fraternity chapters: events, attendance,
 dues/fines treasury, standing, tasks, announcements, roster, and RBAC.
 
-Active development happens in [`LocalDev/`](LocalDev/) (FastAPI + Next.js 16 +
-PostgreSQL) — see `LocalDev/CLAUDE.md` for the project guide. Domain language
-lives in [`CONTEXT.md`](CONTEXT.md); architectural decisions in
+Active development happens in [`LocalDev/`](LocalDev/) (FastAPI + Vite/React
+**greekos** + PostgreSQL) — see `LocalDev/CLAUDE.md` for the project guide.
+The live frontend is `LocalDev/greekos`. `LocalDev/fratos` is the old Next.js
+app and is not what Vercel deploys.
+
+**Temporary (about a week, 2026-09-08):** production Vercel serves greekos but
+still uses the **demo** Supabase database. Do not treat that data as a real
+chapter. A separate prod project comes after this window.
+
+Domain language lives in [`CONTEXT.md`](CONTEXT.md); architectural decisions in
 [`docs/adr/`](docs/adr/).
 
 ## 📊 Product dashboard

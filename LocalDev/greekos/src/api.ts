@@ -1,9 +1,42 @@
 // Thin fetch client for the real GuildOS FastAPI backend.
 // Vite proxies /api -> http://localhost:8001 (see vite.config.ts).
-// Auth is dev-login only: this prototype always acts as the seeded officer.
+// Deployed Vercel 404s /api/auth/dev-login; production login is email+password.
 
 const TOKEN_KEY = 'g_token';
 const DEV_EMAIL = 'jake@tke.org';
+
+export class AuthRequiredError extends Error {
+  constructor() {
+    super('Sign in required');
+    this.name = 'AuthRequiredError';
+  }
+}
+
+export function logout(): void {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+export async function login(email: string, password: string): Promise<string> {
+  const res = await fetch('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email.trim().toLowerCase(), password })
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    let detail = text;
+    try {
+      const parsed = JSON.parse(text);
+      detail = typeof parsed.detail === 'string'
+        ? parsed.detail
+        : (parsed.detail?.message || parsed.message || text);
+    } catch { /* non-JSON */ }
+    throw new Error(detail || `Login failed (${res.status})`);
+  }
+  const data = JSON.parse(text) as { access_token: string };
+  localStorage.setItem(TOKEN_KEY, data.access_token);
+  return data.access_token;
+}
 
 async function devLogin(): Promise<string> {
   const res = await fetch('/api/auth/dev-login', {
@@ -17,8 +50,16 @@ async function devLogin(): Promise<string> {
   return data.access_token as string;
 }
 
+/** Local `vite` only — Vercel builds are production and must use password login. */
+export async function localDevLogin(): Promise<string> {
+  if (!import.meta.env.DEV) throw new AuthRequiredError();
+  return devLogin();
+}
+
 export async function ensureLogin(): Promise<string> {
-  return localStorage.getItem(TOKEN_KEY) || devLogin();
+  const existing = localStorage.getItem(TOKEN_KEY);
+  if (existing) return existing;
+  throw new AuthRequiredError();
 }
 
 async function request<T>(method: string, path: string, body?: unknown, retry = true): Promise<T> {
@@ -31,8 +72,7 @@ async function request<T>(method: string, path: string, body?: unknown, retry = 
 
   if (res.status === 401 && retry) {
     localStorage.removeItem(TOKEN_KEY);
-    await devLogin();
-    return request<T>(method, path, body, false);
+    throw new AuthRequiredError();
   }
 
   const text = await res.text();

@@ -38,7 +38,7 @@ If you are a new developer or agent jumping into the codebase, here is how the r
 graph LR
     A[GuildOS Repo Root] --> B(LocalDev)
     B --> C[api/]
-    B --> D[fratos/]
+    B --> D[greekos/]
     B --> E[migrations/]
     B --> F[tests/]
     B --> G[docs/]
@@ -49,7 +49,7 @@ graph LR
 ```
 
 1.  **Backend (`api/`)**: A Python FastAPI application structured around domain-driven design (e.g., `api/treasury/`, `api/rbac/`).
-2.  **Frontend (`fratos/`)**: A Next.js App Router application written in TypeScript and React.
+2.  **Frontend (`greekos/`)**: A Vite + React SPA. Vercel serves it as the product UI.
 3.  **Database (`migrations/`)**: Raw SQL migrations applied sequentially. We use PostgreSQL.
 4.  **Testing (`tests/`)**: Pytest suite for the backend.
 
@@ -58,7 +58,7 @@ graph LR
 You can spin up the entire stack locally using the scripts in `package.json`:
 
 ```bash
-# Interactive dev mode (Supabase demo DB, FastAPI, and Next.js)
+# Interactive dev mode (Supabase demo DB, FastAPI, and greekos)
 npm run dev
 
 # Apply pending migrations against the demo DB
@@ -69,8 +69,8 @@ npm run seed
 ```
 
 There is no `npm run verify` / `preflight` script — the verification bar is
-`python3 -m pytest` for the backend, and `npm run test:unit` + `npm run build`
-in `fratos/` for the frontend.
+`python3 -m pytest` for the backend, and `npm test` + `npm run lint` +
+`npm run build` in `greekos/` for the frontend.
 
 ## 🤖 Guide for Future Agents
 

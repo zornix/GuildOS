@@ -7,14 +7,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 GuildOS / FraternityOS — operational software for fraternity chapters (events,
 attendance, dues/fines treasury, standing, tasks, announcements, roster, RBAC).
 This directory (`LocalDev/`) is the active development sandbox. The git root is
-one level up at `/home/mshi/GuildOS`, which also contains the `Prod/` sibling
-copy. `LocalDev/fratos` is the only tracked frontend — the stale `Prod/fratos`
-copy was archived out of the repo (2026-09-08).
+one level up at `/home/mshi/GuildOS`. The product frontend is `LocalDev/greekos`
+(Vite + React). `LocalDev/fratos` is the previous Next.js UI and is not deployed.
 
-Stack: **FastAPI (Python)** backend + **Next.js 16 App Router (TS/React 19)**
-frontend + **PostgreSQL** (raw SQL migrations). Deployed on Vercel
-(`api/index.py` as a Python function, `fratos/` as the Next app — see
-`vercel.json`).
+Stack: **FastAPI (Python)** backend + **Vite/React (greekos)** frontend +
+**PostgreSQL** (raw SQL migrations). Deployed on Vercel (`api/index.py` as a
+Python function, `greekos/` as a static Vite build — see `vercel.json`).
+
+**Temporary:** the Vercel production `DATABASE_URL` still points at the demo
+Supabase project until a prod project is created.
 
 ## Commands
 
@@ -22,7 +23,7 @@ Run from this directory (`LocalDev/`). `npm run *` shells out to
 `../local-dev-scripts/scripts/local-dev.sh`.
 
 ```bash
-npm run dev          # Supabase demo DB + migrate + FastAPI + Next.js
+npm run dev          # Supabase demo DB + migrate + FastAPI + greekos (Vite)
 npm run migrate      # apply pending migrations/*.sql against demo db
 npm run seed         # seed demo db only (usually unnecessary — demo has data)
 ```
@@ -46,13 +47,12 @@ needed). Tests connect to a **real Postgres** via `TEST_DATABASE_URL` /
 and treasury tests use a superuser connection that **bypasses RLS** (for
 trigger/RPC tests); RLS-policy tests use a member JWT instead.
 
-### Frontend (run from `LocalDev/fratos/`)
+### Frontend (run from `LocalDev/greekos/`)
 
 ```bash
-npm run test:unit    # vitest
-npm run test:e2e     # playwright (role flows: auth, events, fines, excuses, checkin, members)
-npm run lint         # eslint
-npm run build        # next build
+npm test             # node:test
+npm run lint         # tsc --noEmit
+npm run build        # vite build
 ```
 
 ## Backend architecture
@@ -91,8 +91,8 @@ segments must be registered before parameterized ones); such a router is
 append-only — sub-routers `include_router` into it and existing includes are
 never removed. Domains that also expose standalone routers on their own mount
 prefixes (`excuses_router`, `checkin_links_router`, `fines_router`) re-export
-them for `index.py`. **Mounted URL paths are frozen**: check
-`fratos/lib/api-client.ts` before changing any prefix.
+them for `index.py`. **Mounted URL paths are frozen**: check `greekos/src/api.ts` (and
+`fratos/lib/api-client.ts` if you touch the old app) before changing any prefix.
 
 **No legacy flat modules.** `api/routes/`, `api/services/` and `api/models/`
 are gone — every handler, service and schema lives in its domain package.

@@ -1,7 +1,5 @@
-import { useState } from 'react';
-import { ChevronDown, Shield, User } from 'lucide-react';
-import { MemberRole } from '../types';
-import { DEMO_NAV_ITEMS, NAV_ITEMS, NavItem } from '../config/navigation';
+import { LogOut } from 'lucide-react';
+import { NAV_ITEMS, NavItem } from '../config/navigation';
 import { can } from '../lib/session';
 
 interface SidebarProps {
@@ -9,11 +7,8 @@ interface SidebarProps {
   setActiveTab: (tab: string) => void;
   isOfficer: boolean;
   permissions: Set<string>;
-  setIsOfficer: (val: boolean) => void;
   currentMemberName: string;
-  setCurrentMemberName: (name: string) => void;
-  allMembers: { id: string; name: string; role: MemberRole }[];
-  /** Below lg the column is an overlay drawer; at lg+ it is always in flow. */
+  onLogout: () => void;
   open: boolean;
   onClose: () => void;
 }
@@ -23,17 +18,11 @@ export default function Sidebar({
   setActiveTab,
   isOfficer,
   permissions,
-  setIsOfficer,
   currentMemberName,
-  setCurrentMemberName,
-  allMembers,
+  onLogout,
   open,
   onClose
 }: SidebarProps) {
-  const safeAllMembers = allMembers || [];
-  const currentMember = safeAllMembers.find(m => m.name === currentMemberName);
-  const [switcherOpen, setSwitcherOpen] = useState(false);
-
   const navRow = (item: NavItem) => {
     const Icon = item.icon;
     const isActive = activeTab === item.id;
@@ -54,12 +43,6 @@ export default function Sidebar({
           <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-gold' : 'text-slate-400'}`} />
           <span className="truncate">{item.label}</span>
         </span>
-
-        {item.demo && (
-          <span className="text-xs font-medium bg-gold/20 text-gold px-1.5 py-0.5 rounded border border-gold/30">
-            Demo
-          </span>
-        )}
       </button>
     );
   };
@@ -71,97 +54,40 @@ export default function Sidebar({
         open ? 'translate-x-0' : '-translate-x-full'
       }`}
     >
-      {/* Brand Header */}
       <div className="p-5 border-b border-[#1e2d42] flex items-center gap-3">
         <div className="w-9 h-9 bg-gold text-navy rounded-xl font-bold flex items-center justify-center shadow-xs">
           <span className="text-xl tracking-wider font-display font-black">Ω</span>
         </div>
         <div>
           <h1 className="font-display font-bold text-base tracking-tight text-white">GreekOS</h1>
-          <p className="text-xs text-slate-400 font-sans">Alpha Chapter</p>
+          <p className="text-xs text-slate-400 font-sans">Chapter ops</p>
         </div>
       </div>
 
-      {/* Navigation items */}
       <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto">
         {NAV_ITEMS.filter(item => !item.permission || can(permissions, item.permission)).map(navRow)}
-
-        <details className="mt-3 pt-3 border-t border-[#1e2d42]">
-          <summary className="px-3 py-2 text-xs text-slate-400 hover:text-slate-200 cursor-pointer">
-            Prototype demos
-          </summary>
-          <div className="space-y-1 pt-1">{DEMO_NAV_ITEMS.map(navRow)}</div>
-        </details>
       </nav>
 
-      {/* Footer: current user, expands into the role & view-as switcher */}
-      <div className="border-t border-[#1e2d42] bg-[#0b172a]/50">
-        <button
-          onClick={() => setSwitcherOpen(v => !v)}
-          aria-expanded={switcherOpen}
-          className="w-full min-h-11 flex items-center gap-2.5 px-3.5 py-3 text-left hover:bg-slate-800/40 transition-all cursor-pointer"
-        >
+      <div className="border-t border-[#1e2d42] bg-[#0b172a]/50 p-3 space-y-2">
+        <div className="flex items-center gap-2.5 px-1">
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0"></span>
           <span className="min-w-0 flex-1">
             <span className="block text-xs font-semibold text-slate-200 truncate">
-              {currentMember ? currentMember.name : currentMemberName}
+              {currentMemberName || 'Signed in'}
             </span>
             <span className="block text-xs text-slate-400 truncate">
-              {currentMember ? currentMember.role : (isOfficer ? 'Officer' : 'Member')}
+              {isOfficer ? 'Officer' : 'Member'}
             </span>
           </span>
-          <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${switcherOpen ? 'rotate-180' : ''}`} />
+        </div>
+        <button
+          type="button"
+          onClick={onLogout}
+          className="w-full min-h-11 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 hover:bg-slate-800/50 hover:text-white cursor-pointer"
+        >
+          <LogOut className="w-4 h-4" />
+          Sign out
         </button>
-
-        {switcherOpen && (
-          <div className="px-3.5 pb-3.5 space-y-2.5">
-            <p className="text-xs font-bold text-amber-300 bg-amber-900/40 border border-amber-700/60 rounded-lg px-2.5 py-1.5">
-              Demo: view as — changes only what this screen shows
-            </p>
-            <div className="grid grid-cols-2 gap-1 p-0.5 bg-[#09101d] rounded-lg border border-[#1e2d42]">
-              <button
-                onClick={() => setIsOfficer(true)}
-                className={`py-1.5 px-2 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                  isOfficer
-                    ? 'bg-gold text-navy shadow-xs'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-                }`}
-              >
-                <Shield className="w-3.5 h-3.5" />
-                Officer
-              </button>
-              <button
-                onClick={() => setIsOfficer(false)}
-                className={`py-1.5 px-2 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                  !isOfficer
-                    ? 'bg-gold text-navy shadow-xs'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-                }`}
-              >
-                <User className="w-3.5 h-3.5" />
-                Member
-              </button>
-            </div>
-
-            <div>
-              <label htmlFor="view-as-member" className="text-xs text-slate-400 block mb-1">
-                Demo: view as member
-              </label>
-              <select
-                id="view-as-member"
-                value={currentMemberName}
-                onChange={e => setCurrentMemberName(e.target.value)}
-                className="w-full text-xs bg-[#09101d] border border-[#1e2d42] text-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-gold transition-all cursor-pointer"
-              >
-                {safeAllMembers.map(m => (
-                  <option key={m.id} value={m.name}>
-                    {m.name} ({m.role})
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        )}
       </div>
     </aside>
   );

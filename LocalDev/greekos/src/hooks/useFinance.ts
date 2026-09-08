@@ -1,5 +1,4 @@
 import { useState, type Dispatch, type SetStateAction } from 'react';
-import { INITIAL_FINES, INITIAL_LEDGER, INITIAL_PAYMENTS } from '../data/mockData';
 import { Fine, LedgerEntry, Member, Payment } from '../types';
 import { api } from '../api';
 import { adaptFines } from '../adapters';
@@ -21,9 +20,9 @@ interface Deps {
 /** Fines, payments and the chapter ledger. Balances live on the member
  *  rows, so this hook writes into the roster state too. */
 export function useFinance({ members, setMembers, currentMemberName, isOfficer, syncApi, showToast, enqueueOutbox }: Deps) {
-  const [fines, setFines] = useState<Fine[]>(INITIAL_FINES);
-  const [payments, setPayments] = useState<Payment[]>(INITIAL_PAYMENTS);
-  const [ledger, setLedger] = useState<LedgerEntry[]>(INITIAL_LEDGER);
+  const [fines, setFines] = useState<Fine[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [ledger, setLedger] = useState<LedgerEntry[]>([]);
 
   const refetchFines = async () => setFines(adaptFines(await api.getFines(), members));
 

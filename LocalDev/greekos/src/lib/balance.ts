@@ -21,7 +21,7 @@ export function adaptMemberBalance(dto: MemberTreasuryDashboardDto): MemberBalan
   };
 }
 
-/** A session balance must never be shown for a different Demo "view as" member. */
+/** A session balance must never be shown for a different member than the one signed in. */
 export function balanceForMember(balance: MemberBalance | null, memberId: string | undefined): MemberBalance | null {
   return memberId && balance?.memberId === memberId ? balance : null;
 }

@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { INITIAL_TASKS } from '../data/mockData';
 import { Task } from '../types';
 import { api } from '../api';
 import { canClaimTask, taskClaimants } from '../lib/tasks';
@@ -14,7 +13,7 @@ interface Deps {
 
 /** Jobs: standalone or attached to an event or initiative. */
 export function useTasks({ syncApi, showToast, refetchJobs }: Deps) {
-  const [tasks, setTasks] = useState<Task[]>(INITIAL_TASKS);
+  const [tasks, setTasks] = useState<Task[]>([]);
 
   const handleAddTask = (newTask: Omit<Task, 'id' | 'status'>) => {
     const t: Task = {

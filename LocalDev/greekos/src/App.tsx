@@ -1,6 +1,8 @@
 import { Fragment, useState } from 'react';
+import { logout } from './api';
 import { useAppData } from './hooks/useAppData';
 import AppShell from './components/layout/AppShell';
+import LoginScreen from './components/LoginScreen';
 import DashboardOverview from './components/DashboardOverview';
 import CalendarModule from './components/CalendarModule';
 import EventsModule from './components/EventsModule';
@@ -10,9 +12,7 @@ import AttendanceModule from './components/AttendanceModule';
 import FinanceModule from './components/FinanceModule';
 import TasksModule from './components/TasksModule';
 import RecruitmentModule from './components/RecruitmentModule';
-import RulesModule from './components/RulesModule';
 import CommandModule from './components/CommandModule';
-import OutboxModule from './components/OutboxModule';
 import EventsBar from './components/EventsBar';
 import { useEventsChrome } from './hooks/useEventsChrome';
 import { filterEventsByType } from './lib/events';
@@ -20,10 +20,16 @@ import { balanceForMember } from './lib/balance';
 import { can } from './lib/session';
 
 export default function App() {
+  const [authed, setAuthed] = useState(() => !!localStorage.getItem('g_token'));
+  if (!authed) return <LoginScreen onLoggedIn={() => setAuthed(true)} />;
+  return <ChapterApp onLogout={() => { logout(); setAuthed(false); }} />;
+}
+
+function ChapterApp({ onLogout }: { onLogout: () => void }) {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const chrome = useEventsChrome();
   const app = useAppData();
-  const { roster, events, initiatives, finance, attendance, tasks, recruitment, outbox } = app;
+  const { roster, events, initiatives, finance, attendance, tasks, recruitment } = app;
   const { isOfficer, currentMemberName } = app;
   const currentMember = roster.members.find(member => member.name === currentMemberName);
   const viewedBalance = balanceForMember(app.myBalance, currentMember?.id);
@@ -34,12 +40,8 @@ export default function App() {
       setActiveTab={setActiveTab}
       isOfficer={isOfficer}
       permissions={app.permissions}
-      setIsOfficer={app.setIsOfficer}
-      currentMemberName={currentMemberName}
-      setCurrentMemberName={app.setCurrentMemberName}
-      sessionName={app.sessionName}
-      sessionIsOfficer={app.sessionIsOfficer}
-      members={roster.members}
+      currentMemberName={currentMemberName || app.sessionName}
+      onLogout={onLogout}
       toastMessage={app.toastMessage}
       onDismissToast={app.dismissToast}
       loading={app.loading}
@@ -152,7 +154,6 @@ export default function App() {
       )}
 
       {activeTab === 'finance' && (
-        // Reset open forms when Demo view-as changes the payment recipient.
         <Fragment key={currentMember?.id ?? currentMemberName}>
           <FinanceModule
             members={roster.members}
@@ -203,8 +204,6 @@ export default function App() {
         />
       )}
 
-      {activeTab === 'rules' && <RulesModule rules={app.rules} />}
-
       {activeTab === 'command' && (
         <CommandModule
           members={roster.members}
@@ -212,15 +211,6 @@ export default function App() {
           isOfficer={isOfficer}
           currentMemberName={currentMemberName}
           onExecuteCommand={app.handleExecuteCommand}
-        />
-      )}
-
-      {activeTab === 'outbox' && (
-        <OutboxModule
-          notifications={outbox.outbox}
-          isOfficer={isOfficer}
-          onRetryNotification={() => app.showToast('Re-queued message for transmission.')}
-          onClearDelivered={outbox.clearDelivered}
         />
       )}
     </AppShell>

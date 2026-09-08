@@ -141,26 +141,16 @@ kill_existing_backend() {
 }
 
 kill_existing_frontend() {
-  local lock_file="fratos/.next/dev/lock"
   local pid
   local -a pids=()
 
-  if [ -f "$lock_file" ]; then
-    pid="$(python3 -c "import json; print(json.load(open('$lock_file')).get('pid', ''))" 2>/dev/null || true)"
-    if [ -n "$pid" ]; then
-      pids+=("$pid")
-    fi
-  fi
-
   while IFS= read -r pid; do
     [ -n "$pid" ] && pids+=("$pid")
-  done < <(pgrep -f "${LOCALDEV_ROOT}/fratos.*next dev" 2>/dev/null || true)
+  done < <(pgrep -f "${LOCALDEV_ROOT}/greekos.*vite" 2>/dev/null || true)
 
-  stop_pids "frontend (next dev)" "${pids[@]}"
+  stop_pids "frontend (vite)" "${pids[@]}"
   kill_listeners_on_port 3000 "frontend"
   kill_listeners_on_port 3001 "frontend"
-
-  rm -f "$lock_file"
 }
 
 cleanup() {
@@ -172,7 +162,6 @@ cleanup() {
   if [ -n "$FRONTEND_PID" ]; then
     kill_process_tree "$FRONTEND_PID"
   fi
-  rm -f fratos/.next/dev/lock
   echo "Done."
 }
 trap cleanup EXIT INT TERM
@@ -220,19 +209,13 @@ echo -e "  ${GREEN}Python deps OK${NC}"
 
 # ── 5. Node dependencies ───────────────────────────
 echo "▸ Checking Node dependencies ..."
-if [ ! -d fratos/node_modules ]; then
+if [ ! -d greekos/node_modules ]; then
   echo "  Installing frontend dependencies ..."
-  (cd fratos && npm install)
+  (cd greekos && npm install)
 fi
 echo -e "  ${GREEN}Node deps OK${NC}"
 
-# ── 6. Frontend env ────────────────────────────────
-ensure_env_key fratos/.env.local "NEXT_PUBLIC_API_BASE" "http://127.0.0.1:8001"
-ensure_env_key fratos/.env.local "NEXT_PUBLIC_ENABLE_VP_MODULE" "1"
-ensure_env_key fratos/.env.local "NEXT_PUBLIC_ENABLE_SECRETARY_MODULE" "1"
-echo -e "  ${GREEN}Checked fratos/.env.local${NC}"
-
-# ── 7. Start backend ───────────────────────────────
+# ── 6. Start backend ───────────────────────────────
 echo ""
 echo "▸ Clearing existing dev servers ..."
 kill_existing_backend
@@ -250,9 +233,9 @@ else
   exit 1
 fi
 
-# ── 8. Start frontend ──────────────────────────────
-echo "▸ Starting Next.js frontend on :3000 ..."
-(cd fratos && npm run dev) &
+# ── 7. Start frontend ──────────────────────────────
+echo "▸ Starting GreekOS frontend on :3000 ..."
+(cd greekos && npm run dev) &
 FRONTEND_PID=$!
 sleep 3
 

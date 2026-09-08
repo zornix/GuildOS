@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { INITIAL_MEMBERS } from '../data/mockData';
 import { Member } from '../types';
 import { ShowToast } from './useToast';
 
@@ -7,7 +6,7 @@ import { ShowToast } from './useToast';
  *  invite (POST /api/auth/invite + setup code) and standing is derived server
  *  side, so both mutations here are local. */
 export function useRoster(showToast: ShowToast) {
-  const [members, setMembers] = useState<Member[]>(INITIAL_MEMBERS);
+  const [members, setMembers] = useState<Member[]>([]);
 
   const handleAddMember = (
     newMem: Omit<Member, 'id' | 'points' | 'attendanceRate' | 'duesBalance' | 'duesBalanceCents' | 'securityHoursServed'>

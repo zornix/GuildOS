@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { INITIAL_EVENTS } from '../data/mockData';
 import { ChapterEvent, EventJob, Member, SecurityAssignment } from '../types';
 import { api } from '../api';
 import { adaptEventDetail, adaptEvents, adaptSecurityAssignment, toEventBody } from '../adapters';
@@ -42,7 +41,7 @@ interface Deps {
 
 /** Chapter events plus their claimable jobs and security shifts. */
 export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJobs }: Deps) {
-  const [events, setEvents] = useState<ChapterEvent[]>(INITIAL_EVENTS);
+  const [events, setEvents] = useState<ChapterEvent[]>([]);
 
   // adaptEvents rebuilds rows with empty jobs, security and leader lists.
   // refetchJobs restamps the boards below; security shifts and everything that

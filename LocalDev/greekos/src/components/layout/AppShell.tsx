@@ -1,21 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Menu, Sparkles, X } from 'lucide-react';
-import { Member } from '../../types';
-import { isDemoTab } from '../../config/navigation';
 import Sidebar from '../Sidebar';
-import DemoGate from './DemoGate';
 
 interface AppShellProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   isOfficer: boolean;
   permissions: Set<string>;
-  setIsOfficer: (val: boolean) => void;
   currentMemberName: string;
-  setCurrentMemberName: (name: string) => void;
-  sessionName: string;
-  sessionIsOfficer: boolean;
-  members: Member[];
+  onLogout: () => void;
   toastMessage: string | null;
   onDismissToast: () => void;
   loading: boolean;
@@ -23,29 +16,20 @@ interface AppShellProps {
   children: React.ReactNode;
 }
 
-/** Sidebar + top navbar + toast + the load/demo notices around the active module. */
+/** Sidebar + top navbar + toast around the active module. */
 export default function AppShell({
   activeTab,
   setActiveTab,
   isOfficer,
   permissions,
-  setIsOfficer,
   currentMemberName,
-  setCurrentMemberName,
-  sessionName,
-  sessionIsOfficer,
-  members,
+  onLogout,
   toastMessage,
   onDismissToast,
   loading,
   backendDown,
   children
 }: AppShellProps) {
-  // Which demo-only tabs the user has acknowledged this session
-  const [demoUnlocked, setDemoUnlocked] = useState<Record<string, boolean>>({});
-  const gated = isDemoTab(activeTab) && !demoUnlocked[activeTab];
-
-  // Below lg the sidebar is an overlay drawer.
   const [drawerOpen, setDrawerOpen] = useState(false);
   useEffect(() => {
     if (!drawerOpen) return;
@@ -58,7 +42,6 @@ export default function AppShell({
 
   return (
     <div className="flex min-h-screen bg-[#f8fafc] text-slate-900 font-sans antialiased">
-      {/* Toast Notification — the live region exists even when empty so it announces. */}
       <div role="status" aria-live="polite" className="fixed bottom-6 right-6 z-50">
         {toastMessage && (
           <div className="bg-navy text-white pl-4 pr-2 py-3 rounded-xl border border-gold shadow-2xl flex items-center gap-2.5 animate-in fade-in slide-in-from-bottom-5">
@@ -79,24 +62,18 @@ export default function AppShell({
         />
       )}
 
-      {/* Left Sidebar (Dark Navy, Full Command Menu) */}
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         isOfficer={isOfficer}
         permissions={permissions}
-        setIsOfficer={setIsOfficer}
         currentMemberName={currentMemberName}
-        setCurrentMemberName={setCurrentMemberName}
-        allMembers={members}
+        onLogout={onLogout}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
       />
 
-      {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
-
-        {/* Top Navbar */}
         <header className="bg-white border-b border-slate-200/80 px-4 sm:px-6 py-3 flex items-center justify-between gap-3 sticky top-0 z-20">
           <div className="flex items-center gap-2">
             <button
@@ -106,29 +83,20 @@ export default function AppShell({
             >
               <Menu className="w-5 h-5" />
             </button>
-            <span className="text-xs font-medium text-slate-600">Alpha Chapter</span>
+            <span className="text-xs font-medium text-slate-600">GreekOS</span>
           </div>
 
-          {/* Impersonated Member Chip */}
           <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/80 px-2 sm:px-3 py-1.5 rounded-xl">
             <div className="w-6 h-6 rounded-full bg-navy text-gold flex items-center justify-center font-bold text-xs">
-              {currentMemberName.substring(0, 2).toUpperCase()}
+              {(currentMemberName || '?').substring(0, 2).toUpperCase()}
             </div>
             <div className="hidden sm:block text-left">
-              <span className="text-xs font-bold text-slate-900 block leading-tight">{currentMemberName}</span>
+              <span className="text-xs font-bold text-slate-900 block leading-tight">{currentMemberName || '…'}</span>
               <span className="text-xs text-slate-600 block">{isOfficer ? 'Officer' : 'Member'}</span>
             </div>
-            {/* No session identity yet (still loading, or backend down) means there is
-                nothing to be "viewing as", so the chip waits for sessionName. */}
-            {sessionName !== '' && (currentMemberName !== sessionName || isOfficer !== sessionIsOfficer) && (
-              <span className="text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.5 rounded">
-                Viewing as
-              </span>
-            )}
           </div>
         </header>
 
-        {/* Scrollable View Container */}
         <main className="flex-1 p-4 sm:p-6 max-w-7xl w-full mx-auto space-y-6">
           {loading && (
             <div className="text-xs text-slate-500">Connecting to chapter server…</div>
@@ -136,13 +104,11 @@ export default function AppShell({
 
           {backendDown && (
             <div className="bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold px-4 py-2.5 rounded-xl">
-              Backend unreachable — showing demo data
+              Can't reach the chapter server. Sign out and try again, or check that the API is up.
             </div>
           )}
 
-          {gated
-            ? <DemoGate onContinue={() => setDemoUnlocked(prev => ({ ...prev, [activeTab]: true }))} />
-            : children}
+          {children}
         </main>
       </div>
     </div>

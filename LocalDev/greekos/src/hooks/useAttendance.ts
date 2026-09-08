@@ -1,5 +1,4 @@
 import { useState, type Dispatch, type SetStateAction } from 'react';
-import { INITIAL_EXCUSES } from '../data/mockData';
 import { ChapterEvent, Excuse, Member } from '../types';
 import { api } from '../api';
 import { adaptExcuses } from '../adapters';
@@ -19,7 +18,7 @@ interface Deps {
 /** Roll call, door-code check-in and absence excuses. Attendance is recorded onto
  *  the event rows, so this hook writes into the events state too. */
 export function useAttendance({ members, setEvents, refetchEvents, syncApi, showToast, enqueueOutbox }: Deps) {
-  const [excuses, setExcuses] = useState<Excuse[]>(INITIAL_EXCUSES);
+  const [excuses, setExcuses] = useState<Excuse[]>([]);
 
   const refetchExcuses = async () => setExcuses(adaptExcuses(await api.getExcuses(), members));
 

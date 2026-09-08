@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { INITIAL_INITIATIVES } from '../data/mockData';
 import { EventJob, Initiative, Member } from '../types';
 import { api } from '../api';
 import { adaptInitiatives } from '../adapters';
@@ -15,7 +14,7 @@ interface Deps {
 
 /** Chair-led initiatives and their claimable tasks. */
 export function useInitiatives({ members, syncApi, showToast, refetchJobs }: Deps) {
-  const [initiatives, setInitiatives] = useState<Initiative[]>(INITIAL_INITIATIVES);
+  const [initiatives, setInitiatives] = useState<Initiative[]>([]);
 
   // adaptInitiatives rebuilds rows with an empty jobs list, so restamp the boards after.
   const refetchInitiatives = async () => {

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { INITIAL_ANNOUNCEMENTS, INITIAL_RULES } from '../data/mockData';
-import { Announcement, ChapterEvent, ChapterRule, Member, SecurityAssignment } from '../types';
-import { api, ensureLogin, optionalOfficerCall, EventDto, TaskDto } from '../api';
+import { Announcement, ChapterEvent, Member, SecurityAssignment } from '../types';
+import { api, AuthRequiredError, ensureLogin, logout, optionalOfficerCall, EventDto, TaskDto } from '../api';
 import { isoDay } from '../formatters';
 import { MemberBalance, adaptMemberBalance } from '../lib/balance';
 import { isOfficerView } from '../lib/session';
@@ -19,10 +18,9 @@ import {
   adaptTasks,
   groupJobsByParent
 } from '../adapters';
-import { usePersistentState } from './usePersistentState';
 import { useToast } from './useToast';
 import { useBackend } from './useBackend';
-import { useOutbox } from './useOutbox';
+import { enqueueOutbox } from './useOutbox';
 import { useRoster } from './useRoster';
 import { useEvents } from './useEvents';
 import { useInitiatives } from './useInitiatives';
@@ -39,21 +37,13 @@ export function useAppData() {
   const [permissions, setPermissions] = useState<Set<string>>(new Set());
   const [sessionName, setSessionName] = useState<string>('');
   const [myBalance, setMyBalance] = useState<MemberBalance | null>(null);
-  const sessionIsOfficer = isOfficerView(permissions);
-  // … and the *view*, which the Demo "view as" switcher may override. Starts
-  // as officer so the backend-down mock data still shows the full prototype.
-  const [isOfficer, setIsOfficer] = useState<boolean>(true);
-  const [currentMemberName, setCurrentMemberName] = useState<string>('Alexander Mercer');
+  const [isOfficer, setIsOfficer] = useState<boolean>(false);
+  const [currentMemberName, setCurrentMemberName] = useState<string>('');
 
-  const [announcements, setAnnouncements] = useState<Announcement[]>(INITIAL_ANNOUNCEMENTS);
-
-  // Demo-only tabs still live in localStorage.
-  const [rules] = usePersistentState<ChapterRule[]>('g_rules', INITIAL_RULES);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
   const { toastMessage, showToast, dismissToast } = useToast();
   const { loading, setLoading, backendDown, setBackendDown, syncApi } = useBackend(showToast);
-  const outbox = useOutbox();
-  const { enqueueOutbox } = outbox;
 
   const roster = useRoster(showToast);
   const { members, setMembers } = roster;
@@ -116,7 +106,7 @@ export function useAppData() {
   };
 
   // ----------------------------------------------------
-  // BACKEND LOAD (one try/catch: any failure falls back to the mock data)
+  // BACKEND LOAD (one try/catch; failure leaves empty state + backendDown)
   // ----------------------------------------------------
   useEffect(() => {
     (async () => {
@@ -205,6 +195,7 @@ export function useAppData() {
         });
       } catch (err) {
         console.error('Backend load failed', err);
+        if (err instanceof AuthRequiredError) logout();
         setBackendDown(true);
       } finally {
         setLoading(false);
@@ -288,21 +279,16 @@ export function useAppData() {
   return {
     isOfficer,
     permissions,
-    sessionIsOfficer,
     sessionName,
     contribution,
     myBalance,
-    setIsOfficer,
     currentMemberName,
-    setCurrentMemberName,
     announcements,
-    rules,
     loading,
     backendDown,
     toastMessage,
     showToast,
     dismissToast,
-    outbox,
     roster,
     events,
     initiatives,

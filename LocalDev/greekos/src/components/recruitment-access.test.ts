@@ -14,9 +14,9 @@ const noop = () => {};
 function navigation(permissions: string[], isOfficer = isOfficerView(permissions)) {
   return renderToStaticMarkup(createElement(Sidebar, {
     activeTab: 'dashboard', setActiveTab: noop,
-    permissions: new Set(permissions), isOfficer, setIsOfficer: noop,
-    currentMemberName: 'Recruitment Chair', setCurrentMemberName: noop,
-    allMembers: [], open: true, onClose: noop,
+    permissions: new Set(permissions), isOfficer,
+    currentMemberName: 'Recruitment Chair', onLogout: noop,
+    open: true, onClose: noop,
   }));
 }
 
@@ -50,13 +50,13 @@ test('pipeline viewer sees prospects without create, vote or bid controls', () =
   assert.doesNotMatch(html, /Add Prospect|Extend bid|Vote For/);
 });
 
-test('standing or demo officer mode cannot grant module navigation permissions', () => {
+test('standing cannot grant module navigation permissions', () => {
   assert.doesNotMatch(navigation(['standing:view_all']), />Recruitment</);
   assert.doesNotMatch(navigation([], true), />Recruitment</);
   assert.doesNotMatch(navigation([], true), />Command console</);
 });
 
-test('module access survives the presentation-only Demo Member view', () => {
+test('module access follows permission keys, not officer presentation', () => {
   const html = navigation(['standing:view_all', viewKey, 'nl_controller:execute'], false);
   assert.match(html, />Recruitment</);
   assert.match(html, />Command console</);

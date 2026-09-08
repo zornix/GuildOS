@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { INITIAL_PNMS } from '../data/mockData';
 import { PNM } from '../types';
 import { api } from '../api';
 import { adaptRecruits } from '../adapters';
@@ -15,7 +14,7 @@ interface Deps {
 
 /** Rush pipeline: prospects, votes and bids. */
 export function useRecruitment({ syncApi, showToast, enqueueOutbox }: Deps) {
-  const [pnms, setPnms] = useState<PNM[]>(INITIAL_PNMS);
+  const [pnms, setPnms] = useState<PNM[]>([]);
 
   const refetchPnms = async () => setPnms(adaptRecruits(await api.getRecruits()));
 

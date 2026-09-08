@@ -161,7 +161,7 @@ Set these in the Vercel project (Production scope):
 
 | Variable | Note |
 |---|---|
-| `DATABASE_URL` | prod pooler URL. Required — the app runs the direct-Postgres path. |
+| `DATABASE_URL` | pooler URL. **Temporary:** production Vercel still uses the demo project until a prod Supabase project exists. Required — the app runs the direct-Postgres path. |
 | `JWT_SECRET` | ≥32 random chars. **Must not** be `local-dev-secret`. |
 | `DEV_AUTH_BYPASS` | unset or `false`. Enables `/api/auth/dev-login` otherwise. |
 | `CRON_SECRET` | non-empty; Vercel Cron sends it as `Authorization: Bearer …`. |

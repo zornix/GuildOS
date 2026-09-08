@@ -195,11 +195,11 @@ export default function FinanceModule({
       {/* KPI Cards Ribbon */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card className="p-5 space-y-1">
-          <span className="text-xs font-bold text-slate-500">Outstanding (demo ledger)</span>
+          <span className="text-xs font-bold text-slate-500">Outstanding</span>
           <div className="text-2xl font-display font-black text-slate-900">
             {formatMoney(totalReceivablesCents)}
           </div>
-          <span className="text-xs text-slate-500">Unpaid fines plus demo transactions</span>
+          <span className="text-xs text-slate-500">Unpaid balances on the roster</span>
         </Card>
 
         <Card className="p-5 space-y-1">
@@ -360,7 +360,7 @@ export default function FinanceModule({
                 Chapter ledger
               </h3>
               <p className="text-xs text-slate-500">
-                Demo ledger: rows are recorded in this browser and reset on reload. Corrections are added as adjustment rows, never edits.
+                There is no chapter-wide ledger API yet. Corrections here stay on this session.
               </p>
             </div>
 
@@ -587,12 +587,8 @@ export default function FinanceModule({
                 type="submit"
                 className="w-full bg-gold hover:bg-[#c5a02b] text-navy font-bold py-3 min-h-11 rounded-lg text-xs transition-all"
               >
-                Record payment (demo)
+                Record payment
               </button>
-
-              <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                Demo: this is recorded in your browser only and resets on reload.
-              </p>
             </form>
         </Modal>
       )}
