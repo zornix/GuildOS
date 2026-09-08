@@ -10,13 +10,14 @@ interface Deps {
   members: Member[];
   syncApi: SyncApi;
   showToast: ShowToast;
+  titles: () => { events: Map<string, string>; initiatives: Map<string, string> };
 }
 
-/** House chores and officer to-dos. */
-export function useTasks({ members, syncApi, showToast }: Deps) {
+/** Jobs: standalone or attached to an event or initiative. */
+export function useTasks({ members, syncApi, showToast, titles }: Deps) {
   const [tasks, setTasks] = useState<Task[]>(INITIAL_TASKS);
 
-  const refetchTasks = async () => setTasks(adaptTasks(await api.getTasks(), members));
+  const refetchTasks = async () => setTasks(adaptTasks(await api.getTasks(), members, titles()));
 
   const handleAddTask = (newTask: Omit<Task, 'id' | 'status'>) => {
     const t: Task = {
@@ -36,7 +37,7 @@ export function useTasks({ members, syncApi, showToast }: Deps) {
         }),
       refetchTasks
     );
-    showToast(`Assigned chore "${t.title}" to ${t.assignedTo}`);
+    showToast(`Added job "${t.title}"`);
   };
 
   const handleToggleTaskStatus = (taskId: string) => {
@@ -54,7 +55,7 @@ export function useTasks({ members, syncApi, showToast }: Deps) {
       return t;
     }));
     syncApi(() => api.commitTask(taskId, memberId), refetchTasks);
-    showToast(`Claimed house task.`);
+    showToast(`Claimed job.`);
   };
 
   return { tasks, setTasks, handleAddTask, handleToggleTaskStatus, handleClaimTask };

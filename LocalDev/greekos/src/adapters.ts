@@ -251,8 +251,13 @@ const TASK_STATUS: Record<string, Task['status']> = {
   cancelled: 'Completed'
 };
 
-export function adaptTasks(rows: TaskDto[], members: Member[]): Task[] {
-  return rows.map(row => ({
+export function adaptTasks(
+  rows: TaskDto[],
+  members: Member[],
+  titles: { events?: Map<string, string>; initiatives?: Map<string, string> } = {}
+): Task[] {
+  // Security shifts live on the event's Security panel, never on the jobs board.
+  return rows.filter(row => row.kind !== 'security').map(row => ({
     id: row.id,
     title: row.title,
     description: row.description || '',
@@ -260,7 +265,12 @@ export function adaptTasks(rows: TaskDto[], members: Member[]): Task[] {
     assignedToId: row.assigned_member_id || undefined,
     dueDate: day(row.due_at),
     priority: row.required ? 'High' : 'Medium',
-    status: TASK_STATUS[row.status] || 'To Do'
+    status: TASK_STATUS[row.status] || 'To Do',
+    parent: row.event_id
+      ? { kind: 'event', title: titles.events?.get(row.event_id) || 'Event' }
+      : row.initiative_id
+        ? { kind: 'initiative', title: titles.initiatives?.get(row.initiative_id) || 'Initiative' }
+        : undefined
   }));
 }
 

@@ -75,7 +75,15 @@ export function useAppData() {
     showToast,
     enqueueOutbox
   });
-  const tasks = useTasks({ members, syncApi, showToast });
+  const tasks = useTasks({
+    members,
+    syncApi,
+    showToast,
+    titles: () => ({
+      events: new Map(events.events.map(e => [e.id, e.title])),
+      initiatives: new Map(initiatives.initiatives.map(i => [i.id, i.title]))
+    })
+  });
   const recruitment = useRecruitment({ syncApi, showToast, enqueueOutbox });
   const contribution = useContribution(currentMemberName, events.events, initiatives.initiatives);
 
@@ -184,7 +192,10 @@ export function useAppData() {
         // No chapter-wide ledger read exists yet (statements are per member),
         // so the chapter-ledger view starts empty rather than faked.
         finance.setLedger([]);
-        tasks.setTasks(adaptTasks(taskRows, rosterRows));
+        tasks.setTasks(adaptTasks(taskRows, rosterRows, {
+          events: new Map(adaptedEvents.map(e => [e.id, e.title])),
+          initiatives: new Map(adaptInitiatives(initRows, rosterRows).map(i => [i.id, i.title]))
+        }));
         setAnnouncements(adaptAnnouncements(annRows, rosterRows));
         recruitment.setPnms(adaptRecruits(recruitRows));
         initiatives.setInitiatives(adaptInitiatives(initRows, rosterRows));

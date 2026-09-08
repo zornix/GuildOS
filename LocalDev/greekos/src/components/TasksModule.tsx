@@ -80,7 +80,7 @@ export default function TasksModule({
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            House and officer jobs, who owns each one, and when it is due.
+            Every job — standalone or for an event or initiative — who owns it, and when it is due.
           </p>
         </div>
 
@@ -154,6 +154,11 @@ export default function TasksModule({
                 <h4 className={`font-bold text-sm text-slate-900 ${isDone ? 'line-through text-slate-500' : ''}`}>
                   {task.title}
                 </h4>
+                {task.parent && (
+                  <span className="inline-block mt-1 text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
+                    {task.parent.kind === 'event' ? 'Event' : 'Initiative'}: {task.parent.title}
+                  </span>
+                )}
                 <p className="text-xs text-slate-600 mt-1">{task.description}</p>
               </div>
 
@@ -162,6 +167,13 @@ export default function TasksModule({
                   <User className="w-3 h-3 text-slate-500" />
                   <strong className={isMyTask ? 'text-gold-muted' : 'text-slate-700'}>{task.assignedTo}</strong>
                 </span>
+
+                {!isDone && task.assignedTo === 'Unassigned' && currentMember && (
+                  <button type="button" onClick={() => onClaimTask(task.id, currentMember.name, currentMember.id)}
+                    className="text-xs bg-gold hover:bg-[#c5a02b] text-navy font-bold px-2.5 py-1 rounded-md cursor-pointer">
+                    Claim
+                  </button>
+                )}
 
                 <span className="flex items-center gap-1">
                   <Clock className="w-3 h-3 text-slate-500" />

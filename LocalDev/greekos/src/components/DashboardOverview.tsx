@@ -166,7 +166,7 @@ export default function DashboardOverview({
             <div key={task.id} className="p-2.5 rounded-lg border border-slate-100 bg-slate-50 flex items-center justify-between text-xs gap-2">
               <div>
                 <div className="font-bold text-slate-800">{task.title}</div>
-                <div className="text-xs text-slate-500">{task.assignedTo}</div>
+                <div className="text-xs text-slate-500">{task.assignedTo}{task.parent && <> · {task.parent.title}</>}</div>
               </div>
               <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 shrink-0">{task.status}</span>
             </div>

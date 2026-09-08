@@ -195,6 +195,8 @@ export interface Task {
   dueDate: string;
   priority: 'Low' | 'Medium' | 'High' | 'Urgent';
   status: 'To Do' | 'In Progress' | 'Completed' | 'Pending';
+  /** Which event or initiative the job belongs to; absent for a standalone job. */
+  parent?: { kind: 'event' | 'initiative'; title: string };
   category?: 'House Chore' | 'Officer Project' | 'Maintenance' | 'Ritual Prep';
 }
 
