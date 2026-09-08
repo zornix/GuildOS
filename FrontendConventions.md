@@ -49,13 +49,10 @@ The latest audit found these recurring issues:
 - There is no runtime mock data layer for frontend iteration.
 - Treasury backend endpoints exist, but the app has no Treasury frontend module,
   API wrapper, adapters, mocks, or UI contracts.
-- `LocalDev/fratos` and `Prod/fratos` duplicate frontend files and can drift.
 
 ## Target Folder Structure
 
-Use this structure for the app frontend. If `LocalDev/fratos` and `Prod/fratos`
-remain separate, keep this structure identical in both until they are
-consolidated.
+Use this structure for the app frontend.
 
 ```text
 fratos/
@@ -572,5 +569,4 @@ Use these issue categories:
 6. Add API adapters and frontend contracts.
 7. Add mock API mode.
 8. Add Treasury frontend contracts, mocks, and first module screens.
-9. Consolidate `LocalDev/fratos` and `Prod/fratos` or create one shared source.
 

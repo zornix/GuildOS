@@ -34,11 +34,11 @@ as the Next app (see `vercel.json`).
 The git root is `/home/mshi/GuildOS`, one level **above** this directory.
 
 - `LocalDev/` — **the active development sandbox. All new work happens here.**
-- `Prod/` — sibling copy; `LocalDev/fratos` and `Prod/fratos` are duplicated
-  frontends that **drift** (consolidation is a known open task — don't assume
-  they match).
-- `greekos-landing/` — marketing site. (The old `GreekV1/` copy is archived
-  under `docs/archive/GreekV1/` at the git root.)
+- `Prod/` — sibling backend copy. Its stale `fratos/` frontend was archived out
+  of the repo (2026-09-08), so `LocalDev/fratos` is the only tracked frontend.
+- The marketing site (`greekos-landing/`) was archived alongside it; both now
+  live in the gitignored `archive/` at the git root, as does the older
+  `GreekV1/` copy under `docs/archive/GreekV1/`.
 - `local-dev-scripts/` — tooling; `LocalDev/package.json` scripts shell out to
   `local-dev-scripts/scripts/local-dev.sh`.
 

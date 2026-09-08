@@ -82,3 +82,6 @@ playwright/.cache/
 # Gemini Skills
 git-publish/
 *.skill
+
+# Archived sibling copies (local only, see archive/)
+/archive/

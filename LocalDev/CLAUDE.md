@@ -7,9 +7,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 GuildOS / FraternityOS — operational software for fraternity chapters (events,
 attendance, dues/fines treasury, standing, tasks, announcements, roster, RBAC).
 This directory (`LocalDev/`) is the active development sandbox. The git root is
-one level up at `/home/mshi/GuildOS`, which also contains `Prod/` and other
-sibling copies — `LocalDev/fratos` and `Prod/fratos` are duplicated frontends
-that can drift (consolidation is a known open task).
+one level up at `/home/mshi/GuildOS`, which also contains the `Prod/` sibling
+copy. `LocalDev/fratos` is the only tracked frontend — the stale `Prod/fratos`
+copy was archived out of the repo (2026-09-08).
 
 Stack: **FastAPI (Python)** backend + **Next.js 16 App Router (TS/React 19)**
 frontend + **PostgreSQL** (raw SQL migrations). Deployed on Vercel

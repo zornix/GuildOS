@@ -1,9 +1,10 @@
 # GuildOS (repo root)
 
 Active development happens in `LocalDev/` — see `LocalDev/CLAUDE.md` for the
-project guide, commands, and conventions. Other top-level directories
-(`Prod/`, `greekos-landing/`) are sibling copies for the same
-product; `local-dev-scripts/` holds the shared dev-runner tooling.
+project guide, commands, and conventions. `Prod/` holds the sibling backend
+copy; `local-dev-scripts/` holds the shared dev-runner tooling. The stale
+`Prod/fratos` and `greekos-landing/` copies were moved out of the repo into a
+gitignored `archive/` (2026-09-08).
 
 ## Agent skills
 
