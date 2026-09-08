@@ -10,6 +10,7 @@ import {
 import { ChapterEvent, Member, Excuse } from '../types';
 import Modal from './ui/Modal';
 import Card from './ui/Card';
+import { RollStatus, markRemainingPresent, rollCallSummary } from '../lib/rollCall';
 
 interface AttendanceModuleProps {
   events: ChapterEvent[];
@@ -57,23 +58,20 @@ export default function AttendanceModule({
   const currentMember = safeMembers.find(m => m.name === currentMemberName);
 
   // Local attendance state for the roll call sheet
-  const [attendanceRecords, setAttendanceRecords] = useState<Record<string, 'Present' | 'Absent' | 'Excused' | 'Late'>>({});
+  const [attendanceRecords, setAttendanceRecords] = useState<Record<string, RollStatus>>({});
 
-  const handleStatusChange = (memberId: string, status: 'Present' | 'Absent' | 'Excused' | 'Late') => {
+  const handleStatusChange = (memberId: string, status: RollStatus) => {
     setAttendanceRecords(prev => ({
       ...prev,
       [memberId]: status
     }));
   };
 
-  const handleSaveAttendance = () => {
-    if (!selectedEvent) return;
-    const formattedRecords = safeMembers.map(m => ({
-      memberId: m.id,
-      status: attendanceRecords[m.id] || 'Present'
-    }));
+  const summary = rollCallSummary(safeMembers, attendanceRecords);
 
-    onRecordAttendance(selectedEvent.id, formattedRecords);
+  const handleSaveAttendance = () => {
+    if (!selectedEvent || summary.marked.length === 0) return;
+    onRecordAttendance(selectedEvent.id, summary.marked);
   };
 
   const handleExcuseSubmit = (e: React.FormEvent) => {
@@ -191,13 +189,29 @@ export default function AttendanceModule({
             </div>
 
             {isOfficer && (
-              <button
-                onClick={handleSaveAttendance}
-                className="bg-navy hover:bg-slate-800 text-gold font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg transition-all cursor-pointer flex items-center gap-2 shadow-xs"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                Commit Attendance to Roster
-              </button>
+              <div className="flex flex-col sm:items-end gap-2">
+                <div className="flex gap-2">
+                  {summary.unmarked > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setAttendanceRecords(markRemainingPresent(safeMembers, attendanceRecords))}
+                      className="bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-xs cursor-pointer"
+                    >
+                      Mark remaining present ({summary.unmarked})
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleSaveAttendance}
+                    disabled={summary.marked.length === 0}
+                    className="bg-navy hover:bg-slate-800 text-gold font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg transition-all cursor-pointer flex items-center gap-2 shadow-xs disabled:opacity-50"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    Save roll call
+                  </button>
+                </div>
+                <p role="status" className="text-xs text-slate-600">{summary.label || 'Nothing marked yet'}</p>
+              </div>
             )}
           </div>
 
@@ -215,7 +229,7 @@ export default function AttendanceModule({
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {safeMembers.map(mem => {
-                  const status = attendanceRecords[mem.id] || 'Present';
+                  const status = attendanceRecords[mem.id];
 
                   return (
                     <tr key={mem.id} className="hover:bg-slate-50/60">
@@ -233,6 +247,7 @@ export default function AttendanceModule({
                         </td>
                       )}
                       <td className="py-3 px-3 text-right">
+                        {!status && <span className="text-xs text-slate-400 mr-2">Unmarked</span>}
                         <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 text-xs font-semibold">
                           {(['Present', 'Late', 'Excused', 'Absent'] as const).map(st => {
                             const isCur = status === st;
