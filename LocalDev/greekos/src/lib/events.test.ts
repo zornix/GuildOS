@@ -28,5 +28,8 @@ test('liveDoorEvent is the earliest upcoming event with an open door link', () =
     ev({ id: 'closed', date: '2026-09-07', checkInLinkActive: false })
   ];
   assert.equal(liveDoorEvent(list, '2026-09-07')?.id, 'soon');
+  // Today's own door counts as upcoming, and beats a later day.
+  const openToday = ev({ id: 'today', date: '2026-09-07', checkInLinkActive: true });
+  assert.equal(liveDoorEvent([...list, openToday], '2026-09-07')?.id, 'today');
   assert.equal(liveDoorEvent([ev({ checkInLinkActive: false })], '2026-09-07'), undefined);
 });
