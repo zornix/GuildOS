@@ -126,7 +126,7 @@ export interface AttendanceRecord {
   memberId: string;
   status: 'Present' | 'Absent' | 'Excused' | 'Late';
   markedAt?: string;
-  method?: 'Door Link' | 'Officer Roll' | 'PIN Check-in';
+  method?: 'Door code' | 'Officer Roll' | 'PIN Check-in';
 }
 
 export interface Fine {

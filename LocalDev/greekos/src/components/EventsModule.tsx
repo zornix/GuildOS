@@ -34,7 +34,7 @@ interface EventsModuleProps {
   onCreateOpenChange: (open: boolean) => void;
   selectedEventId: string | null;
   onSelectEventId: (eventId: string) => void;
-  /** Loads the selected event's supervisors, organizers and door link. */
+  /** Loads the selected event's supervisors, organizers and door code. */
   onSelectEvent: (eventId: string) => void;
   onAddEvent: (event: Omit<ChapterEvent, 'id' | 'attendanceTaken' | 'checkedInCount'>) => void;
   onUpdateEvent: (event: ChapterEvent) => void;
@@ -368,7 +368,7 @@ export default function EventsModule({
                     className="bg-navy hover:bg-slate-800 text-gold font-bold text-xs px-3.5 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                   >
                     <QrCode className="w-4 h-4" />
-                    Live Door Mode
+                    Show door code
                   </button>
 
                   {isOfficer && (
@@ -381,7 +381,7 @@ export default function EventsModule({
                       }`}
                     >
                       <KeyRound className="w-3.5 h-3.5" />
-                      {selectedEvent.checkInLinkActive ? 'Check-in open' : 'Enable door link'}
+                      {selectedEvent.checkInLinkActive ? 'Close door code' : 'Open door code'}
                     </button>
                   )}
                 </div>
@@ -891,7 +891,7 @@ export default function EventsModule({
             <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
               <h3 className="font-display font-extrabold text-base text-slate-900 flex items-center gap-2">
                 <Calendar className="w-5 h-5 text-gold" />
-                Schedule Chapter Operation Event
+                Create event
               </h3>
               <button 
                 onClick={() => onCreateOpenChange(false)}
@@ -1199,11 +1199,11 @@ export default function EventsModule({
         </Modal>
       )}
 
-      {/* MODAL: Live Door Mode & QR Code View */}
+      {/* MODAL: Door code & QR Code View */}
       {showLiveQRModal && selectedEvent && (
         <Modal maxWidth="max-w-sm" className="text-center space-y-4" overlayClassName="bg-slate-900/70">
             <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-              <span className="text-xs font-bold text-slate-500">Live Door Mode</span>
+              <span className="text-xs font-bold text-slate-500">Door code</span>
               <button onClick={() => setShowLiveQRModal(false)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
             </div>
 
@@ -1220,20 +1220,20 @@ export default function EventsModule({
               <span className="text-xs text-slate-500">QR rendering is demo art — read out the code below</span>
             </div>
 
-            {/* Live door code (backend check-in link) */}
+            {/* Door code (backend check-in link) */}
             {selectedEvent.checkInToken ? (
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1">
-                <span className="text-xs text-amber-800 font-bold">Live Door Code</span>
+                <span className="text-xs text-amber-800 font-bold">Door code</span>
                 <div className="text-2xl font-mono font-extrabold tracking-widest text-slate-900">
                   {selectedEvent.checkInToken}
                 </div>
                 <p className="text-xs text-amber-800">
-                  Brothers enter it under Attendance &rarr; Door Check-In. Expires shortly.
+                  Members enter it on Home or under Attendance &rarr; Door code. Expires shortly.
                 </p>
               </div>
             ) : (
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500">
-                No door link is open. Use <strong>Enable Door Link</strong> on the event to open one.
+                No door code is open. Use <strong>Open door code</strong> on the event.
               </div>
             )}
 
@@ -1241,7 +1241,7 @@ export default function EventsModule({
               onClick={() => setShowLiveQRModal(false)}
               className="w-full bg-navy text-white font-bold py-2.5 rounded-lg text-xs"
             >
-              Close Door View
+              Close
             </button>
         </Modal>
       )}

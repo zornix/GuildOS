@@ -20,7 +20,7 @@ test('All keeps every event; a type keeps only that type', () => {
   assert.deepEqual(filterEventsByType(list, 'Brotherhood'), []);
 });
 
-test('liveDoorEvent is the earliest upcoming event with an open door link', () => {
+test('liveDoorEvent is the earliest upcoming event with an open door code', () => {
   const list = [
     ev({ id: 'past', date: '2026-09-01', checkInLinkActive: true }),
     ev({ id: 'later', date: '2026-09-12', checkInLinkActive: true }),

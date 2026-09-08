@@ -11,7 +11,7 @@ export function filterEventsByType(events: ChapterEvent[], type: string): Chapte
 }
 
 /** The event a member can check into right now: earliest upcoming event whose
- *  door link is open. `today` is YYYY-MM-DD. */
+ *  door code is open. `today` is YYYY-MM-DD. */
 export function liveDoorEvent(events: ChapterEvent[], today: string): ChapterEvent | undefined {
   return events
     .filter(e => e.checkInLinkActive && e.date >= today)

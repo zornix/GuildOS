@@ -147,7 +147,7 @@ export function useAppData() {
             })
           ]);
 
-        // Security rosters, organizer/supervisor names and the door link are
+        // Security rosters, organizer/supervisor names and the door code are
         // all per event, so only upcoming events get the extra requests; a
         // failing one just leaves that event's row with the list data.
         const adaptedEvents = adaptEvents(eventRows);
