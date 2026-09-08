@@ -1,4 +1,5 @@
 import type { MemberTreasuryDashboardDto } from '../api';
+import { formatMoney } from '../formatters';
 
 /** What the member owes right now. This is the number Home and the pay modal
  *  show as "Balance owed". It is NOT the standing-derived unpaid-fines number
@@ -16,4 +17,15 @@ export function adaptMemberBalance(dto: MemberTreasuryDashboardDto): MemberBalan
     openInvoiceCount: invoices.length,
     overdueInvoiceCount: invoices.filter(i => i.overdue).length
   };
+}
+
+/** The one-line status Home shows. Empty string while the balance is unknown
+ *  so the banner can render nothing rather than a fake $0. */
+export function balanceStatusLine(balance: MemberBalance | null): string {
+  if (!balance) return '';
+  if (balance.outstandingCents <= 0 && balance.openInvoiceCount === 0) return 'No balance owed';
+  const n = balance.openInvoiceCount;
+  const invoices = `${n} open invoice${n === 1 ? '' : 's'}`;
+  const overdue = balance.overdueInvoiceCount > 0 ? ` (${balance.overdueInvoiceCount} overdue)` : '';
+  return `Balance owed ${formatMoney(balance.outstandingCents)} · ${invoices}${overdue}`;
 }
