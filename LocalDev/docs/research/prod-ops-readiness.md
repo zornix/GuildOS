@@ -13,12 +13,125 @@ Supabase docs pages carry no "last updated" stamp, so those are "as served on
 2026-09-08" and nothing more. Claims about this repository cite a file and are
 checkable from the tree.
 
-**The headline, if you read nothing else:** two of the four things blocking a
-real pilot are paid plans, not code — Vercel Pro ($20/mo, because Hobby forbids
+> **Update, same day, after the plan facts came back from the maintainer:**
+> the Vercel project is **already on Pro**, and the plan is to run the pilot on
+> the **existing Free demo Supabase project** rather than a separate prod one.
+> That is a legitimate choice for a closed pilot, but it moves the risk rather
+> than removing it — see § 0 below, which supersedes parts of the checklist.
+> Sections 1–4 stay as written: they are what you need the day prod becomes its
+> own project.
+
+**The headline as originally written:** two of the four things blocking a real
+pilot are paid plans, not code — Vercel Pro ($20/mo, because Hobby forbids
 commercial use *and* caps cron at once per day, while `vercel.json` schedules
 one every 5 minutes) and Supabase Pro ($25/mo, because the Free plan has **no
-backups at all** and pauses after a week of inactivity). Roughly **$45/month**
-total. PITR is a further ~$105/mo and is not worth it for a 2–5 chapter pilot.
+backups at all** and pauses after a week of inactivity). Vercel Pro is settled.
+Supabase Pro is the open question, and § 0 is the honest cost of saying no.
+
+---
+
+## 0. If the demo project *is* production
+
+Three consequences, in order of how much they should worry you.
+
+### 0.1 Every fail-closed write guard is now pointed at real data
+
+`scripts/db_guard.py` separates exactly two things: the demo project and
+everything else. If the demo project holds pilot chapters, that separation stops
+meaning anything, and three commands that are currently safe become writes
+against real data:
+
+- **`python3 -m pytest` permanently pollutes the ledger.** ADR-0002 states the
+  reason the guard exists: "pytest refuses to run against a URL containing the
+  prod project ref — `big_ledger`/`audit_logs` are append-only, so test garbage
+  in prod would be permanent." `tests/treasury/conftest.py` says the same in its
+  own docstring: the append-only tables "accumulate and cannot be truncated".
+  The per-test `chapter_id` fixture keeps *tenant* tables tidy, but the two
+  DELETE-blocked audit tables grow forever, in whatever database the suite runs
+  against. With demo = prod, `require_demo` waves the test suite straight
+  through. Nothing can undo it afterwards; the triggers block `DELETE`.
+- **`npm run dev` silently migrates prod.** The dev runner auto-applies pending
+  migrations to `DATABASE_URL` on every start. Runbook § 1 exists to make
+  production schema changes deliberate, human-triggered, and ahead of the code
+  that needs them. That discipline evaporates when a developer starting the
+  stack applies migrations to the pilot's database as a side effect.
+- **`npm run seed` deletes the demo chapter.** Less bad than it sounds — the
+  deletes in `scripts/seed.py` (lines 181–198) are all scoped to the fixed demo
+  `CHAPTER_ID` and its member/event ids, so a pilot chapter with its own id is
+  untouched. It is only a hazard if a pilot chapter ever reuses that id.
+
+The lazy mitigation, in order of preference:
+
+1. **Point local dev at a second Supabase project** and let the current demo ref
+   become the pilot's. Free allows 2 active projects, so this costs $0. Then
+   `db_guard` means something again — swap `DEMO_PROJECT_REF` to the new dev
+   project's ref and the pilot database becomes `unknown`, which `require_demo`
+   already refuses.
+2. If you will not do that, **at minimum stop running `pytest` and `npm run dev`
+   against that URL once a real chapter exists in it.** That is a discipline, not
+   a guard, and disciplines fail — but it is honest to say so rather than pretend
+   the checked-in guards still cover you.
+
+### 0.2 `PROD_PROJECT_REFS` is moot for now — leave it empty
+
+Do **not** paste the demo ref into `PROD_PROJECT_REFS`. Prod is checked before
+demo in `classify_url`, so the demo project would classify as `prod` and
+`require_demo` would start refusing it — breaking pytest, seed and migrate
+outright. That is checklist item 3 of the original note inverted.
+
+While one project serves both roles, `migrate:prod` and
+`provision_chapter.py --prod` stay unusable — and you do not need them, because
+`npm run migrate` and plain `provision_chapter.py` now reach the same database.
+The `PROD_DATABASE_URL` secret and the migrate-prod workflow stay dormant until
+prod becomes a separate project. Fill the ref then, not now.
+
+### 0.3 No backups at all, and the project will pause
+
+These are the two Free-plan facts that do not care how closed the pilot is:
+
+- **Zero backups.** Free is excluded from daily backups and cannot download
+  them. Supabase's own advice to Free users is to run `supabase db dump`
+  yourself and keep off-site copies. With `big_ledger` and `audit_logs`
+  append-only, a corruption event has no other out. **A manual dump before every
+  risky migration, plus a scheduled one, stops being good practice and becomes
+  the only backup that exists.** See § 1 — and note the runbook's dump command
+  is pointed at the wrong port today, so it likely does not work.
+- **The project pauses after ~1 week of inactivity**, and the app goes down until
+  someone restores it from the dashboard. A pilot chapter in a quiet week between
+  events can trigger this. Nothing notifies you.
+
+Supabase Pro ($25/mo) removes both. If that is not happening yet, the two
+compensating actions are a real dump habit and an uptime check (§ 0.4).
+
+### 0.4 So why Sentry? Honest answer: mostly you don't, yet — but take the uptime monitor
+
+Fair challenge. Splitting it:
+
+**Error reporting: genuinely optional for a closed pilot.** You know all 2–5
+officers and they will text you when something breaks. The one real argument is
+retention — Vercel keeps runtime logs for **1 day on Pro**. An officer hits a 500
+on Saturday, mentions it Tuesday, and the traceback is gone. `SENTRY_DSN` is one
+environment variable against code that is already written and already shipping
+in `requirements.txt`, and the free tier is $0, so the cost of taking it is about
+five minutes. But "the code is already there" is not the same as "you need it",
+and I would not upgrade any plan or write any frontend code for it now.
+
+**Uptime monitoring: worth doing, and it is not really about Sentry.** This is
+the part that earns its place *because* prod is on Supabase Free. The project
+pauses after a week of inactivity, and `GET /api/health` is a real database ping
+(`api/health_checks.py`), not a static 200 — so a monitor on it is the only thing
+that will tell you the pilot's database went to sleep, or that the pooler ran out
+of connections. Sentry's free plan includes one uptime monitor, which is why it
+came up; UptimeRobot's free tier does the same job and the runbook § 7 already
+suggests either. Pick whichever you will actually configure.
+
+**Skip for now:** the frontend Sentry wiring (§ 3), source maps, and PITR. None
+of them pay for themselves at pilot scale.
+
+Note the outbox drain cron is currently low-stakes: `MESSAGE_DELIVERY_MODE` stays
+`dry_run` until Twilio's 10DLC registration clears, so a missed run marks rows
+`simulated` late and sends nothing. Revisit the cron monitor when the mode flips
+to `twilio` — that is when a silently skipped run means a member never got told.
 
 ---
 
@@ -650,44 +763,47 @@ Also worth enabling from Vercel's checklist: **Deployment Protection on previews
 
 ## Checklist of human actions
 
-Ordered so that nothing later depends on a decision not yet made. Items 1–4 are
-required before real users; 5–8 are cheap and worth doing in the same sitting;
-9–10 are deferrals recorded on purpose.
+Revised for the actual plan: Vercel **Pro** (settled), Supabase **Free demo
+project doubling as prod**, Twilio later. Items 1–3 are the ones that matter;
+4–5 are five-minute wins; 6–8 are deliberate deferrals.
 
-1. **Confirm the Vercel plan on the `guild-os` project.** Hobby forbids
-   commercial use and rejects the `*/5 * * * *` cron at deploy time. If it is
-   Hobby, upgrade to Pro ($20/mo) — the outbox drain is not running today.
-2. **Upgrade the prod Supabase project to Pro ($25/mo).** Free has no backups and
-   pauses after a week of inactivity. This buys 7-day daily backups. Skip the
-   PITR add-on for now (~$105/mo more, and it forces a Small compute upgrade).
-3. **Fill `PROD_PROJECT_REFS` in `LocalDev/scripts/db_guard.py`** with the prod
-   Reference ID, and set the `PROD_DATABASE_URL` repository secret. Then run
-   `python3 -m pytest` — the demo suite passing is the proof you did not paste
-   the demo ref. Verified: filling the ref does not break any test.
-4. **Verify the Vercel Production `DATABASE_URL` actually points at prod**, by
-   comparing its `postgres.<ref>` username to the ref from step 3. Nothing in the
-   code checks this, and a demo URL in prod would boot silently.
-5. **Fix the backup command in `ops-runbook.md` § 2** to use a **session-mode**
-   URL (pooler host, port **5432**), not the transaction-mode `PROD_DATABASE_URL`
-   (6543). `pg_dump` does not work through transaction mode. Then run one dump
-   and one restore drill, and fill in the two `_TBD_` lines in that section.
-6. **Create the Sentry org** (choose **US** region — irreversible), then set
-   `SENTRY_DSN` in Vercel Production. The backend needs nothing else. Add
-   `release` from `VERCEL_GIT_COMMIT_SHA` and one `flush_async()` in the
-   unhandled-exception handler while you are there.
-7. **Point Sentry's free uptime monitor at `GET /api/health`** and its free cron
-   monitor at the outbox drain. That is the whole of `ops-runbook.md` § 7's
-   monitoring section, for $0, and the cron monitor is the only thing that can
-   tell you a best-effort Vercel cron silently didn't run.
-8. **Check the Vercel function region matches the Supabase project region.**
-   Vercel defaults to `iad1`; a mismatch taxes every single query.
-9. **Deferred on purpose: PITR.** Revisit when chapters are paying, or when the
-   database approaches 4 GB (Supabase's own trigger). Until then a 24-hour RPO
-   plus a manual dump before every risky migration is the trade we are making.
-10. **Deferred on purpose: greekos frontend Sentry and source maps.** Add
-    `@sentry/react` when the greekos deploy lands (which itself needs a
-    `vercel.json` change — it currently builds `fratos`).
-
-Sentry's free plan allows **exactly one user**. If a second person needs to
-receive alerts, that is Team at $26/mo — a billing decision, not an engineering
-one.
+1. **Split dev off the pilot database.** Create a second Free Supabase project
+   for local dev and point `LocalDev/.env` at it, then move `DEMO_PROJECT_REF`
+   in `scripts/db_guard.py` to the new ref. $0 (Free allows 2 projects), and it
+   restores the guard that stops `pytest` writing permanent garbage into
+   `big_ledger`/`audit_logs` and `npm run dev` auto-migrating the pilot's schema.
+   If you skip this, the compensating rule is: **stop running `pytest` and
+   `npm run dev` against that URL once a real chapter exists in it.**
+2. **Start actually taking dumps.** On Free there is no other backup, and the
+   append-only ledger cannot be repaired any other way. First fix the command in
+   `ops-runbook.md` § 2 — it uses the transaction-mode pooler (6543), through
+   which `pg_dump` does not work; it needs the **session** pooler, port **5432**.
+   Then run one dump and one restore, and fill in the `_TBD_` lines there.
+3. **Decide about the Supabase Free pause.** The project sleeps after ~1 week of
+   inactivity and the app goes down until someone wakes it from the dashboard.
+   Either accept it and put a monitor on `GET /api/health` so you find out
+   (UptimeRobot free, or Sentry's free uptime monitor — the runbook already
+   suggests both), or upgrade to Pro at $25/mo, which also buys 7-day backups.
+4. **Leave `PROD_PROJECT_REFS` empty.** While one project serves both roles,
+   pasting the demo ref in would make `require_demo` refuse the demo database and
+   break dev outright. `migrate:prod`, `provision_chapter.py --prod` and the
+   `PROD_DATABASE_URL` secret stay dormant; `npm run migrate` reaches the same
+   database anyway. Fill the ref (and see § 2 for how) when prod becomes its own
+   project.
+5. **Check the Vercel function region matches the Supabase project region.**
+   Vercel defaults to `iad1`; a mismatch taxes every single query, for free.
+6. **Optional, ~5 minutes: set `SENTRY_DSN` in Vercel Production.** The backend
+   code is already written and `sentry-sdk` already ships. It buys 30-day error
+   retention against Vercel's 1-day log window. Not required for a closed pilot
+   where officers will text you — take it or leave it. If you take it, pick the
+   **US** data region (irreversible) and add `release` from
+   `VERCEL_GIT_COMMIT_SHA`.
+7. **Deferred: PITR, and the greekos frontend Sentry + source maps.** PITR is
+   ~$105/mo on top of Pro and forces a compute upgrade; revisit at 4 GB or when
+   chapters pay. Frontend Sentry waits for the greekos deploy, which itself needs
+   a `vercel.json` change — it currently builds `fratos`.
+8. **Deferred until Twilio goes live: the cron monitor.** `MESSAGE_DELIVERY_MODE`
+   is `dry_run` until 10DLC clears, so a skipped cron run costs nothing today.
+   When the mode flips to `twilio`, a silently missed run means a member never
+   got told — that is when the monitor earns its place, along with an alert on
+   non-zero `failed` counts from `drain_outbox`.
