@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   UserCheck,
   Check,
@@ -57,8 +57,10 @@ export default function AttendanceModule({
   const selectedEvent = safeEvents.find(e => e.id === selectedEventId) || safeEvents[0];
   const currentMember = safeMembers.find(m => m.name === currentMemberName);
 
-  // Local attendance state for the roll call sheet
+  // Local attendance state for the roll call sheet. Marks belong to one event,
+  // so switching the selector starts a fresh sheet rather than carrying them over.
   const [attendanceRecords, setAttendanceRecords] = useState<Record<string, RollStatus>>({});
+  useEffect(() => setAttendanceRecords({}), [selectedEventId]);
 
   const handleStatusChange = (memberId: string, status: RollStatus) => {
     setAttendanceRecords(prev => ({

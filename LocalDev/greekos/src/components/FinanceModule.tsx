@@ -703,7 +703,7 @@ export default function FinanceModule({
       {pendingFinePaid && (
         <ConfirmDialog
           title="Mark fine paid?"
-          body={<p><strong>{pendingFinePaid.memberName}</strong>'s {formatMoney(pendingFinePaid.amountCents)} fine for "{pendingFinePaid.reason}" will show as paid.</p>}
+          body={<p><strong>{pendingFinePaid.memberName}</strong>'s {formatMoney(pendingFinePaid.amountCents || pendingFinePaid.amount * 100)} fine for "{pendingFinePaid.reason}" will show as paid.</p>}
           confirmLabel="Mark paid"
           onCancel={() => setPendingFinePaid(null)}
           onConfirm={() => { onApproveFinePayment(pendingFinePaid.id); setPendingFinePaid(null); }}
