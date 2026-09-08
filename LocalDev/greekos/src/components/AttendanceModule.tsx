@@ -11,6 +11,7 @@ import { ChapterEvent, Member, Excuse } from '../types';
 import Modal from './ui/Modal';
 import Card from './ui/Card';
 import { RollStatus, markRemainingPresent, rollCallSummary } from '../lib/rollCall';
+import DoorCodeField from './home/DoorCodeField';
 
 interface AttendanceModuleProps {
   events: ChapterEvent[];
@@ -18,6 +19,8 @@ interface AttendanceModuleProps {
   excuses: Excuse[];
   isOfficer: boolean;
   currentMemberName: string;
+  /** Officers land on roll call; members land on the door code. */
+  initialTab: 'roster_check' | 'excuses' | 'self_pin';
   onRecordAttendance: (eventId: string, records: { memberId: string; status: 'Present' | 'Absent' | 'Excused' | 'Late' }[]) => void;
   onSubmitExcuse: (excuse: Omit<Excuse, 'id' | 'status' | 'submittedDate'>) => void;
   onReviewExcuse: (excuseId: string, status: 'Approved' | 'Rejected', reviewedBy: string) => void;
@@ -31,6 +34,7 @@ export default function AttendanceModule({
   excuses,
   isOfficer,
   currentMemberName,
+  initialTab,
   onRecordAttendance,
   onSubmitExcuse,
   onReviewExcuse,
@@ -41,13 +45,8 @@ export default function AttendanceModule({
   const safeExcuses = excuses || [];
 
   const [selectedEventId, setSelectedEventId] = useState<string>(safeEvents[0]?.id || '');
-  const [activeTab, setActiveTab] = useState<'roster_check' | 'excuses' | 'self_pin'>('roster_check');
+  const [activeTab, setActiveTab] = useState<'roster_check' | 'excuses' | 'self_pin'>(initialTab);
   const [showExcuseModal, setShowExcuseModal] = useState(false);
-
-  // Door-code check-in state
-  const [enteredCode, setEnteredCode] = useState('');
-  const [codeFeedback, setCodeFeedback] = useState<{ success?: boolean; msg?: string } | null>(null);
-  const [checkingIn, setCheckingIn] = useState(false);
 
   // Excuse Form State
   const [excuseEventId, setExcuseEventId] = useState(safeEvents[0]?.id || '');
@@ -94,15 +93,6 @@ export default function AttendanceModule({
 
     setExcuseReason('');
     setShowExcuseModal(false);
-  };
-
-  const handleCodeCheckInSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCheckingIn(true);
-    const result = await onSelfCheckIn(enteredCode);
-    setCheckingIn(false);
-    setCodeFeedback({ success: result.ok, msg: result.message });
-    if (result.ok) setEnteredCode('');
   };
 
   return (
@@ -155,7 +145,7 @@ export default function AttendanceModule({
           }`}
         >
           <KeyRound className="w-4 h-4" />
-          Live Door Check-In
+          Door code
         </button>
 
         <button
@@ -285,7 +275,7 @@ export default function AttendanceModule({
         </Card>
       )}
 
-      {/* TAB 2: Live Door Check-In */}
+      {/* TAB 2: Door code */}
       {activeTab === 'self_pin' && (
         <Card className="p-6 max-w-lg mx-auto text-center space-y-6">
           <div className="space-y-1">
@@ -293,46 +283,14 @@ export default function AttendanceModule({
               <KeyRound className="w-6 h-6" />
             </div>
             <h3 className="font-display font-extrabold text-slate-900 text-lg">
-              Live Door Check-In
+              Door code
             </h3>
             <p className="text-xs text-slate-500">
-              Enter the door code an officer is showing in Live Door Mode. The code decides
-              which event you are checked into, so no event picker here.
+              Enter the door code an officer is showing. The code decides which event you are checked into.
             </p>
           </div>
 
-          <form onSubmit={handleCodeCheckInSubmit} className="space-y-4">
-            <div>
-              <label className="text-xs font-bold text-slate-700 block mb-2">
-                Door code
-              </label>
-              <input
-                type="text"
-                maxLength={6}
-                value={enteredCode}
-                onChange={e => setEnteredCode(e.target.value)}
-                placeholder="A7x9Kp"
-                className="w-48 mx-auto text-center text-3xl font-mono font-black tracking-widest py-3 border-2 border-slate-300 rounded-xl focus:outline-none focus:border-gold"
-                required
-              />
-            </div>
-
-            {codeFeedback && (
-              <div className={`p-3 rounded-lg text-xs font-semibold ${
-                codeFeedback.success ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'
-              }`}>
-                {codeFeedback.msg}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={checkingIn || !enteredCode.trim()}
-              className="w-full bg-navy text-gold hover:bg-slate-800 font-bold py-3 min-h-11 rounded-lg text-xs transition-all cursor-pointer disabled:opacity-50"
-            >
-              {checkingIn ? 'Checking in…' : 'Verify Attendance Check-In'}
-            </button>
-          </form>
+          <DoorCodeField onSelfCheckIn={onSelfCheckIn} />
         </Card>
       )}
 

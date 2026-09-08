@@ -137,6 +137,7 @@ export default function App() {
           excuses={attendance.excuses}
           isOfficer={isOfficer}
           currentMemberName={currentMemberName}
+          initialTab={isOfficer ? 'roster_check' : 'self_pin'}
           onRecordAttendance={attendance.handleRecordAttendance}
           onSubmitExcuse={attendance.handleSubmitExcuse}
           onReviewExcuse={attendance.handleReviewExcuse}
