@@ -13,6 +13,8 @@ interface AppShellProps {
   setIsOfficer: (val: boolean) => void;
   currentMemberName: string;
   setCurrentMemberName: (name: string) => void;
+  sessionName: string;
+  sessionIsOfficer: boolean;
   members: Member[];
   toastMessage: string | null;
   onDismissToast: () => void;
@@ -30,6 +32,8 @@ export default function AppShell({
   setIsOfficer,
   currentMemberName,
   setCurrentMemberName,
+  sessionName,
+  sessionIsOfficer,
   members,
   toastMessage,
   onDismissToast,
@@ -114,6 +118,13 @@ export default function AppShell({
               <span className="text-xs font-bold text-slate-900 block leading-tight">{currentMemberName}</span>
               <span className="text-xs text-slate-600 block">{isOfficer ? 'Officer' : 'Member'}</span>
             </div>
+            {/* No session identity yet (still loading, or backend down) means there is
+                nothing to be "viewing as", so the chip waits for sessionName. */}
+            {sessionName !== '' && (currentMemberName !== sessionName || isOfficer !== sessionIsOfficer) && (
+              <span className="text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.5 rounded">
+                Viewing as
+              </span>
+            )}
           </div>
         </header>
 

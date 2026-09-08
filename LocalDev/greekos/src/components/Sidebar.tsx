@@ -115,6 +115,9 @@ export default function Sidebar({
 
         {switcherOpen && (
           <div className="px-3.5 pb-3.5 space-y-2.5">
+            <p className="text-xs font-bold text-amber-300 bg-amber-900/40 border border-amber-700/60 rounded-lg px-2.5 py-1.5">
+              Demo: view as — changes only what this screen shows
+            </p>
             <div className="grid grid-cols-2 gap-1 p-0.5 bg-[#09101d] rounded-lg border border-[#1e2d42]">
               <button
                 onClick={() => setIsOfficer(true)}
@@ -142,7 +145,7 @@ export default function Sidebar({
 
             <div>
               <label htmlFor="view-as-member" className="text-xs text-slate-400 block mb-1">
-                View as
+                Demo: view as member
               </label>
               <select
                 id="view-as-member"
