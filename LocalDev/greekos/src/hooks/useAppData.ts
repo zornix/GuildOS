@@ -3,6 +3,7 @@ import { INITIAL_ANNOUNCEMENTS, INITIAL_RULES } from '../data/mockData';
 import { Announcement, ChapterEvent, ChapterRule, Member, SecurityAssignment } from '../types';
 import { api, ensureLogin, optionalOfficerCall, EventDto, TaskDto } from '../api';
 import { isoDay } from '../formatters';
+import { MemberBalance, adaptMemberBalance } from '../lib/balance';
 import { isOfficerView } from '../lib/session';
 import {
   adaptAnnouncements,
@@ -37,6 +38,7 @@ export function useAppData() {
   // The real session (from /me + /rbac/me/permissions) …
   const [permissions, setPermissions] = useState<Set<string>>(new Set());
   const [sessionName, setSessionName] = useState<string>('');
+  const [myBalance, setMyBalance] = useState<MemberBalance | null>(null);
   const sessionIsOfficer = isOfficerView(permissions);
   // … and the *view*, which the Demo "view as" switcher may override. Starts
   // as officer so the backend-down mock data still shows the full prototype.
@@ -121,7 +123,7 @@ export function useAppData() {
         const permissionSet = new Set(perms.permissions);
         const rosterRows = adaptMembers(memberRows, standingRows, scoreRows);
 
-        const [eventRows, excuseRows, fineRows, treasury, taskRows, annRows, recruitRows, initRows] =
+        const [eventRows, excuseRows, fineRows, treasury, taskRows, annRows, recruitRows, initRows, myBalanceRow] =
           await Promise.all([
             api.getEvents(),
             api.getExcuses(),
@@ -130,7 +132,11 @@ export function useAppData() {
             api.getTasks(),
             api.getAnnouncements(),
             optionalOfficerCall(api.getRecruits(), []),
-            api.getInitiatives()
+            api.getInitiatives(),
+            api.getMemberTreasuryDashboard(me.id).then(adaptMemberBalance).catch(err => {
+              console.error('Member balance load failed', err);
+              return null;
+            })
           ]);
 
         // Security rosters, organizer/supervisor names and the door link are
@@ -164,6 +170,7 @@ export function useAppData() {
         setMembers(rosterRows);
         setPermissions(permissionSet);
         setSessionName(me.name);
+        setMyBalance(myBalanceRow);
         setCurrentMemberName(me.name);
         setIsOfficer(isOfficerView(permissionSet));
         events.setEvents(adaptedEvents.map(e => ({
@@ -271,6 +278,7 @@ export function useAppData() {
     sessionIsOfficer,
     sessionName,
     contribution,
+    myBalance,
     setIsOfficer,
     currentMemberName,
     setCurrentMemberName,
