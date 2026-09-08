@@ -1,5 +1,4 @@
 import React, { useId, useState } from 'react';
-import { Receipt } from 'lucide-react';
 import type { Member } from '../../types';
 import Modal from '../ui/Modal';
 import { formatMoney } from '../../formatters';
@@ -57,14 +56,7 @@ export default function AddTransactionModal({ members, balanceCentsOf, onSubmit,
   };
 
   return (
-    <Modal maxWidth="max-w-lg">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="font-display font-bold text-base text-slate-900 flex items-center gap-2">
-          <Receipt className="w-5 h-5 text-gold" />
-          Add transaction
-        </h3>
-        <button type="button" onClick={onClose} aria-label="Close" className="text-slate-500 hover:text-slate-800 font-bold cursor-pointer">✕</button>
-      </div>
+    <Modal maxWidth="max-w-lg" title="Add transaction" onClose={onClose}>
 
       <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
         Demo: this is recorded in your browser only and resets on reload.

@@ -373,14 +373,7 @@ export default function InitiativesModule({
 
       {/* MODAL: Create Initiative */}
       {showCreateModal && (
-        <Modal maxWidth="max-w-lg">
-            <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
-              <h3 className="font-display font-extrabold text-base text-slate-900 flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-gold" />
-                Launch Chair-Led Initiative
-              </h3>
-              <button onClick={() => setShowCreateModal(false)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
-            </div>
+        <Modal maxWidth="max-w-lg" title="Launch Chair-Led Initiative" onClose={() => setShowCreateModal(false)}>
 
             <form onSubmit={handleCreateSubmit} className="space-y-4">
               <div>
@@ -470,14 +463,7 @@ export default function InitiativesModule({
 
       {/* MODAL: Add Job to Initiative */}
       {showAddJobModal && selectedInit && (
-        <Modal>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-display font-bold text-base text-slate-900 flex items-center gap-2">
-                <Plus className="w-5 h-5 text-gold" />
-                Add job to initiative
-              </h3>
-              <button onClick={() => setShowAddJobModal(false)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
-            </div>
+        <Modal title="Add job to initiative" onClose={() => setShowAddJobModal(false)}>
 
             <form onSubmit={handleAddJobSubmit} className="space-y-4">
               <div>

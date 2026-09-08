@@ -216,14 +216,7 @@ export default function RecruitmentModule({
 
       {/* MODAL: Add PNM */}
       {showAddModal && (
-        <Modal>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-display font-bold text-base text-slate-900 flex items-center gap-2">
-                <UserPlus className="w-5 h-5 text-gold" />
-                Log Potential New Member (PNM)
-              </h3>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
-            </div>
+        <Modal title="Log Potential New Member (PNM)" onClose={() => setShowAddModal(false)}>
 
             <form onSubmit={handleAddSubmit} className="space-y-4">
               <div>

@@ -14,8 +14,7 @@ interface ConfirmDialogProps {
 /** One question, two buttons. Cancel is always on the left and never styled as primary. */
 export default function ConfirmDialog({ title, body, confirmLabel, tone = 'default', onConfirm, onCancel }: ConfirmDialogProps) {
   return (
-    <Modal maxWidth="max-w-sm">
-      <h3 className="font-display font-bold text-base text-slate-900 mb-2">{title}</h3>
+    <Modal maxWidth="max-w-sm" title={title} onClose={onCancel}>
       <div className="text-xs text-slate-700 mb-5 space-y-1">{body}</div>
       <div className="flex gap-2">
         <button type="button" onClick={onCancel} autoFocus

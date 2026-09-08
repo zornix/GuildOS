@@ -548,14 +548,7 @@ export default function FinanceModule({
 
       {/* MODAL: Pay Dues (Member) */}
       {showPayModal && currentMember && (
-        <Modal>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-display font-bold text-base text-slate-900 flex items-center gap-2">
-                <CreditCard className="w-5 h-5 text-gold" />
-                Pay balance
-              </h3>
-              <button onClick={() => setShowPayModal(false)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
-            </div>
+        <Modal title="Pay balance" onClose={() => setShowPayModal(false)}>
 
             <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs mb-4">
               <div className="text-amber-900 font-bold">Balance owed</div>
@@ -605,14 +598,7 @@ export default function FinanceModule({
 
       {/* MODAL: Add adjustment */}
       {showCorrectionModal && (
-        <Modal>
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="font-display font-bold text-base text-slate-900 flex items-center gap-2">
-                <RotateCcw className="w-5 h-5 text-purple-600" />
-                Add adjustment
-              </h3>
-              <button onClick={() => setShowCorrectionModal(null)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
-            </div>
+        <Modal title="Add adjustment" onClose={() => setShowCorrectionModal(null)}>
 
             <p className="text-xs text-slate-600 mb-3">
               Creating linked correction for Sequence #{showCorrectionModal.sequence} ({showCorrectionModal.description}).

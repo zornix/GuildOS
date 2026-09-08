@@ -887,20 +887,7 @@ export default function EventsModule({
 
       {/* MODAL: Create New Event */}
       {createOpen && (
-        <Modal maxWidth="max-w-lg">
-            <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
-              <h3 className="font-display font-extrabold text-base text-slate-900 flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-gold" />
-                Create event
-              </h3>
-              <button 
-                onClick={() => onCreateOpenChange(false)}
-                className="text-slate-500 hover:text-slate-600 font-bold"
-              >
-                ✕
-              </button>
-            </div>
-            
+        <Modal maxWidth="max-w-lg" title="Create event" onClose={() => onCreateOpenChange(false)}>
             <form onSubmit={handleCreateEvent} className="space-y-4">
               <div>
                 <label className="text-xs font-semibold text-slate-700 block mb-1">Event Title</label>
@@ -1024,15 +1011,7 @@ export default function EventsModule({
 
       {/* MODAL: Add / Edit Job on Event */}
       {(showAddJobModal || editJobId) && selectedEvent && (
-        <Modal>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-display font-bold text-base text-slate-900 flex items-center gap-2">
-                {editJobId ? <Pencil className="w-5 h-5 text-gold" /> : <Plus className="w-5 h-5 text-gold" />}
-                {editJobId ? 'Edit Claimable Job / Shift' : 'Add Claimable Job / Shift'}
-              </h3>
-              <button onClick={closeJobForm} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
-            </div>
-            
+        <Modal title={editJobId ? 'Edit Claimable Job / Shift' : 'Add Claimable Job / Shift'} onClose={closeJobForm}>
             <form onSubmit={handleAddJobSubmit} className="space-y-4">
               <div>
                 <label className="text-xs font-semibold text-slate-700 block mb-1">Job Title</label>
@@ -1083,11 +1062,7 @@ export default function EventsModule({
 
       {/* MODAL: Reject Job with Reason */}
       {showRejectModal && (
-        <Modal>
-            <h3 className="font-display font-extrabold text-base text-red-900 flex items-center gap-2 mb-2">
-              <XCircle className="w-5 h-5 text-red-600" />
-              Reject Job Completion
-            </h3>
+        <Modal title="Reject Job Completion" onClose={() => setShowRejectModal(null)}>
             <p className="text-xs text-slate-600 mb-4">
               Work is never silently undone. State the exact reason why this job was rejected so claimants receive the notice in their SMS / push outbox.
             </p>
@@ -1121,14 +1096,7 @@ export default function EventsModule({
 
       {/* MODAL: Assign Security Member from Stats Table */}
       {showSecurityAssignModal && selectedEvent && (
-        <Modal maxWidth="max-w-lg">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-display font-bold text-base text-slate-900 flex items-center gap-2">
-                <Shield className="w-5 h-5 text-blue-600" />
-                Assign Member to Security Shift
-              </h3>
-              <button onClick={() => setShowSecurityAssignModal(false)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
-            </div>
+        <Modal maxWidth="max-w-lg" title="Assign Member to Security Shift" onClose={() => setShowSecurityAssignModal(false)}>
 
             <form onSubmit={handleConfirmSecurityAssign} className="space-y-4">
               <div>
@@ -1161,11 +1129,7 @@ export default function EventsModule({
 
       {/* MODAL: Request Security Shift Swap */}
       {showSwapModal && (
-        <Modal>
-            <h3 className="font-display font-bold text-base text-slate-900 flex items-center gap-2 mb-2">
-              <ArrowLeftRight className="w-5 h-5 text-amber-600" />
-              Propose Security Shift Swap
-            </h3>
+        <Modal title="Propose Security Shift Swap" onClose={() => setShowSwapModal(null)}>
             <p className="text-xs text-slate-600 mb-4">
               Select an active brother to take your shift. The brother will be notified via outbox and can accept or decline.
             </p>
@@ -1201,12 +1165,8 @@ export default function EventsModule({
 
       {/* MODAL: Door code & QR Code View */}
       {showLiveQRModal && selectedEvent && (
-        <Modal maxWidth="max-w-sm" className="text-center space-y-4" overlayClassName="bg-slate-900/70">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-              <span className="text-xs font-bold text-slate-500">Door code</span>
-              <button onClick={() => setShowLiveQRModal(false)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
-            </div>
-
+        <Modal maxWidth="max-w-sm" className="text-center space-y-4" overlayClassName="bg-slate-900/70"
+          title="Door code" onClose={() => setShowLiveQRModal(false)}>
             <div className="space-y-1">
               <h3 className="font-display font-extrabold text-lg text-slate-900">{selectedEvent.title}</h3>
               <p className="text-xs text-slate-500">{selectedEvent.location} &bull; {selectedEvent.time}</p>

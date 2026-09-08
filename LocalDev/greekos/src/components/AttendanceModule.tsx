@@ -362,14 +362,7 @@ export default function AttendanceModule({
 
       {/* MODAL: Submit Excuse */}
       {showExcuseModal && (
-        <Modal>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-display font-bold text-base text-slate-900 flex items-center gap-2">
-                <FileText className="w-5 h-5 text-gold" />
-                Request an excuse
-              </h3>
-              <button onClick={() => setShowExcuseModal(false)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
-            </div>
+        <Modal title="Request an excuse" onClose={() => setShowExcuseModal(false)}>
 
             <form onSubmit={handleExcuseSubmit} className="space-y-4">
               <div>

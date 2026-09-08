@@ -187,14 +187,7 @@ export default function TasksModule({
 
       {/* MODAL: Assign Task */}
       {showAddModal && (
-        <Modal>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-display font-bold text-base text-slate-900 flex items-center gap-2">
-                <CheckSquare className="w-5 h-5 text-gold" />
-                Add job
-              </h3>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
-            </div>
+        <Modal title="Add job" onClose={() => setShowAddModal(false)}>
 
             <form onSubmit={handleAddSubmit} className="space-y-4">
               <div>
