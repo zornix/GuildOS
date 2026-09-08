@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { ChapterEvent, EventJob, Member, EventType } from '../types';
 import { hasStarted, isoDay, isWithin36Hours } from '../formatters';
+import { filterEventsByType } from '../lib/events';
 import Modal from './ui/Modal';
 import Card from './ui/Card';
 
@@ -27,6 +28,12 @@ interface EventsModuleProps {
   members: Member[];
   isOfficer: boolean;
   currentMemberName: string;
+  /** Chrome owned by useEventsChrome — the bar above this module sets them. */
+  filterType: string;
+  createOpen: boolean;
+  onCreateOpenChange: (open: boolean) => void;
+  selectedEventId: string | null;
+  onSelectEventId: (eventId: string) => void;
   /** Loads the selected event's supervisors, organizers and door link. */
   onSelectEvent: (eventId: string) => void;
   onAddEvent: (event: Omit<ChapterEvent, 'id' | 'attendanceTaken' | 'checkedInCount'>) => void;
@@ -53,6 +60,11 @@ export default function EventsModule({
   members,
   isOfficer,
   currentMemberName,
+  filterType,
+  createOpen,
+  onCreateOpenChange,
+  selectedEventId,
+  onSelectEventId,
   onSelectEvent,
   onAddEvent,
   onUpdateEvent,
@@ -72,9 +84,6 @@ export default function EventsModule({
   onRespondSecuritySwap,
   onCancelSecuritySwap
 }: EventsModuleProps) {
-  const [selectedEventId, setSelectedEventId] = useState<string>(events[0]?.id || '');
-  const [filterType, setFilterType] = useState<string>('All');
-  const [showAddForm, setShowAddForm] = useState(false);
   const [showAddJobModal, setShowAddJobModal] = useState(false);
   const [editJobId, setEditJobId] = useState<string | null>(null);
   const [showRejectModal, setShowRejectModal] = useState<{ eventId: string; jobId: string } | null>(null);
@@ -143,7 +152,7 @@ export default function EventsModule({
     setTitle('');
     setDescription('');
     setLocation('');
-    setShowAddForm(false);
+    onCreateOpenChange(false);
   };
 
   // One form serves both "add job" and "edit job" — editJobId picks the target.
@@ -221,7 +230,7 @@ export default function EventsModule({
 
   const safeEvents = events || [];
   const safeMembers = members || [];
-  const filteredEvents = safeEvents.filter(e => filterType === 'All' || e.type === filterType);
+  const filteredEvents = filterEventsByType(safeEvents, filterType);
   // Security picker order (D17): fewest prior shifts first — that's who to pick.
   const securityPickerMembers = [...safeMembers].sort(
     (a, b) => (a.priorSecurityShifts || 0) - (b.priorSecurityShifts || 0)
@@ -242,16 +251,6 @@ export default function EventsModule({
             Plan events, assign supervisors, and publish claimable jobs.
           </p>
         </div>
-
-        {isOfficer && (
-          <button
-            onClick={() => setShowAddForm(true)}
-            className="bg-gold hover:bg-[#c5a02b] text-navy font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer w-full sm:w-auto justify-center"
-          >
-            <Plus className="w-4 h-4" />
-            Create Chapter Event
-          </button>
-        )}
       </div>
 
       {/* Main Grid: Left Event List (1 col), Right Detailed Event View (2 cols) */}
@@ -259,29 +258,6 @@ export default function EventsModule({
         
         {/* Left Column: Events Directory */}
         <div className="space-y-4">
-          {/* Category Filter */}
-          <div className="bg-white rounded-xl border border-slate-200/80 p-3 shadow-xs">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-slate-700">Filter Events</span>
-              <span className="text-xs text-slate-500">{filteredEvents.length} items</span>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {['All', 'Chapter Meeting', 'Philanthropy', 'Brotherhood', 'Social', 'Pledge Education'].map(t => (
-                <button
-                  key={t}
-                  onClick={() => setFilterType(t)}
-                  className={`text-xs px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer ${
-                    filterType === t 
-                      ? 'bg-navy text-gold shadow-xs' 
-                      : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-                  }`}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Event Cards */}
           <div className="space-y-3 max-h-[75vh] overflow-y-auto pr-1">
             {filteredEvents.map(e => {
@@ -294,7 +270,7 @@ export default function EventsModule({
               return (
                 <div
                   key={e.id}
-                  onClick={() => setSelectedEventId(e.id)}
+                  onClick={() => onSelectEventId(e.id)}
                   className={`p-4 rounded-xl border transition-all cursor-pointer ${
                     isSelected 
                       ? 'bg-white border-gold shadow-md ring-2 ring-gold/20' 
@@ -910,7 +886,7 @@ export default function EventsModule({
       </div>
 
       {/* MODAL: Create New Event */}
-      {showAddForm && (
+      {createOpen && (
         <Modal maxWidth="max-w-lg">
             <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
               <h3 className="font-display font-extrabold text-base text-slate-900 flex items-center gap-2">
@@ -918,7 +894,7 @@ export default function EventsModule({
                 Schedule Chapter Operation Event
               </h3>
               <button 
-                onClick={() => setShowAddForm(false)}
+                onClick={() => onCreateOpenChange(false)}
                 className="text-slate-500 hover:text-slate-600 font-bold"
               >
                 ✕

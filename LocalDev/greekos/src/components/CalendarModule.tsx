@@ -18,6 +18,8 @@ interface CalendarModuleProps {
   announcements: Announcement[];
   currentMemberName: string;
   onVolunteerOrganizer: (eventId: string, memberName: string) => void;
+  /** Jump to the list/detail view for one event. */
+  onOpenEvent: (eventId: string) => void;
 }
 
 export default function CalendarModule({
@@ -25,7 +27,8 @@ export default function CalendarModule({
   initiatives,
   announcements,
   currentMemberName,
-  onVolunteerOrganizer
+  onVolunteerOrganizer,
+  onOpenEvent
 }: CalendarModuleProps) {
   const today = isoDay();
   const [selectedDateStr, setSelectedDateStr] = useState<string>(today);
@@ -247,6 +250,13 @@ export default function CalendarModule({
                           </div>
                           <span className="text-xs text-slate-600 font-medium">{e.type}</span>
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => onOpenEvent(e.id)}
+                          className="text-xs font-semibold text-navy hover:text-gold-muted cursor-pointer shrink-0"
+                        >
+                          Open &rarr;
+                        </button>
                       </div>
 
                       <div className="text-xs text-slate-500 space-y-0.5">
