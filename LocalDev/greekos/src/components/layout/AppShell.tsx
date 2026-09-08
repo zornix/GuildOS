@@ -9,6 +9,7 @@ interface AppShellProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   isOfficer: boolean;
+  permissions: Set<string>;
   setIsOfficer: (val: boolean) => void;
   currentMemberName: string;
   setCurrentMemberName: (name: string) => void;
@@ -24,6 +25,7 @@ export default function AppShell({
   activeTab,
   setActiveTab,
   isOfficer,
+  permissions,
   setIsOfficer,
   currentMemberName,
   setCurrentMemberName,
@@ -71,6 +73,7 @@ export default function AppShell({
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         isOfficer={isOfficer}
+        permissions={permissions}
         setIsOfficer={setIsOfficer}
         currentMemberName={currentMemberName}
         setCurrentMemberName={setCurrentMemberName}

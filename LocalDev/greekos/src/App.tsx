@@ -27,6 +27,7 @@ export default function App() {
       activeTab={activeTab}
       setActiveTab={setActiveTab}
       isOfficer={isOfficer}
+      permissions={app.permissions}
       setIsOfficer={app.setIsOfficer}
       currentMemberName={currentMemberName}
       setCurrentMemberName={app.setCurrentMemberName}

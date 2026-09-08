@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { ChevronDown, Shield, User } from 'lucide-react';
 import { MemberRole } from '../types';
 import { DEMO_NAV_ITEMS, NAV_ITEMS, NavItem } from '../config/navigation';
+import { can } from '../lib/session';
 
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   isOfficer: boolean;
+  permissions: Set<string>;
   setIsOfficer: (val: boolean) => void;
   currentMemberName: string;
   setCurrentMemberName: (name: string) => void;
@@ -20,6 +22,7 @@ export default function Sidebar({
   activeTab,
   setActiveTab,
   isOfficer,
+  permissions,
   setIsOfficer,
   currentMemberName,
   setCurrentMemberName,
@@ -81,7 +84,7 @@ export default function Sidebar({
 
       {/* Navigation items */}
       <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto">
-        {NAV_ITEMS.filter(item => isOfficer || !item.officerOnly).map(navRow)}
+        {NAV_ITEMS.filter(item => !item.permission || (isOfficer && can(permissions, item.permission))).map(navRow)}
 
         <details className="mt-3 pt-3 border-t border-[#1e2d42]">
           <summary className="px-3 py-2 text-xs text-slate-400 hover:text-slate-200 cursor-pointer">
