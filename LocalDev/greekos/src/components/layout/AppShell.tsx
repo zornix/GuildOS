@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Menu, Sparkles } from 'lucide-react';
+import { Menu, Sparkles, X } from 'lucide-react';
 import { Member } from '../../types';
 import { isDemoTab } from '../../config/navigation';
 import Sidebar from '../Sidebar';
@@ -13,8 +13,11 @@ interface AppShellProps {
   setIsOfficer: (val: boolean) => void;
   currentMemberName: string;
   setCurrentMemberName: (name: string) => void;
+  sessionName: string;
+  sessionIsOfficer: boolean;
   members: Member[];
   toastMessage: string | null;
+  onDismissToast: () => void;
   loading: boolean;
   backendDown: boolean;
   children: React.ReactNode;
@@ -29,8 +32,11 @@ export default function AppShell({
   setIsOfficer,
   currentMemberName,
   setCurrentMemberName,
+  sessionName,
+  sessionIsOfficer,
   members,
   toastMessage,
+  onDismissToast,
   loading,
   backendDown,
   children
@@ -52,13 +58,18 @@ export default function AppShell({
 
   return (
     <div className="flex min-h-screen bg-[#f8fafc] text-slate-900 font-sans antialiased">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 bg-navy text-white px-4 py-3 rounded-xl border border-gold shadow-2xl flex items-center gap-2.5 z-50 animate-in fade-in slide-in-from-bottom-5">
-          <Sparkles className="w-4 h-4 text-gold" />
-          <span className="text-xs font-semibold">{toastMessage}</span>
-        </div>
-      )}
+      {/* Toast Notification — the live region exists even when empty so it announces. */}
+      <div role="status" aria-live="polite" className="fixed bottom-6 right-6 z-50">
+        {toastMessage && (
+          <div className="bg-navy text-white pl-4 pr-2 py-3 rounded-xl border border-gold shadow-2xl flex items-center gap-2.5 animate-in fade-in slide-in-from-bottom-5">
+            <Sparkles className="w-4 h-4 text-gold shrink-0" />
+            <span className="text-xs font-semibold">{toastMessage}</span>
+            <button type="button" onClick={onDismissToast} aria-label="Dismiss notification" className="ml-2 p-1.5 rounded-md text-slate-300 hover:text-white hover:bg-slate-800 cursor-pointer">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
 
       {drawerOpen && (
         <div
@@ -107,6 +118,13 @@ export default function AppShell({
               <span className="text-xs font-bold text-slate-900 block leading-tight">{currentMemberName}</span>
               <span className="text-xs text-slate-600 block">{isOfficer ? 'Officer' : 'Member'}</span>
             </div>
+            {/* No session identity yet (still loading, or backend down) means there is
+                nothing to be "viewing as", so the chip waits for sessionName. */}
+            {sessionName !== '' && (currentMemberName !== sessionName || isOfficer !== sessionIsOfficer) && (
+              <span className="text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.5 rounded">
+                Viewing as
+              </span>
+            )}
           </div>
         </header>
 

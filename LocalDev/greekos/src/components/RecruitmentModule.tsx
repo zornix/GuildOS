@@ -10,6 +10,7 @@ import {
 import { PNM } from '../types';
 import Modal from './ui/Modal';
 import Card from './ui/Card';
+import ConfirmDialog from './ui/ConfirmDialog';
 
 interface RecruitmentModuleProps {
   pnms: PNM[];
@@ -30,6 +31,7 @@ export default function RecruitmentModule({
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [pendingBid, setPendingBid] = useState<PNM | null>(null);
 
   // Form State
   const [name, setName] = useState('');
@@ -200,10 +202,10 @@ export default function RecruitmentModule({
 
                 {isOfficer && pnm.status !== 'Bid Extended' && pnm.status !== 'Bid Accepted' && (
                   <button
-                    onClick={() => onExtendBid(pnm.id)}
+                    onClick={() => setPendingBid(pnm)}
                     className="w-full mt-2 bg-gold hover:bg-[#c5a02b] text-navy font-bold text-xs py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
                   >
-                    <Send className="w-3.5 h-3.5" /> Extend Official Chapter Bid
+                    <Send className="w-3.5 h-3.5" /> Extend bid
                   </button>
                 )}
               </div>
@@ -329,6 +331,16 @@ export default function RecruitmentModule({
               </button>
             </form>
         </Modal>
+      )}
+
+      {pendingBid && (
+        <ConfirmDialog
+          title="Extend a bid?"
+          body={<p><strong>{pendingBid.name}</strong> moves to Bid Extended and gets a text saying the chapter has offered them membership.</p>}
+          confirmLabel="Extend bid"
+          onCancel={() => setPendingBid(null)}
+          onConfirm={() => { onExtendBid(pendingBid.id); setPendingBid(null); }}
+        />
       )}
     </div>
   );

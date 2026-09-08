@@ -13,6 +13,7 @@ import {
 import { Member, Fine, Payment, LedgerEntry } from '../types';
 import Modal from './ui/Modal';
 import Card from './ui/Card';
+import ConfirmDialog from './ui/ConfirmDialog';
 import AddTransactionModal from './finance/AddTransactionModal';
 import { formatMoney } from '../formatters';
 import type { MemberBalance } from '../lib/balance';
@@ -59,6 +60,8 @@ export default function FinanceModule({
   const [showAddTransaction, setShowAddTransaction] = useState(false);
   const [showPayModal, setShowPayModal] = useState(false);
   const [showCorrectionModal, setShowCorrectionModal] = useState<LedgerEntry | null>(null);
+  const [pendingMarkPaid, setPendingMarkPaid] = useState<{ member: Member; balanceCents: number } | null>(null);
+  const [pendingFinePaid, setPendingFinePaid] = useState<Fine | null>(null);
 
   // Search & Filter
   const [searchMember, setSearchMember] = useState('');
@@ -330,17 +333,7 @@ export default function FinanceModule({
                       <td className="py-3 px-3 text-right">
                         {balanceCents > 0 && isOfficer && (
                           <button
-                            onClick={() => {
-                              onRecordPayment({
-                                memberId: mem.id,
-                                memberName: mem.name,
-                                amount: balanceCents / 100,
-                                amountCents: balanceCents,
-                                type: 'Dues',
-                                paymentMethod: 'Cash',
-                                reference: 'IN_PERSON_CASH'
-                              });
-                            }}
+                            onClick={() => setPendingMarkPaid({ member: mem, balanceCents })}
                             className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold px-2 py-1 rounded transition-all cursor-pointer"
                           >
                             Mark Paid
@@ -492,7 +485,7 @@ export default function FinanceModule({
 
                   {isOfficer && f.status === 'Unpaid' && (
                     <button
-                      onClick={() => onApproveFinePayment(f.id)}
+                      onClick={() => setPendingFinePaid(f)}
                       className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-lg transition-all cursor-pointer"
                     >
                       Mark paid
@@ -657,6 +650,32 @@ export default function FinanceModule({
               </button>
             </form>
         </Modal>
+      )}
+
+      {pendingMarkPaid && (
+        <ConfirmDialog
+          title="Mark paid?"
+          body={<p>Record a cash payment of <strong>{formatMoney(pendingMarkPaid.balanceCents)}</strong> from <strong>{pendingMarkPaid.member.name}</strong>. Their balance becomes $0.00.</p>}
+          confirmLabel="Mark paid"
+          onCancel={() => setPendingMarkPaid(null)}
+          onConfirm={() => {
+            onRecordPayment({
+              memberId: pendingMarkPaid.member.id, memberName: pendingMarkPaid.member.name,
+              amount: pendingMarkPaid.balanceCents / 100, amountCents: pendingMarkPaid.balanceCents,
+              type: 'Dues', paymentMethod: 'Cash', reference: 'IN_PERSON_CASH'
+            });
+            setPendingMarkPaid(null);
+          }}
+        />
+      )}
+      {pendingFinePaid && (
+        <ConfirmDialog
+          title="Mark fine paid?"
+          body={<p><strong>{pendingFinePaid.memberName}</strong>'s {formatMoney(pendingFinePaid.amountCents || pendingFinePaid.amount * 100)} fine for "{pendingFinePaid.reason}" will show as paid.</p>}
+          confirmLabel="Mark paid"
+          onCancel={() => setPendingFinePaid(null)}
+          onConfirm={() => { onApproveFinePayment(pendingFinePaid.id); setPendingFinePaid(null); }}
+        />
       )}
     </div>
   );

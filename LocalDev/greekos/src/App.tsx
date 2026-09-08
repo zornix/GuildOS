@@ -33,8 +33,11 @@ export default function App() {
       setIsOfficer={app.setIsOfficer}
       currentMemberName={currentMemberName}
       setCurrentMemberName={app.setCurrentMemberName}
+      sessionName={app.sessionName}
+      sessionIsOfficer={app.sessionIsOfficer}
       members={roster.members}
       toastMessage={app.toastMessage}
+      onDismissToast={app.dismissToast}
       loading={app.loading}
       backendDown={app.backendDown}
     >
