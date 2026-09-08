@@ -45,8 +45,10 @@ proposer its creator-chair; denial carries a reason back to the proposer.
 _Avoid_: request, draft initiative
 
 **Contribution**:
-A member's auto-derived positive record: events attended, initiatives chaired,
-and jobs done on events and initiatives. Only structurally-known facts count —
+A member's auto-derived positive record: events attended, events organized
+or supervised (with attendee counts), initiatives chaired, and every job
+completed and verified, attached or standalone. It exists to help the member
+— a résumé-grade record they can cite — not to measure them. Only structurally-known facts count —
 nothing manually awarded or officer-verified — and contribution never feeds
 standing. Counts only go up; absences and attendance percentages are not
 contribution and are visible only to the member themself and officers.
@@ -61,9 +63,9 @@ _Avoid_: leaderboard, ranking
 **Job**:
 A claimable unit of work a member commits to, reports done, and a supervisor
 or chair approves. A job may be attached to an event, attached to an
-initiative, or standalone; only event- and initiative-attached jobs count
-toward contribution. Jobs never affect standing.
-_Avoid_: task (storage-layer name only), chore, assignment
+initiative, or standalone; every verified job counts toward contribution.
+Jobs never affect standing.
+_Avoid_: task (storage-layer name only), chore, assignment, house job
 
 **Chair**:
 A member granted a slice of officer work in one domain (risk, social,
