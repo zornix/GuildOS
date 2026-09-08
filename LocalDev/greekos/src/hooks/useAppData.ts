@@ -182,7 +182,7 @@ export function useAppData() {
         finance.setFines(adaptFines(fineRows, rosterRows));
         finance.setPayments(adaptPayments(treasury?.recent_payments || [], rosterRows));
         // No chapter-wide ledger read exists yet (statements are per member),
-        // so the immutable-ledger view starts empty rather than faked.
+        // so the chapter-ledger view starts empty rather than faked.
         finance.setLedger([]);
         tasks.setTasks(adaptTasks(taskRows, rosterRows));
         setAnnouncements(adaptAnnouncements(annRows, rosterRows));

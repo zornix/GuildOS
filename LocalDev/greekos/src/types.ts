@@ -167,7 +167,7 @@ export interface LedgerEntry {
   balanceAfterCents: number;
   description: string;
   authorizedBy: string;
-  correctsEntryId?: string; // If this is an immutable correction referencing an earlier entry
+  correctsEntryId?: string; // If this adjustment row offsets an earlier entry
 }
 
 export interface Excuse {
