@@ -19,8 +19,7 @@ export interface NavItem {
   icon: LucideIcon;
   /** No backend behind this tab yet — the shell gates it behind a demo notice. */
   demo?: boolean;
-  /** Shown only when the session holds this permission key AND the view is
-   *  officer (the Demo "view as" switch hides it too). */
+  /** Shown when the session holds this module's permission key. */
   permission?: string;
 }
 

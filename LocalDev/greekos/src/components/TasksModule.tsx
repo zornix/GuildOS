@@ -7,6 +7,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { Task, Member } from '../types';
+import { canClaimTask, isTaskComplete, taskClaimants } from '../lib/tasks';
 import Modal from './ui/Modal';
 
 interface TasksModuleProps {
@@ -76,7 +77,7 @@ export default function TasksModule({
               Jobs
             </h2>
             <span className="text-xs font-semibold bg-navy text-gold px-2 py-0.5 rounded-full">
-              {tasks.filter(t => t.status === 'Pending').length} pending
+              {tasks.filter(t => t.status === 'Pending' || t.status === 'Done Reported').length} pending
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
@@ -114,8 +115,10 @@ export default function TasksModule({
       {/* Tasks Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredTasks.map(task => {
-          const isDone = task.status === 'Completed';
-          const isMyTask = task.assignedTo === currentMemberName;
+          const isDone = isTaskComplete(task);
+          const claimants = taskClaimants(task);
+          const isMyTask = claimants.some(c => c.memberId === currentMember?.id);
+          const statusReadOnly = !!task.parent || ['Done Reported', 'Approved', 'Cancelled', 'Unknown'].includes(task.status);
 
           return (
             <div
@@ -138,6 +141,9 @@ export default function TasksModule({
                 </span>
 
                 <button
+                  type="button"
+                  disabled={statusReadOnly}
+                  title={task.parent ? `Report and review this job in its ${task.parent.kind}.` : undefined}
                   onClick={() => onToggleTaskStatus(task.id)}
                   className={`text-xs font-bold px-2 py-0.5 rounded flex items-center gap-1 cursor-pointer transition-all ${
                     isDone 
@@ -165,10 +171,13 @@ export default function TasksModule({
               <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
                 <span className="flex items-center gap-1">
                   <User className="w-3 h-3 text-slate-500" />
-                  <strong className={isMyTask ? 'text-gold-muted' : 'text-slate-700'}>{task.assignedTo}</strong>
+                  <span>
+                    <strong className={isMyTask ? 'text-gold-muted' : 'text-slate-700'}>{task.assignedTo}</strong>
+                    <span className="block">{task.claimedCount ?? claimants.length}/{task.peopleNeeded ?? 1} spots filled</span>
+                  </span>
                 </span>
 
-                {!isDone && task.assignedTo === 'Unassigned' && currentMember && (
+                {currentMember && canClaimTask(task, currentMember.id) && (
                   <button type="button" onClick={() => onClaimTask(task.id, currentMember.name, currentMember.id)}
                     className="text-xs bg-gold hover:bg-[#c5a02b] text-navy font-bold px-2.5 py-1 rounded-md cursor-pointer">
                     Claim

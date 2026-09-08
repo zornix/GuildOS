@@ -192,11 +192,15 @@ export interface Task {
   id: string;
   title: string;
   description: string;
-  assignedTo: string; // Member name
+  assignedTo: string; // Claimant names, falling back to the assigned member
   assignedToId?: string;
+  /** Absent only on local demo/draft tasks; API rows always carry these. */
+  claimants?: EventJob['claimants'];
+  peopleNeeded?: number;
+  claimedCount?: number;
   dueDate: string;
   priority: 'Low' | 'Medium' | 'High' | 'Urgent';
-  status: 'To Do' | 'In Progress' | 'Completed' | 'Pending';
+  status: 'To Do' | 'In Progress' | 'Completed' | 'Pending' | 'Done Reported' | 'Approved' | 'Cancelled' | 'Unknown';
   /** Which event or initiative the job belongs to; absent for a standalone job. */
   parent?: { kind: 'event' | 'initiative'; title: string };
   category?: 'House Chore' | 'Officer Project' | 'Maintenance' | 'Ritual Prep';

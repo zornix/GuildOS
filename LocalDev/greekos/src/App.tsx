@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useAppData } from './hooks/useAppData';
 import AppShell from './components/layout/AppShell';
 import DashboardOverview from './components/DashboardOverview';
@@ -16,6 +16,8 @@ import OutboxModule from './components/OutboxModule';
 import EventsBar from './components/EventsBar';
 import { useEventsChrome } from './hooks/useEventsChrome';
 import { filterEventsByType } from './lib/events';
+import { balanceForMember } from './lib/balance';
+import { can } from './lib/session';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
@@ -23,6 +25,8 @@ export default function App() {
   const app = useAppData();
   const { roster, events, initiatives, finance, attendance, tasks, recruitment, outbox } = app;
   const { isOfficer, currentMemberName } = app;
+  const currentMember = roster.members.find(member => member.name === currentMemberName);
+  const viewedBalance = balanceForMember(app.myBalance, currentMember?.id);
 
   return (
     <AppShell
@@ -51,7 +55,7 @@ export default function App() {
           isOfficer={isOfficer}
           currentMemberName={currentMemberName}
           contribution={app.contribution}
-          myBalance={app.myBalance}
+          myBalance={viewedBalance}
           onNavigateTab={setActiveTab}
           onOpenEvent={id => { chrome.openEvent(id); setActiveTab('events'); }}
           onScheduleEvent={() => { chrome.openCreate(); setActiveTab('events'); }}
@@ -148,21 +152,24 @@ export default function App() {
       )}
 
       {activeTab === 'finance' && (
-        <FinanceModule
-          members={roster.members}
-          fines={finance.fines}
-          payments={finance.payments}
-          ledger={finance.ledger}
-          isOfficer={isOfficer}
-          currentMemberName={currentMemberName}
-          myBalance={app.myBalance}
-          balanceCentsOf={finance.balanceCentsOf}
-          onRecordPayment={finance.handleRecordPayment}
-          onIssueFine={finance.handleIssueFine}
-          onPostInvoice={finance.handlePostInvoice}
-          onApproveFinePayment={finance.handleApproveFinePayment}
-          onPostLedgerCorrection={finance.handlePostLedgerCorrection}
-        />
+        // Reset open forms when Demo view-as changes the payment recipient.
+        <Fragment key={currentMember?.id ?? currentMemberName}>
+          <FinanceModule
+            members={roster.members}
+            fines={finance.fines}
+            payments={finance.payments}
+            ledger={finance.ledger}
+            isOfficer={isOfficer}
+            currentMemberName={currentMemberName}
+            myBalance={viewedBalance}
+            balanceCentsOf={finance.balanceCentsOf}
+            onRecordPayment={finance.handleRecordPayment}
+            onIssueFine={finance.handleIssueFine}
+            onPostInvoice={finance.handlePostInvoice}
+            onApproveFinePayment={finance.handleApproveFinePayment}
+            onPostLedgerCorrection={finance.handlePostLedgerCorrection}
+          />
+        </Fragment>
       )}
 
       {activeTab === 'roster' && (
@@ -189,7 +196,7 @@ export default function App() {
       {activeTab === 'recruitment' && (
         <RecruitmentModule
           pnms={recruitment.pnms}
-          isOfficer={isOfficer}
+          canUpdate={can(app.permissions, 'recruitment:pipeline:update')}
           onAddPNM={recruitment.handleAddPNM}
           onVotePNM={recruitment.handleVotePNM}
           onExtendBid={recruitment.handleExtendBid}

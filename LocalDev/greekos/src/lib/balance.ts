@@ -5,6 +5,7 @@ import { formatMoney } from '../formatters';
  *  show as "Balance owed". It is NOT the standing-derived unpaid-fines number
  *  on Member.duesBalanceCents. */
 export interface MemberBalance {
+  memberId: string;
   outstandingCents: number;
   openInvoiceCount: number;
   overdueInvoiceCount: number;
@@ -13,10 +14,16 @@ export interface MemberBalance {
 export function adaptMemberBalance(dto: MemberTreasuryDashboardDto): MemberBalance {
   const invoices = dto.open_invoices || [];
   return {
+    memberId: dto.member_id,
     outstandingCents: dto.balance?.outstanding_balance_cents || 0,
     openInvoiceCount: invoices.length,
     overdueInvoiceCount: invoices.filter(i => i.overdue).length
   };
+}
+
+/** A session balance must never be shown for a different Demo "view as" member. */
+export function balanceForMember(balance: MemberBalance | null, memberId: string | undefined): MemberBalance | null {
+  return memberId && balance?.memberId === memberId ? balance : null;
 }
 
 /** The one-line status Home shows. Empty string while the balance is unknown

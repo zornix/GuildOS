@@ -14,7 +14,7 @@ import ConfirmDialog from './ui/ConfirmDialog';
 
 interface RecruitmentModuleProps {
   pnms: PNM[];
-  isOfficer: boolean;
+  canUpdate: boolean;
   onAddPNM: (pnm: Omit<PNM, 'id' | 'votesFor' | 'votesAgainst' | 'status'>) => void;
   onVotePNM: (pnmId: string, type: 'up' | 'down') => void;
   onExtendBid: (pnmId: string) => void;
@@ -22,7 +22,7 @@ interface RecruitmentModuleProps {
 
 export default function RecruitmentModule({
   pnms,
-  isOfficer,
+  canUpdate,
   onAddPNM,
   onVotePNM,
   onExtendBid
@@ -96,13 +96,13 @@ export default function RecruitmentModule({
           </p>
         </div>
 
-        <button
+        {canUpdate && <button
           onClick={() => setShowAddModal(true)}
           className="bg-gold hover:bg-[#c5a02b] text-navy font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer w-full sm:w-auto justify-center"
         >
           <Plus className="w-4 h-4" />
           Add Prospect (PNM)
-        </button>
+        </button>}
       </div>
 
       {/* Filter and Search Bar */}
@@ -185,7 +185,7 @@ export default function RecruitmentModule({
                   <span className="font-bold text-slate-800">{pnm.votesFor} For / {pnm.votesAgainst} Against ({approvalPct}%)</span>
                 </div>
 
-                <div className="flex items-center gap-2">
+                {canUpdate && <div className="flex items-center gap-2">
                   <button
                     onClick={() => onVotePNM(pnm.id, 'up')}
                     className="flex-1 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer"
@@ -199,9 +199,9 @@ export default function RecruitmentModule({
                   >
                     -1
                   </button>
-                </div>
+                </div>}
 
-                {isOfficer && pnm.status !== 'Bid Extended' && pnm.status !== 'Bid Accepted' && (
+                {canUpdate && pnm.status !== 'Bid Extended' && pnm.status !== 'Bid Accepted' && (
                   <button
                     onClick={() => setPendingBid(pnm)}
                     className="w-full mt-2 bg-gold hover:bg-[#c5a02b] text-navy font-bold text-xs py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
@@ -216,7 +216,7 @@ export default function RecruitmentModule({
       </div>
 
       {/* MODAL: Add PNM */}
-      {showAddModal && (
+      {canUpdate && showAddModal && (
         <Modal title="Log Potential New Member (PNM)" onClose={() => setShowAddModal(false)}>
 
             <form onSubmit={handleAddSubmit} className="space-y-4">
@@ -327,7 +327,7 @@ export default function RecruitmentModule({
         </Modal>
       )}
 
-      {pendingBid && (
+      {canUpdate && pendingBid && (
         <ConfirmDialog
           title="Extend a bid?"
           body={<p><strong>{pendingBid.name}</strong> moves to Bid Extended and gets a text saying the chapter has offered them membership.</p>}

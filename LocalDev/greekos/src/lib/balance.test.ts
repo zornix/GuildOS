@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { adaptMemberBalance, balanceStatusLine } from './balance';
+import { adaptMemberBalance, balanceForMember, balanceStatusLine } from './balance';
 
 test('adapts outstanding cents and invoice counts', () => {
   const b = adaptMemberBalance({
@@ -14,7 +14,7 @@ test('adapts outstanding cents and invoice counts', () => {
     ],
     recent_activity: []
   });
-  assert.deepEqual(b, { outstandingCents: 12500, openInvoiceCount: 2, overdueInvoiceCount: 1 });
+  assert.deepEqual(b, { memberId: 'm1', outstandingCents: 12500, openInvoiceCount: 2, overdueInvoiceCount: 1 });
 });
 
 test('a clean account is all zeros', () => {
@@ -23,21 +23,32 @@ test('a clean account is all zeros', () => {
     balance: { outstanding_balance_cents: 0, current_balance_cents: 0, total_owed_cents: 0, total_paid_cents: 0 },
     pending_cents: 0, pending_submissions: [], open_invoices: [], recent_activity: []
   });
-  assert.deepEqual(b, { outstandingCents: 0, openInvoiceCount: 0, overdueInvoiceCount: 0 });
+  assert.deepEqual(b, { memberId: 'm1', outstandingCents: 0, openInvoiceCount: 0, overdueInvoiceCount: 0 });
 });
 
 test('balance line names the amount and invoice counts', () => {
   assert.equal(
-    balanceStatusLine({ outstandingCents: 12500, openInvoiceCount: 2, overdueInvoiceCount: 1 }),
+    balanceStatusLine({ memberId: 'm1', outstandingCents: 12500, openInvoiceCount: 2, overdueInvoiceCount: 1 }),
     'Balance owed $125.00 · 2 open invoices (1 overdue)'
   );
   assert.equal(
-    balanceStatusLine({ outstandingCents: 2500, openInvoiceCount: 1, overdueInvoiceCount: 0 }),
+    balanceStatusLine({ memberId: 'm1', outstandingCents: 2500, openInvoiceCount: 1, overdueInvoiceCount: 0 }),
     'Balance owed $25.00 · 1 open invoice'
   );
 });
 
 test('a clean account says so; unknown says nothing', () => {
-  assert.equal(balanceStatusLine({ outstandingCents: 0, openInvoiceCount: 0, overdueInvoiceCount: 0 }), 'No balance owed');
+  assert.equal(balanceStatusLine({ memberId: 'm1', outstandingCents: 0, openInvoiceCount: 0, overdueInvoiceCount: 0 }), 'No balance owed');
   assert.equal(balanceStatusLine(null), '');
+});
+
+test('view as only exposes the balance belonging to the viewed member', () => {
+  const balance = { memberId: 'alice', outstandingCents: 12500, openInvoiceCount: 2, overdueInvoiceCount: 1 };
+  assert.equal(balanceForMember(balance, 'alice'), balance);
+  assert.equal(balanceForMember(balance, 'bob'), null);
+  assert.equal(balanceStatusLine(balanceForMember(balance, 'bob')), '');
+  assert.equal(balanceForMember(balance, undefined), null);
+  assert.equal(balanceForMember(null, 'alice'), null);
+  // Switching back recovers Alice's known balance without inventing Bob's.
+  assert.equal(balanceForMember(balance, 'alice')?.outstandingCents, 12500);
 });

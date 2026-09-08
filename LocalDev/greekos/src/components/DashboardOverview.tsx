@@ -7,6 +7,7 @@ import { isoDay } from '../formatters';
 import type { ContributionSummary } from '../lib/contribution';
 import type { MemberBalance } from '../lib/balance';
 import { liveDoorEvent } from '../lib/events';
+import { isTaskComplete } from '../lib/tasks';
 import WelcomeBanner from './home/WelcomeBanner';
 
 interface DashboardOverviewProps {
@@ -61,7 +62,7 @@ export default function DashboardOverview({
   const today = isoDay();
   const upcomingEvents = safeEvents.filter(e => e.date >= today).sort((a, b) => a.date.localeCompare(b.date)).slice(0, TILE_LIMIT);
   const pendingJobSignOffs = safeEvents.flatMap(e => (e.jobs || []).filter(j => j.status === 'Done Reported'));
-  const openTasks = safeTasks.filter(t => t.status !== 'Completed');
+  const openTasks = safeTasks.filter(t => !isTaskComplete(t));
 
   return (
     <div className="space-y-6">

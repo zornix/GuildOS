@@ -1,23 +1,20 @@
 import { useState } from 'react';
 import { INITIAL_TASKS } from '../data/mockData';
-import { Member, Task } from '../types';
+import { Task } from '../types';
 import { api } from '../api';
-import { adaptTasks } from '../adapters';
+import { canClaimTask, taskClaimants } from '../lib/tasks';
 import { ShowToast } from './useToast';
 import { SyncApi } from './useBackend';
 
 interface Deps {
-  members: Member[];
   syncApi: SyncApi;
   showToast: ShowToast;
-  titles: () => { events: Map<string, string>; initiatives: Map<string, string> };
+  refetchJobs: () => Promise<void>;
 }
 
 /** Jobs: standalone or attached to an event or initiative. */
-export function useTasks({ members, syncApi, showToast, titles }: Deps) {
+export function useTasks({ syncApi, showToast, refetchJobs }: Deps) {
   const [tasks, setTasks] = useState<Task[]>(INITIAL_TASKS);
-
-  const refetchTasks = async () => setTasks(adaptTasks(await api.getTasks(), members, titles()));
 
   const handleAddTask = (newTask: Omit<Task, 'id' | 'status'>) => {
     const t: Task = {
@@ -35,27 +32,33 @@ export function useTasks({ members, syncApi, showToast, titles }: Deps) {
           required: t.priority === 'High' || t.priority === 'Urgent',
           due_at: t.dueDate ? `${t.dueDate}T12:00:00Z` : null
         }),
-      refetchTasks
+      refetchJobs
     );
     showToast(`Added job "${t.title}"`);
   };
 
   const handleToggleTaskStatus = (taskId: string) => {
     const current = tasks.find(t => t.id === taskId);
+    if (!current || current.parent || ['Done Reported', 'Approved', 'Cancelled', 'Unknown'].includes(current.status)) return;
     const nextStatus = current && current.status === 'Completed' ? 'To Do' : 'Completed';
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: nextStatus } : t));
-    syncApi(() => api.setTaskStatus(taskId, nextStatus === 'Completed' ? 'done' : 'open'), refetchTasks);
+    syncApi(() => api.setTaskStatus(taskId, nextStatus === 'Completed' ? 'done' : 'open'), refetchJobs);
   };
 
   const handleClaimTask = (taskId: string, memberName: string, memberId: string) => {
+    const current = tasks.find(t => t.id === taskId);
+    if (!current || !canClaimTask(current, memberId)) return;
     setTasks(prev => prev.map(t => {
       if (t.id === taskId) {
-        return { ...t, assignedTo: memberName, assignedToId: memberId, status: 'In Progress' };
+        const claimants = [...taskClaimants(t), { memberId, memberName, claimedAt: new Date().toISOString() }];
+        return { ...t, claimants, claimedCount: Math.max(t.claimedCount ?? 0, claimants.length - 1) + 1,
+          assignedTo: claimants.map(c => c.memberName).join(', '), status: 'In Progress' };
       }
       return t;
     }));
-    syncApi(() => api.commitTask(taskId, memberId), refetchTasks);
-    showToast(`Claimed job.`);
+    syncApi(() => api.commitTask(taskId, memberId), refetchJobs, {
+      onSuccess: () => showToast('Claimed job.')
+    });
   };
 
   return { tasks, setTasks, handleAddTask, handleToggleTaskStatus, handleClaimTask };

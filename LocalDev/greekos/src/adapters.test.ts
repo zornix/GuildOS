@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { adaptTasks } from './adapters';
 import type { TaskDto } from './api';
 import type { Member } from './types';
+import { canClaimTask } from './lib/tasks';
 
 const row = (over: Partial<TaskDto>): TaskDto => ({
   id: 't1', title: 'Setup chairs', description: null, assigned_member_id: null, status: 'open', required: false,
@@ -30,4 +31,40 @@ test('an attached job whose parent is unknown still says which kind', () => {
 
 test('security shifts are not jobs on the board', () => {
   assert.equal(adaptTasks([row({ kind: 'security' }), row({ id: 'x' })], members).length, 1);
+});
+
+test('claimed jobs preserve ownership and capacity even without an assigned member', () => {
+  const [task] = adaptTasks([row({ status: 'in_progress', claimants: ['m1'], claimed_count: 1, people_needed: 2 })], members);
+  assert.equal(task.assignedTo, 'Ryan Cole');
+  assert.equal(task.assignedToId, undefined);
+  assert.equal(task.peopleNeeded, 2);
+  assert.equal(task.claimedCount, 1);
+  assert.equal(canClaimTask(task, 'm1'), false);
+  assert.equal(canClaimTask(task, 'm2'), true);
+
+  const [full] = adaptTasks([row({ claimants: ['m1'], claimed_count: 1 })], members);
+  assert.equal(canClaimTask(full, 'm2'), false);
+});
+
+test('reported, approved, completed and cancelled jobs retain their lifecycle and cannot be claimed', () => {
+  const statuses = { done_reported: 'Done Reported', approved: 'Approved', done: 'Completed', cancelled: 'Cancelled' };
+  for (const [status, label] of Object.entries(statuses)) {
+    const [task] = adaptTasks([row({ status })], members);
+    assert.equal(task.status, label);
+    assert.equal(canClaimTask(task, 'm1'), false, status);
+  }
+});
+
+test('unknown states cannot accidentally become open jobs', () => {
+  const [task] = adaptTasks([row({ status: 'future_state' })], members);
+  assert.equal(task.status, 'Unknown');
+  assert.equal(canClaimTask(task, 'm1'), false);
+});
+
+test('claiming requires an identified member and respects the server capacity summary', () => {
+  const [task] = adaptTasks([row({})], members);
+  assert.equal(canClaimTask(task, undefined), false);
+  assert.equal(canClaimTask(task, 'm1'), true);
+  const [full] = adaptTasks([row({ claimed_count: 1, claimants: [] })], members);
+  assert.equal(canClaimTask(full, 'm1'), false);
 });

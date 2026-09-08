@@ -84,7 +84,7 @@ export default function Sidebar({
 
       {/* Navigation items */}
       <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto">
-        {NAV_ITEMS.filter(item => !item.permission || (isOfficer && can(permissions, item.permission))).map(navRow)}
+        {NAV_ITEMS.filter(item => !item.permission || can(permissions, item.permission)).map(navRow)}
 
         <details className="mt-3 pt-3 border-t border-[#1e2d42]">
           <summary className="px-3 py-2 text-xs text-slate-400 hover:text-slate-200 cursor-pointer">

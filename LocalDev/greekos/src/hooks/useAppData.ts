@@ -59,7 +59,7 @@ export function useAppData() {
   const { members, setMembers } = roster;
 
   // Jobs live on the same `tasks` table for both parents, so one refetch restamps
-  // both boards. The ref breaks the cycle: the domain hooks call refetchJobs, but
+  // all three boards. The ref breaks the cycle: the domain hooks call refetchJobs, but
   // it can only be built from the setters those same hooks return.
   const refetchJobsRef = useRef<() => Promise<void>>(async () => {});
   const refetchJobs = () => refetchJobsRef.current();
@@ -76,13 +76,9 @@ export function useAppData() {
     enqueueOutbox
   });
   const tasks = useTasks({
-    members,
     syncApi,
     showToast,
-    titles: () => ({
-      events: new Map(events.events.map(e => [e.id, e.title])),
-      initiatives: new Map(initiatives.initiatives.map(i => [i.id, i.title]))
-    })
+    refetchJobs
   });
   const recruitment = useRecruitment({ syncApi, showToast, enqueueOutbox });
   const contribution = useContribution(currentMemberName, events.events, initiatives.initiatives);
@@ -91,7 +87,14 @@ export function useAppData() {
    *  counts live on the event rows, so restamp those in the same update when
    *  fresh ones are supplied (rows are patched, never re-adapted, to keep the
    *  per-event security shifts already in state). */
-  const applyJobs = (taskRows: TaskDto[], rosterRows: Member[], eventRows?: EventDto[]) => {
+  const applyJobs = (
+    taskRows: TaskDto[], rosterRows: Member[], eventRows?: EventDto[],
+    titles = {
+      events: new Map<string, string>((eventRows ?? events.events).map(e => [e.id, e.title])),
+      initiatives: new Map<string, string>(initiatives.initiatives.map(i => [i.id, i.title]))
+    }
+  ) => {
+    tasks.setTasks(adaptTasks(taskRows, rosterRows, titles));
     const membersById = new Map(rosterRows.map(m => [m.id, m]));
     const { byEvent, byInitiative } = groupJobsByParent(taskRows, membersById);
     const countsById = new Map((eventRows ?? []).map(row => [row.id, row]));
@@ -192,15 +195,14 @@ export function useAppData() {
         // No chapter-wide ledger read exists yet (statements are per member),
         // so the chapter-ledger view starts empty rather than faked.
         finance.setLedger([]);
-        tasks.setTasks(adaptTasks(taskRows, rosterRows, {
-          events: new Map(adaptedEvents.map(e => [e.id, e.title])),
-          initiatives: new Map(adaptInitiatives(initRows, rosterRows).map(i => [i.id, i.title]))
-        }));
         setAnnouncements(adaptAnnouncements(annRows, rosterRows));
         recruitment.setPnms(adaptRecruits(recruitRows));
         initiatives.setInitiatives(adaptInitiatives(initRows, rosterRows));
         // Queued after both setters above, so it restamps the freshly adapted rows.
-        applyJobs(taskRows, rosterRows);
+        applyJobs(taskRows, rosterRows, eventRows, {
+          events: new Map(adaptedEvents.map(e => [e.id, e.title])),
+          initiatives: new Map(initRows.map(i => [i.id, i.title]))
+        });
       } catch (err) {
         console.error('Backend load failed', err);
         setBackendDown(true);
