@@ -567,7 +567,7 @@ export default function FinanceModule({
             <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs mb-4">
               <div className="text-amber-900 font-bold">Balance owed</div>
               <div className="text-xl font-display font-black text-amber-900">
-                {formatMoney(myBalance?.outstandingCents ?? 0)}
+                {myBalance ? formatMoney(myBalance.outstandingCents) : '—'}
               </div>
             </div>
 

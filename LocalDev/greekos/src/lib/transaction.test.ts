@@ -11,6 +11,7 @@ test('dollarsToCents parses money without float drift', () => {
   assert.equal(dollarsToCents('-25'), -2500);
   assert.equal(dollarsToCents(''), null);
   assert.equal(dollarsToCents('abc'), null);
+  ['1e3', '+25', '.5'].forEach(bad => assert.equal(dollarsToCents(bad), null, bad));
 });
 
 const draft = (over: Partial<TransactionDraft>): TransactionDraft => ({
