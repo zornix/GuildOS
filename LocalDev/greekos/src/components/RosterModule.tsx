@@ -144,7 +144,7 @@ export default function RosterModule({
                 <th className="py-3 px-4">Academic Standing</th>
                 {/* Attendance rates are for the member themself and officers only. */}
                 {isOfficer && <th className="py-3 px-4">Attendance</th>}
-                <th className="py-3 px-4">Dues Balance</th>
+                <th className="py-3 px-4">Unpaid fines</th>
                 <th className="py-3 px-4">Risk Shifts</th>
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>

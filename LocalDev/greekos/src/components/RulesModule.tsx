@@ -95,7 +95,7 @@ export default function RulesModule({ rules }: RulesModuleProps) {
                   <p>{rule.description || rule.content}</p>
                   <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
                     <span>Alpha Chapter Constitution &bull; Article II &bull; Ratified 2026</span>
-                    <span>Executive Board Enforced</span>
+                    <span>Officer enforced</span>
                   </div>
                 </div>
               )}

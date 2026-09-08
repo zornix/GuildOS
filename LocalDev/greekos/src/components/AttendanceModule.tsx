@@ -117,7 +117,7 @@ export default function AttendanceModule({
             className="bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-xs flex items-center gap-2 transition-all cursor-pointer"
           >
             <FileText className="w-4 h-4 text-gold" />
-            Submit Excuse Request
+            Request excuse
           </button>
         </div>
       </div>
@@ -133,7 +133,7 @@ export default function AttendanceModule({
           }`}
         >
           <UserCheck className="w-4 h-4" />
-          Roll Call Sheet
+          Roll call
         </button>
 
         <button
@@ -157,11 +157,11 @@ export default function AttendanceModule({
           }`}
         >
           <FileText className="w-4 h-4" />
-          Excuse Approvals ({safeExcuses.filter(e => e.status === 'Pending').length} Pending)
+          Excuses ({safeExcuses.filter(e => e.status === 'Pending').length} pending)
         </button>
       </div>
 
-      {/* TAB 1: Roll Call Sheet */}
+      {/* TAB 1: Roll call */}
       {activeTab === 'roster_check' && (
         <Card className="p-6 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
@@ -294,13 +294,13 @@ export default function AttendanceModule({
         </Card>
       )}
 
-      {/* TAB 3: Excuse Approvals */}
+      {/* TAB 3: Excuses */}
       {activeTab === 'excuses' && (
         <Card className="p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-display font-bold text-slate-900 text-base">Submitted Excuse Requests</h3>
-              <p className="text-xs text-slate-500">Executive board review for academic, medical, and family obligations.</p>
+              <p className="text-xs text-slate-500">Officers review these.</p>
             </div>
           </div>
 
@@ -366,7 +366,7 @@ export default function AttendanceModule({
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-display font-bold text-base text-slate-900 flex items-center gap-2">
                 <FileText className="w-5 h-5 text-gold" />
-                Submit Absence Excuse Request
+                Request an excuse
               </h3>
               <button onClick={() => setShowExcuseModal(false)} className="text-slate-500 hover:text-slate-600 font-bold">✕</button>
             </div>
@@ -403,7 +403,7 @@ export default function AttendanceModule({
                 type="submit"
                 className="w-full bg-navy text-gold hover:bg-slate-800 font-bold py-3 min-h-11 rounded-lg text-xs transition-all"
               >
-                Submit for Executive Review
+                Submit request
               </button>
             </form>
         </Modal>

@@ -76,7 +76,7 @@ export default function OutboxModule({
           <div className="flex items-center gap-2">
             <Send className="w-6 h-6 text-gold" />
             <h2 className="text-2xl font-display font-extrabold text-slate-900 tracking-tight">
-              Transactional Outbox & SMS Log
+              Message outbox
             </h2>
             <span className="text-xs font-bold bg-navy text-gold px-2 py-0.5 rounded-full">
               Real-time Queue

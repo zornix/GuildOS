@@ -33,6 +33,8 @@ export interface Member {
   standing: MemberStanding;
   major?: string;
   gpa: number;
+  // ponytail: field name kept while every UI label says "Unpaid fines" (D12);
+  // renaming it is churn across seven files. Rename when it earns its keep.
   duesBalanceCents: number; // Integer cents end to end
   duesBalance: number; // in dollars for display convenience
   attendanceRate: number;

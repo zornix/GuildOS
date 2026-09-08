@@ -78,7 +78,7 @@ export default function Sidebar({
         </div>
         <div>
           <h1 className="font-display font-bold text-base tracking-tight text-white">GreekOS</h1>
-          <p className="text-xs text-slate-400 font-sans">Alpha Chapter Operations</p>
+          <p className="text-xs text-slate-400 font-sans">Alpha Chapter</p>
         </div>
       </div>
 

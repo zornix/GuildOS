@@ -226,7 +226,7 @@ export default function CommandModule({
       onExecuteCommand({
         type: 'ANNOUNCEMENT',
         payload: {
-          title: 'Executive Chapter Alert',
+          title: 'Chapter announcement',
           content: annText,
           author: currentMemberName,
           priority: 'Mandatory',

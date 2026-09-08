@@ -216,12 +216,12 @@ export default function InitiativesModule({
                 </div>
               </div>
 
-              {/* Lead Chairs Section (Never Zero Chairs) */}
+              {/* Chairs Section (Never Zero Chairs) */}
               <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/70 space-y-1.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                     <Users className="w-3.5 h-3.5 text-gold" />
-                    Assigned Lead Chairs
+                    Chairs
                   </span>
                   <span className="text-xs text-slate-500">
                     {selectedInit.leadChairs.length} Chair{selectedInit.leadChairs.length > 1 ? 's' : ''} (Minimum 1 Required)
@@ -235,7 +235,7 @@ export default function InitiativesModule({
                     </span>
                   ))}
                 </div>
-                <p className="text-xs text-slate-500">Lead chairs approve work reported by brothers on this initiative.</p>
+                <p className="text-xs text-slate-500">Chairs approve work reported by brothers on this initiative.</p>
               </div>
             </Card>
 
@@ -425,7 +425,7 @@ export default function InitiativesModule({
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1">Lead Chair (Creator)</label>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">Chair (Creator)</label>
                   <input
                     type="text"
                     value={leadChairs.join(', ')}

@@ -482,7 +482,7 @@ export default function EventsModule({
                   <div>
                     <h4 className="text-xs font-bold text-gold flex items-center gap-1.5">
                       <Send className="w-3.5 h-3.5" />
-                      Notify Members Gate (SMS & Broadcast)
+                      Notify Members Gate (SMS & Push)
                     </h4>
                     <p className="text-xs text-slate-300">
                       Blast stays locked until the event is fully planned with supervisors, organizers, and jobs.
