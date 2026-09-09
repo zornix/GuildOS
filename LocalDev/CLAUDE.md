@@ -11,8 +11,9 @@ one level up at `/home/mshi/GuildOS`. The product frontend is `LocalDev/greekos`
 (Vite + React). `LocalDev/fratos` is the previous Next.js UI and is not deployed.
 
 Stack: **FastAPI (Python)** backend + **Vite/React (greekos)** frontend +
-**PostgreSQL** (raw SQL migrations). Deployed on Vercel (`api/index.py` as a
-Python function, `greekos/` as a static Vite build — see `vercel.json`).
+**PostgreSQL** (raw SQL migrations). Local preview can use this folder's
+`vercel.json` (`greekos/`). The live FraternityOS site is `Prod/` (`fratos/`
+is a clone of greekos — see `Prod/vercel.json`).
 
 **Temporary:** the Vercel production `DATABASE_URL` still points at the demo
 Supabase project until a prod project is created.

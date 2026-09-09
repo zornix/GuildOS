@@ -5,86 +5,59 @@ dues/fines treasury, standing, tasks, announcements, roster, and RBAC.
 
 Active development happens in [`LocalDev/`](LocalDev/) (FastAPI + Vite/React
 **greekos** + PostgreSQL) — see `LocalDev/CLAUDE.md` for the project guide.
-The live frontend is `LocalDev/greekos`. `LocalDev/fratos` is the old Next.js
-app and is not what Vercel deploys.
+`LocalDev/greekos` stays the sandbox UI. `LocalDev/fratos` is the old Next.js
+app and is not deployed.
 
-**Temporary (about a week, 2026-09-08):** production Vercel serves greekos but
-still uses the **demo** Supabase database. Do not treat that data as a real
-chapter. A separate prod project comes after this window.
+The FraternityOS Vercel project roots at [`Prod/`](Prod/): API in `Prod/api`,
+hosted UI in `Prod/fratos` (clone of greekos). See `Prod/vercel.json`.
+
+**Temporary (about a week, 2026-09-08):** production Vercel still uses the
+**demo** Supabase database. Do not treat that data as a real chapter. A
+separate prod project comes after this window.
 
 Domain language lives in [`CONTEXT.md`](CONTEXT.md); architectural decisions in
 [`docs/adr/`](docs/adr/).
 
-## 📊 Product dashboard
+## Where the app stands
 
-_Updated 2026-07-18. Plan docs live in [`LocalDev/docs/`](LocalDev/docs/) (`imp-*.md`)._
+_2026-09-08._
 
-### ✅ Latest additions (shipped)
+The product is a working **demo chapter**, not a shippable multi-tenant
+release. Officers and members can run the real workflows in greekos against
+the demo database: login, roster, events and jobs, security shifts and swaps,
+initiatives, attendance and excuses, treasury (dues/fines as invoices),
+standing, tasks, announcements, and recruitment. Permission keys (not
+`user.role === "officer"`) gate the UI. The Next.js `LocalDev/fratos` app is
+left behind.
 
-- **Chapter data is now sealed off (security fix).** An officer of one chapter
-  could edit another chapter's attendance and excuse records by supplying
-  foreign IDs. Every such edit now runs through a database procedure that
-  verifies the chapter in one atomic step, and the attendance tables carry the
-  chapter on every row. Bonus fix found along the way: approving an excuse now
-  actually cancels the fine it caused — that had been silently broken since
-  fines moved to the invoice system. Production also refuses to start with
-  unsafe settings (dev secret, missing database, or auth bypass left on), and
-  backend dependency versions are pinned. (Plan: `imp-tenant-guards.md`.)
-- **Events V1 — full feature set, server-side.** The complete events workflow is
-  built and tested on the backend:
-  - Scheduling with start/end times, co-supervisors, and an invite link.
-  - **Jobs** members can claim, report done, and get approved/rejected, with a
-    hard "no dropping out within 36 hours" lock.
-  - **"Notify members"** — a one-tap SMS blast, allowed only once an event is
-    complete (has a supervisor, an organizer, and at least 3 jobs).
-  - **Initiatives** — chair-led projects that sit on the calendar next to events
-    and reuse the same jobs machinery.
-  - **Security assignments & shift swaps** — supervisors assign security, members
-    swap shifts with each other, all tracked.
-- **Standing shows real money owed.** Fixed a bug where unpaid fines weren't
-  counting toward a member's standing.
-- **Dev & test tooling repaired.** Officer password login, a green end-to-end
-  test suite, and cleaned-up dev scripts. Dead code removed.
+**What is real**
 
-### 🔨 In progress / next up
+- FastAPI domains in `LocalDev/api` are RPC-backed and tenant-guarded. One
+  Postgres client (`api/platform/`). Production boot refuses a weak
+  `JWT_SECRET`, missing `DATABASE_URL`, auth bypass, or localhost CORS.
+- `LocalDev/greekos` is the product UI (Vite). Events V1 screens talk to the
+  API — jobs, calendar chips, security/swaps, announcements. Demo mock
+  fallback, Bylaws/Outbox tabs, and the view-as switcher are gone. Vercel
+  login is email + password (`dev-login` is 404 on any deploy).
+- Hosted site is `Prod/`: `Prod/fratos` is a clone of greekos, `Prod/api` is
+  the LocalDev API. Both environments use the **demo** Supabase project until
+  a real prod database exists.
 
-- **Events V1 Phase 5 — the screens.** Everything above exists on the backend but
-  has **no user interface yet**: the jobs board, calendar badges/week view, the
-  security & swap screens, and the SMS composer. This is the near-term critical
-  path — the plan doc still needs to be written before build starts.
-- **Fix reseeding — bumped up after an incident (see below).** Plan already
-  written: `imp-reseed-idempotency.md`.
-- **Resume the architecture cleanup at step 3** (one platform module for DB
-  access). Note for that step: its sweep must also pick up the new
-  `LocalDev/api/attendance/db/rpc.py` created by the tenant-guards fix.
-- **When shipping to prod resumes** (prod DB currently paused): paste the prod
-  project ref into `LocalDev/scripts/db_guard.py` so `migrate:prod` can run,
-  and apply migration 0146.
+**What is not**
 
-### ⚠️ Incident (2026-07-17): demo database partially wiped by reseed
+- No chapter signup. A real chapter is still hand SQL; seed is demo-only and
+  unsafe to re-run on a used DB (`imp-reseed-idempotency.md`).
+- No prod database and no `migrate:prod` (`PROD_PROJECT_REFS` is empty).
+  Schema and data on the hosted site are the demo chapter.
+- No email, so no password reset. Members without a hash still get a grace
+  login and must set a password. Invites do not notify anyone.
+- SMS is not a launch-ready channel: delivery defaults to `dry_run`, Twilio
+  needs A2P 10DLC, and many outbox producers only move when cron drain runs.
+- Phone check-in and `members.phone` storage are still inconsistent (digit
+  length vs E.164). Do not treat check-in as proven in production.
+- Command console is still a nav item (`nl_controller:execute`); it is not a
+  working product surface.
 
-Running `npm run seed` on the already-used demo database failed partway and
-committed its deletes as it went: the seed script's cleanup can't delete
-members because the append-only audit log references them, but everything it
-had already deleted (events, invoices, ledger, excuses, attendance, expenses)
-stayed deleted. The demo chapter was restored by hand the same day, including
-the officer's demo password. This is exactly the failure
-`imp-reseed-idempotency.md` predicted, so that fix moves to the front of the
-tooling queue. Until it lands, **avoid `npm run seed` on a used demo DB**.
-
-### 📋 Backlog
-
-| Item | What it's for | Status |
-|---|---|---|
-| Architecture cleanup (7 steps) | Consolidate DB access, unify permissions, self-describing DB client, tidy the frontend data/mutation layers | **2 of 7 done** (cleanup + standing fix); steps 3–7 pending |
-| Frontend remediation (B–E) | Consistent money formatting, per-domain data adapters, theme/token cleanup | Phase A shipped; B–E pending |
-| Check-in link race fix | A latent UI glitch where a freshly made check-in link can be wiped by a slow background refresh | Not started |
-| Reseed reliability | Let the demo database reseed cleanly on top of existing data | **Next up** — root cause confirmed by the 2026-07-17 incident |
-
-### 🧭 Trajectory
-
-**The backend is ahead of the frontend.** The entire Events V1 feature set is
-finished and tested server-side; the product's most valuable next move is Phase 5,
-surfacing it in the UI. Running alongside is a 7-step architecture cleanup that is
-2/7 complete and paused while events work proceeds. Domain language and decisions
-are captured in [`CONTEXT.md`](CONTEXT.md) and [`docs/adr/`](docs/adr/).
+**Do not** run `npm run seed` against a database that already has chapter
+data. A 2026-07-17 reseed wiped operational rows on demo and had to be
+restored by hand.

@@ -1,10 +1,13 @@
 # GuildOS (repo root)
 
 Active development happens in `LocalDev/` — see `LocalDev/CLAUDE.md` for the
-project guide, commands, and conventions. `Prod/` holds the sibling backend
-copy; `local-dev-scripts/` holds the shared dev-runner tooling. The stale
-`Prod/fratos` and `greekos-landing/` copies were moved out of the repo into a
-gitignored `archive/` (2026-09-08).
+project guide, commands, and conventions. `Prod/` is the Vercel root for
+FraternityOS: FastAPI in `Prod/api` plus the hosted UI in `Prod/fratos` (a
+clone of `LocalDev/greekos`). `local-dev-scripts/` holds the shared
+dev-runner tooling. The old Next.js `Prod/fratos` and `greekos-landing/`
+copies were archived (2026-09-08). The pre-switch Prod FastAPI
+(`routes/`, `postgres_client.py`) is snapshotted in gitignored
+`archive/Prod/`; `Prod/api` is the LocalDev API.
 
 ## Agent skills
 
