@@ -1,0 +1,37 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/index.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "fratos/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/drain-outbox",
+      "schedule": "*/5 * * * *"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "headers": {
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Strict-Transport-Security": "max-age=63072000; includeSubDomains"
+      },
+      "continue": true
+    },
+    { "src": "/api/(.*)", "dest": "/api/index.py" },
+    { "src": "/c/(.*)", "dest": "/api/index.py" },
+    { "src": "/(.*)", "dest": "/fratos/$1" }
+  ]
+}

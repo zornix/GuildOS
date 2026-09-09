@@ -1,0 +1,6 @@
+{
+  "name": "GreekOS",
+  "description": "GreekOS is a comprehensive internal operating system for fraternity chapters, managing operations, attendance, rosters, events, dues, fines, recruitment, and tasks in one polished dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
