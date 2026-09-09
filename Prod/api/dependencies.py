@@ -1,12 +1,12 @@
-from fastapi import Depends, HTTPException, Header
+from fastapi import HTTPException, Header
 
-from api.db import get_supabase
+from api.platform.db import get_db
 
 
 async def get_current_user(authorization: str = Header(...)):
     """Extract and validate JWT, return member record."""
     token = authorization.replace("Bearer ", "")
-    sb = get_supabase()
+    sb = get_db()
 
     try:
         auth_response = sb.auth.get_user(token)
@@ -16,9 +16,10 @@ async def get_current_user(authorization: str = Header(...)):
 
     member_id = str(auth_user.id)
 
+    # `sub` is members.id — we mint every token ourselves (api/platform/postgres.py).
     result = (
         sb.table("members")
-        .select("id, chapter_id, name, email, phone, role, status, created_at, chapters(*)")
+        .select("*, chapters(*)")
         .eq("id", member_id)
         .eq("status", "active")
         .maybe_single()
@@ -28,11 +29,11 @@ async def get_current_user(authorization: str = Header(...)):
     if not result.data:
         raise HTTPException(403, "No active membership found")
 
+    # Session epoch check (0148). Setting a password or issuing a reset code
+    # bumps members.token_version, so any token minted before that bump is dead
+    # even though its signature and expiry are still valid.
+    claims = getattr(auth_user, "claims", None) or {}
+    if int(claims.get("ver", 0)) != int(result.data.get("token_version") or 0):
+        raise HTTPException(403, "Session no longer valid, please log in again")
+
     return result.data
-
-
-async def require_officer(user=Depends(get_current_user)):
-    """Dependency that restricts endpoint to officers only."""
-    if user["role"] != "officer":
-        raise HTTPException(403, "Officer access required")
-    return user

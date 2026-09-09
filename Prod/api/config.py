@@ -1,32 +1,43 @@
 from pydantic_settings import BaseSettings
+from typing import Optional
 
 
 class Settings(BaseSettings):
-    POSTGRES_URL_NON_POOLING: str = ""
-    SUPABASE_JWT_SECRET: str = ""
-    FRONTEND_URL: str = "https://fraternity-os.vercel.app"
-    FRONTEND_URLS: str = ""
-    FRONTEND_ORIGIN_REGEX: str = ""
-    BASE_URL: str = "https://guild-os-two.vercel.app"
+    DATABASE_URL: Optional[str] = None
+    JWT_SECRET: str = "local-dev-secret"
+    FRONTEND_URL: str = "http://localhost:3000"
+    BASE_URL: str = "http://localhost:8001"
     CHECKIN_LINK_TTL_MINUTES: int = 10
+    DEV_AUTH_BYPASS: bool = False
+    # Shared secret for the Vercel Cron caller (api/cron/api/cron.py). Empty disables
+    # every cron endpoint (returns 401) so an unconfigured deploy can't be triggered.
     CRON_SECRET: str = ""
+    # Set by Vercel at build/runtime ("production" | "preview" | "development").
+    # Empty locally. Drives the production boot guard in api/index.py.
+    VERCEL_ENV: str = ""
+    # Outbound message delivery: "dry_run" (rows marked simulated, no network) or
+    # "twilio" (real sends; requires the three TWILIO_* settings below).
+    MESSAGE_DELIVERY_MODE: str = "dry_run"
+    TWILIO_ACCOUNT_SID: str = ""
+    TWILIO_AUTH_TOKEN: str = ""
+    # E.164 sending number, e.g. +15551234567.
+    TWILIO_FROM_NUMBER: str = ""
+    # Sentry error reporting. Empty disables Sentry entirely (local/dev default).
+    SENTRY_DSN: str = ""
+
+    @property
+    def is_production(self) -> bool:
+        return self.VERCEL_ENV == "production"
+
+    @property
+    def is_deployed(self) -> bool:
+        # Preview deploys are public URLs that inherit env vars; they get the
+        # same config guard and lockdowns as production.
+        return self.VERCEL_ENV in ("production", "preview")
 
     class Config:
         env_file = ".env"
-
-    @property
-    def cors_origins(self) -> list[str]:
-        """Return explicit CORS origins, supporting comma-separated env overrides."""
-        items = [self.FRONTEND_URL, *self.FRONTEND_URLS.split(",")]
-        return [origin.strip() for origin in items if origin and origin.strip()]
+        extra = "ignore"
 
 
 settings = Settings()
-
-if not (settings.SUPABASE_JWT_SECRET or "").strip():
-    raise RuntimeError(
-        "SUPABASE_JWT_SECRET is missing or whitespace-only. "
-        "Set it in the environment or in a .env file next to the API (local dev: copy from "
-        "Supabase Project Settings → API → JWT Secret). The API refuses to start without a "
-        "non-empty signing key."
-    )
