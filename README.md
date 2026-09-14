@@ -15,6 +15,10 @@ hosted UI in `Prod/fratos` (clone of greekos). See `Prod/vercel.json`.
 **demo** Supabase database. Do not treat that data as a real chapter. A
 separate prod project comes after this window.
 
+**Launch the demo locally:** [`docs/launch-demo.md`](docs/launch-demo.md)
+(`cd LocalDev && npm run dev`, then sign in as `jake@tke.org` /
+`demo-officer-pw`).
+
 Domain language lives in [`CONTEXT.md`](CONTEXT.md); architectural decisions in
 [`docs/adr/`](docs/adr/).
 
