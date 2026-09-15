@@ -218,7 +218,7 @@ export async function optionalOfficerCall<T, F>(call: Promise<T>, fallback: F): 
 // ----------------------------------------------------
 // BACKEND DTOs (snake_case, exactly as the API returns them)
 // ----------------------------------------------------
-export interface MeDto { id: string; name: string; email: string; role: string; chapter_id: string; }
+export interface MeDto { id: string; name: string; email: string; role: string; chapter_id: string; chapter_name: string | null; }
 
 /** GET /api/rbac/me/permissions — the only source of authority in the UI. */
 export interface MyPermissionsDto { permissions: string[]; roles: string[]; }
@@ -352,6 +352,50 @@ export interface TreasuryDashboardDto {
   recent_payments: VerifiedPaymentDto[];
 }
 
+/** One open invoice as the member dashboard presents it. `source` is the V1
+ *  vocabulary (dues|fine|manual|…), `status` the V1 open/paid/void mapping. */
+export interface OpenInvoiceDto {
+  id: string;
+  description: string | null;
+  amount_cents: number;
+  remaining_cents: number;
+  due_at: string | null;
+  overdue: boolean;
+  source: string | null;
+  status: string;
+}
+
+/** Evidence metadata, as the review queue carries it (never the bytes). */
+export interface EvidenceRefDto {
+  id: string;
+  content_type: string;
+  size_bytes: number;
+}
+
+/** A member's claim that they paid, awaiting a `treasury:payment:verify` holder. */
+export interface PaymentSubmissionDto {
+  id: string;
+  member_id: string;
+  invoice_id: string | null;
+  claimed_amount_cents: number;
+  method: string;
+  status: string;
+  proof_ref: string | null;
+  created_at: string;
+  /** Present on the review-queue read; absent on a freshly-created submission. */
+  evidence?: EvidenceRefDto[];
+}
+
+/** GET /api/treasury/payments/evidence/{id} — the bytes, base64-encoded. */
+export interface EvidenceDto extends EvidenceRefDto {
+  submission_id: string;
+  data_base64: string;
+}
+
+export interface BulkInvoiceResultDto { count: number; invoice_ids: string[]; }
+
+export interface PageDto<T> { data: T[]; next_cursor: string | null; total: number; }
+
 /** GET /api/treasury/members/{id}/dashboard — readable by the member themself. */
 export interface MemberTreasuryDashboardDto {
   member_id: string;
@@ -362,17 +406,8 @@ export interface MemberTreasuryDashboardDto {
     total_paid_cents: number;
   };
   pending_cents: number;
-  pending_submissions: unknown[];
-  open_invoices: {
-    id: string;
-    description: string | null;
-    amount_cents: number;
-    remaining_cents: number;
-    due_at: string | null;
-    overdue: boolean;
-    source: string | null;
-    status: string;
-  }[];
+  pending_submissions: PaymentSubmissionDto[];
+  open_invoices: OpenInvoiceDto[];
   recent_activity: unknown[];
 }
 
@@ -555,6 +590,49 @@ export const api = {
   getTreasuryDashboard: () => request<TreasuryDashboardDto>('GET', '/api/treasury/dashboard'),
   getMemberTreasuryDashboard: (memberId: string) =>
     request<MemberTreasuryDashboardDto>('GET', `/api/treasury/members/${memberId}/dashboard`),
+
+  // ── The dues run → invoice → proof → verify loop ────────────────────────────
+  /** One dues run = one bulk batch. Needs `treasury:invoice:create`. */
+  bulkCreateInvoices: (invoices: {
+    member_id: string;
+    kind: string;
+    amount_cents: number;
+    description?: string;
+    due_at?: string;
+  }[]) => request<BulkInvoiceResultDto>('POST', '/api/treasury/invoices/bulk', { invoices }),
+
+  /** The member's own claim that they paid — self only, no permission key. */
+  submitPaymentProof: (body: {
+    invoice_id: string;
+    claimed_amount_cents: number;
+    method: string;
+    proof_ref?: string;
+  }) => request<PaymentSubmissionDto>('POST', '/api/treasury/payments/submissions', body),
+
+  /** Attach a screenshot to a submission the caller owns (≤ 2 MiB). */
+  addPaymentEvidence: (submissionId: string, contentType: string, dataBase64: string) =>
+    request<EvidenceRefDto>('POST', `/api/treasury/payments/submissions/${submissionId}/evidence`, {
+      content_type: contentType,
+      data_base64: dataBase64
+    }),
+
+  /** The review queue. Needs `treasury:payment:verify`. */
+  listPaymentSubmissions: (status = 'pending') =>
+    request<PageDto<PaymentSubmissionDto>>(
+      'GET',
+      `/api/treasury/payments/submissions?status=${encodeURIComponent(status)}`
+    ),
+
+  /** Evidence bytes — the reviewer or the submitting member. */
+  getPaymentEvidence: (evidenceId: string) =>
+    request<EvidenceDto>('GET', `/api/treasury/payments/evidence/${evidenceId}`),
+
+  // The -v1 pair is the current path: verify allocates oldest-first across the
+  // member's open invoices, and reject makes the reason mandatory.
+  verifyPaymentSubmission: (submissionId: string) =>
+    request<unknown>('POST', `/api/treasury/payments/submissions/${submissionId}/verify-v1`),
+  rejectPaymentSubmission: (submissionId: string, reason: string) =>
+    request<unknown>('POST', `/api/treasury/payments/submissions/${submissionId}/reject-v1`, { reason }),
 
   getTasks: () => request<TaskDto[]>('GET', '/api/tasks/'),
   createTask: (body: Record<string, unknown>) => request<TaskDto>('POST', '/api/tasks/', body),
