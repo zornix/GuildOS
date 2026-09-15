@@ -340,7 +340,7 @@ export default function EventsModule({
         {selectedEvent ? (
           <div className="lg:col-span-2 space-y-6">
             {/* Top Event Banner */}
-            <Card className="p-6 space-y-4">
+            <Card className="p-4 sm:p-6 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
@@ -365,7 +365,7 @@ export default function EventsModule({
                 <div className="flex sm:flex-col gap-2 shrink-0">
                   <button
                     onClick={() => setShowLiveQRModal(true)}
-                    className="bg-navy hover:bg-slate-800 text-gold font-bold text-xs px-3.5 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                    className="bg-navy hover:bg-slate-800 text-gold font-bold text-xs px-3.5 py-2 min-h-11 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                   >
                     <QrCode className="w-4 h-4" />
                     Show door code
@@ -374,7 +374,7 @@ export default function EventsModule({
                   {isOfficer && (
                     <button
                       onClick={() => onToggleCheckInLink(selectedEvent.id)}
-                      className={`text-xs font-semibold px-3 py-1.5 rounded-lg border flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      className={`text-xs font-semibold px-3 py-1.5 min-h-11 sm:min-h-0 rounded-lg border flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                         selectedEvent.checkInLinkActive
                           ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
                           : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
@@ -465,7 +465,7 @@ export default function EventsModule({
                     {(!selectedEvent.organizers?.includes(currentMemberName)) && (
                       <button
                         onClick={() => onVolunteerOrganizer(selectedEvent.id, currentMemberName)}
-                        className="text-xs bg-gold hover:bg-[#c5a02b] text-navy font-bold px-2.5 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
+                        className="text-xs bg-gold hover:bg-[#c5a02b] text-navy font-bold px-2.5 py-1 min-h-11 sm:min-h-0 rounded-md transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
                       >
                         <Sparkles className="w-3.5 h-3.5" />
                         Volunteer as Organizer
@@ -546,7 +546,7 @@ export default function EventsModule({
             </Card>
 
             {/* Section 2: Claimable Jobs Machinery */}
-            <Card className="p-6 space-y-4">
+            <Card className="p-4 sm:p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="font-display font-extrabold text-slate-900 text-base flex items-center gap-2">
@@ -561,7 +561,7 @@ export default function EventsModule({
                 {isOfficer && (
                   <button
                     onClick={() => setShowAddJobModal(true)}
-                    className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer"
+                    className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-3 py-1.5 min-h-11 sm:min-h-0 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     Add Job
@@ -665,7 +665,7 @@ export default function EventsModule({
                                     onClaimJob(selectedEvent.id, job.id, currentMember.id, currentMember.name);
                                   }
                                 }}
-                                className="text-xs bg-gold hover:bg-[#c5a02b] text-navy font-bold px-3 py-1.5 rounded-lg transition-all cursor-pointer"
+                                className="text-xs bg-gold hover:bg-[#c5a02b] text-navy font-bold px-3 py-1.5 min-h-11 sm:min-h-0 rounded-lg transition-all cursor-pointer"
                               >
                                 Claim This Job
                               </button>
@@ -680,7 +680,7 @@ export default function EventsModule({
                                     onUnclaimJob(selectedEvent.id, job.id, currentMember.id);
                                   }
                                 }}
-                                className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all ${
+                                className={`text-xs font-semibold px-3 py-1.5 min-h-11 sm:min-h-0 rounded-lg border transition-all ${
                                   lockUnclaim
                                     ? 'bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed'
                                     : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100 cursor-pointer'
@@ -694,7 +694,7 @@ export default function EventsModule({
                             {isClaimedByMe && job.status === 'In Progress' && (
                               <button
                                 onClick={() => onReportJobDone(selectedEvent.id, job.id, currentMemberName)}
-                                className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1.5 rounded-lg transition-all cursor-pointer"
+                                className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1.5 min-h-11 sm:min-h-0 rounded-lg transition-all cursor-pointer"
                               >
                                 Report Completed
                               </button>
@@ -705,7 +705,7 @@ export default function EventsModule({
                             {isOfficer && (
                               <button
                                 onClick={() => openEditJob(job)}
-                                className="text-xs font-semibold px-3 py-1.5 rounded-lg border bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 transition-all cursor-pointer flex items-center gap-1"
+                                className="text-xs font-semibold px-3 py-1.5 min-h-11 sm:min-h-0 rounded-lg border bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 transition-all cursor-pointer flex items-center gap-1"
                               >
                                 <Pencil className="w-3.5 h-3.5" />
                                 Edit
@@ -715,7 +715,7 @@ export default function EventsModule({
                             {isOfficer && job.status === 'To Do' && claimants.length === 0 && (
                               <button
                                 onClick={() => onDeleteJob(selectedEvent.id, job.id)}
-                                className="text-xs font-semibold px-3 py-1.5 rounded-lg border bg-red-50 text-red-700 border-red-200 hover:bg-red-100 transition-all cursor-pointer flex items-center gap-1"
+                                className="text-xs font-semibold px-3 py-1.5 min-h-11 sm:min-h-0 rounded-lg border bg-red-50 text-red-700 border-red-200 hover:bg-red-100 transition-all cursor-pointer flex items-center gap-1"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                                 Delete
@@ -728,7 +728,7 @@ export default function EventsModule({
                             <div className="flex items-center gap-2">
                               <button
                                 onClick={() => onApproveJob(selectedEvent.id, job.id, currentMemberName)}
-                                className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1"
+                                className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 min-h-11 sm:min-h-0 rounded-lg transition-all cursor-pointer flex items-center gap-1"
                               >
                                 <CheckCircle2 className="w-3.5 h-3.5" />
                                 Approve Job
@@ -736,7 +736,7 @@ export default function EventsModule({
 
                               <button
                                 onClick={() => setShowRejectModal({ eventId: selectedEvent.id, jobId: job.id })}
-                                className="text-xs bg-red-600 hover:bg-red-700 text-white font-bold px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1"
+                                className="text-xs bg-red-600 hover:bg-red-700 text-white font-bold px-3 py-1.5 min-h-11 sm:min-h-0 rounded-lg transition-all cursor-pointer flex items-center gap-1"
                               >
                                 <XCircle className="w-3.5 h-3.5" />
                                 Reject with Reason
@@ -752,7 +752,7 @@ export default function EventsModule({
             </Card>
 
             {/* Section 3: Security Shifts & Security Swap (Optional / Pre-assigned) */}
-            <Card className="p-6 space-y-4">
+            <Card className="p-4 sm:p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="font-display font-extrabold text-slate-900 text-base flex items-center gap-2">
@@ -771,7 +771,7 @@ export default function EventsModule({
                       setSelectedSecMemberId(members[0]?.id || '');
                       setShowSecurityAssignModal(true);
                     }}
-                    className="text-xs bg-navy hover:bg-slate-800 text-gold font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer"
+                    className="text-xs bg-navy hover:bg-slate-800 text-gold font-bold px-3 py-1.5 min-h-11 sm:min-h-0 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     Assign Member
@@ -829,7 +829,7 @@ export default function EventsModule({
                               {isMyAssignment && sec.swapStatus !== 'Pending' && (
                                 <button
                                   onClick={() => setShowSwapModal({ eventId: selectedEvent.id, assignmentId: sec.id })}
-                                  className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold px-2.5 py-1 rounded transition-all cursor-pointer"
+                                  className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold px-2.5 py-1 min-h-11 sm:min-h-0 rounded transition-all cursor-pointer"
                                 >
                                   Request Swap
                                 </button>
@@ -839,7 +839,7 @@ export default function EventsModule({
                               {isMyAssignment && sec.swapStatus === 'Pending' && (
                                 <button
                                   onClick={() => onCancelSecuritySwap(selectedEvent.id, sec.id)}
-                                  className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold px-2.5 py-1 rounded transition-all cursor-pointer"
+                                  className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold px-2.5 py-1 min-h-11 sm:min-h-0 rounded transition-all cursor-pointer"
                                 >
                                   Cancel request
                                 </button>
@@ -850,13 +850,13 @@ export default function EventsModule({
                                 <div className="flex items-center justify-end gap-1.5">
                                   <button
                                     onClick={() => onRespondSecuritySwap(selectedEvent.id, sec.id, true)}
-                                    className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2 py-1 rounded cursor-pointer"
+                                    className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2 py-1 min-h-11 sm:min-h-0 rounded cursor-pointer"
                                   >
                                     Accept
                                   </button>
                                   <button
                                     onClick={() => onRespondSecuritySwap(selectedEvent.id, sec.id, false)}
-                                    className="text-xs bg-red-600 hover:bg-red-700 text-white font-bold px-2 py-1 rounded cursor-pointer"
+                                    className="text-xs bg-red-600 hover:bg-red-700 text-white font-bold px-2 py-1 min-h-11 sm:min-h-0 rounded cursor-pointer"
                                   >
                                     Decline
                                   </button>
@@ -1079,14 +1079,14 @@ export default function EventsModule({
             <div className="flex gap-2 justify-end">
               <button
                 onClick={() => setShowRejectModal(null)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg"
+                className="px-4 py-2 min-h-11 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg"
               >
                 Cancel
               </button>
               <button
                 disabled={!rejectReason.trim()}
                 onClick={handleConfirmReject}
-                className="px-4 py-2 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all disabled:opacity-50"
+                className="px-4 py-2 min-h-11 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all disabled:opacity-50"
               >
                 Confirm Rejection & Send Notice
               </button>
@@ -1148,14 +1148,14 @@ export default function EventsModule({
             <div className="flex gap-2 justify-end">
               <button
                 onClick={() => setShowSwapModal(null)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg"
+                className="px-4 py-2 min-h-11 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg"
               >
                 Cancel
               </button>
               <button
                 disabled={!targetSwapMemberId}
                 onClick={handleConfirmSwapRequest}
-                className="px-4 py-2 text-xs font-bold bg-gold text-navy hover:bg-[#c5a02b] rounded-lg disabled:opacity-50"
+                className="px-4 py-2 min-h-11 text-xs font-bold bg-gold text-navy hover:bg-[#c5a02b] rounded-lg disabled:opacity-50"
               >
                 Send Swap Request
               </button>

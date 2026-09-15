@@ -123,10 +123,10 @@ export default function AttendanceModule({
       </div>
 
       {/* Navigation subtabs */}
-      <div className="flex border-b border-slate-200 gap-6 text-sm font-semibold">
+      <div className="flex border-b border-slate-200 gap-4 sm:gap-6 text-sm font-semibold overflow-x-auto">
         <button
           onClick={() => setActiveTab('roster_check')}
-          className={`pb-3 transition-all cursor-pointer flex items-center gap-2 ${
+          className={`pb-3 shrink-0 whitespace-nowrap transition-all cursor-pointer flex items-center gap-2 ${
             activeTab === 'roster_check'
               ? 'text-navy border-b-2 border-gold font-bold'
               : 'text-slate-500 hover:text-slate-800'
@@ -138,7 +138,7 @@ export default function AttendanceModule({
 
         <button
           onClick={() => setActiveTab('self_pin')}
-          className={`pb-3 transition-all cursor-pointer flex items-center gap-2 ${
+          className={`pb-3 shrink-0 whitespace-nowrap transition-all cursor-pointer flex items-center gap-2 ${
             activeTab === 'self_pin'
               ? 'text-navy border-b-2 border-gold font-bold'
               : 'text-slate-500 hover:text-slate-800'
@@ -150,7 +150,7 @@ export default function AttendanceModule({
 
         <button
           onClick={() => setActiveTab('excuses')}
-          className={`pb-3 transition-all cursor-pointer flex items-center gap-2 ${
+          className={`pb-3 shrink-0 whitespace-nowrap transition-all cursor-pointer flex items-center gap-2 ${
             activeTab === 'excuses'
               ? 'text-navy border-b-2 border-gold font-bold'
               : 'text-slate-500 hover:text-slate-800'
@@ -163,14 +163,14 @@ export default function AttendanceModule({
 
       {/* TAB 1: Roll call */}
       {activeTab === 'roster_check' && (
-        <Card className="p-6 space-y-6">
+        <Card className="p-4 sm:p-6 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
             <div>
               <span className="text-xs text-slate-500 font-bold block">Select Chapter Event</span>
               <select
                 value={selectedEventId}
                 onChange={e => setSelectedEventId(e.target.value)}
-                className="font-display font-bold text-slate-900 text-base border-none focus:outline-none cursor-pointer bg-transparent"
+                className="max-w-full font-display font-bold text-slate-900 text-base border-none focus:outline-none cursor-pointer bg-transparent"
               >
                 {safeEvents.map(ev => (
                   <option key={ev.id} value={ev.id}>
@@ -182,7 +182,7 @@ export default function AttendanceModule({
 
             {isOfficer && (
               <div className="flex flex-col sm:items-end gap-2">
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {summary.unmarked > 0 && (
                     <button
                       type="button"
@@ -212,11 +212,11 @@ export default function AttendanceModule({
             <table className="w-full text-xs text-left">
               <thead className="bg-slate-50 border-y border-slate-200 text-slate-600 text-xs">
                 <tr>
-                  <th className="py-2.5 px-3">Brother</th>
-                  <th className="py-2.5 px-3">Role</th>
+                  <th className="py-2.5 px-2 sm:px-3">Brother</th>
+                  <th className="py-2.5 px-3 hidden sm:table-cell">Role</th>
                   {/* Attendance rates are for the member themself and officers only. */}
-                  {isOfficer && <th className="py-2.5 px-3">Semester rate</th>}
-                  <th className="py-2.5 px-3 text-right">Attendance Status</th>
+                  {isOfficer && <th className="py-2.5 px-3 hidden sm:table-cell">Semester rate</th>}
+                  <th className="py-2.5 px-2 sm:px-3 text-right">Attendance Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -225,12 +225,12 @@ export default function AttendanceModule({
 
                   return (
                     <tr key={mem.id} className="hover:bg-slate-50/60">
-                      <td className="py-3 px-3">
+                      <td className="py-3 px-2 sm:px-3">
                         <span className="font-bold text-slate-900">{mem.name}</span>
                       </td>
-                      <td className="py-3 px-3 text-slate-500">{mem.role}</td>
+                      <td className="py-3 px-3 text-slate-500 hidden sm:table-cell">{mem.role}</td>
                       {isOfficer && (
-                        <td className="py-3 px-3">
+                        <td className="py-3 px-3 hidden sm:table-cell">
                           <span className={`font-bold ${
                             mem.attendanceRate >= 85 ? 'text-emerald-600' : 'text-red-600'
                           }`}>
@@ -238,8 +238,8 @@ export default function AttendanceModule({
                           </span>
                         </td>
                       )}
-                      <td className="py-3 px-3 text-right">
-                        {!status && <span className="text-xs text-slate-400 mr-2">Unmarked</span>}
+                      <td className="py-3 px-2 sm:px-3 text-right">
+                        {!status && <span className="hidden sm:inline text-xs text-slate-400 mr-2">Unmarked</span>}
                         <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 text-xs font-semibold">
                           {(['Present', 'Late', 'Excused', 'Absent'] as const).map(st => {
                             const isCur = status === st;
@@ -248,7 +248,7 @@ export default function AttendanceModule({
                                 key={st}
                                 disabled={!isOfficer}
                                 onClick={() => handleStatusChange(mem.id, st)}
-                                className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                                className={`px-1.5 sm:px-2.5 py-1 min-h-11 sm:min-h-0 rounded-md transition-all cursor-pointer ${
                                   isCur 
                                     ? st === 'Present' 
                                       ? 'bg-emerald-600 text-white shadow-2xs' 
@@ -277,7 +277,7 @@ export default function AttendanceModule({
 
       {/* TAB 2: Door code */}
       {activeTab === 'self_pin' && (
-        <Card className="p-6 max-w-lg mx-auto text-center space-y-6">
+        <Card className="p-4 sm:p-6 max-w-lg mx-auto text-center space-y-6">
           <div className="space-y-1">
             <div className="w-12 h-12 rounded-2xl bg-amber-50 text-gold flex items-center justify-center mx-auto mb-2 border border-amber-200">
               <KeyRound className="w-6 h-6" />
@@ -296,7 +296,7 @@ export default function AttendanceModule({
 
       {/* TAB 3: Excuses */}
       {activeTab === 'excuses' && (
-        <Card className="p-6 space-y-4">
+        <Card className="p-4 sm:p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-display font-bold text-slate-900 text-base">Submitted Excuse Requests</h3>
@@ -338,7 +338,7 @@ export default function AttendanceModule({
                     <div className="flex items-center gap-2 shrink-0">
                       <button
                         onClick={() => onReviewExcuse(excuse.id, 'Approved', currentMemberName)}
-                        className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1"
+                        className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 min-h-11 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1"
                       >
                         <Check className="w-3.5 h-3.5" />
                         Approve
@@ -346,7 +346,7 @@ export default function AttendanceModule({
 
                       <button
                         onClick={() => onReviewExcuse(excuse.id, 'Rejected', currentMemberName)}
-                        className="text-xs bg-red-600 hover:bg-red-700 text-white font-bold px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1"
+                        className="text-xs bg-red-600 hover:bg-red-700 text-white font-bold px-3 py-1.5 min-h-11 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1"
                       >
                         <X className="w-3.5 h-3.5" />
                         Reject

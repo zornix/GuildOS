@@ -35,7 +35,7 @@ export default function OnboardingScreen({ onBack }: { onBack: () => void }) {
     }
   };
 
-  const field = 'w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-gold';
+  const field = 'w-full text-sm border border-slate-200 rounded-lg p-2.5 min-h-11 focus:outline-none focus:border-gold';
   const label = 'text-xs font-semibold text-slate-700 block mb-1';
 
   if (created) {
