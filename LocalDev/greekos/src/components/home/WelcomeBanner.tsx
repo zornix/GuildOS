@@ -1,6 +1,6 @@
 import { Calendar, KeyRound, Wallet } from 'lucide-react';
 import type { ChapterEvent, Member } from '../../types';
-import type { ContributionSummary } from '../../lib/contribution';
+import type { ContributionRecord } from '../../lib/contribution';
 import { MemberBalance, balanceStatusLine } from '../../lib/balance';
 import DoorCodeField from './DoorCodeField';
 
@@ -9,7 +9,7 @@ interface WelcomeBannerProps {
   currentMemberName: string;
   memberCount: number;
   isOfficer: boolean;
-  contribution: ContributionSummary;
+  contribution: ContributionRecord;
   myBalance: MemberBalance | null;
   liveDoorEvent: ChapterEvent | undefined;
   onScheduleEvent: () => void;
@@ -18,7 +18,7 @@ interface WelcomeBannerProps {
   onSelfCheckIn: (code: string) => Promise<{ ok: boolean; message: string }>;
 }
 
-/** Name, role, standing, the member's own upcoming counts, balance owed, and
+/** Name, role, standing, the member's own lifetime counts, balance owed, and
  *  the two actions that finish on this screen: schedule (officer) and
  *  check in (member, when a door is open). */
 export default function WelcomeBanner({
@@ -26,9 +26,9 @@ export default function WelcomeBanner({
   onScheduleEvent, onOpenTreasury, onOpenAttendance, onSelfCheckIn
 }: WelcomeBannerProps) {
   const counts = [
-    `Organizing ${contribution.eventsOrganized}`,
-    ...(isOfficer ? [`Supervising ${contribution.eventsSupervised}`] : []),
-    `Chairing ${contribution.initiativesChaired}`
+    `Organized ${contribution.eventsOrganized.length}`,
+    ...(isOfficer ? [`Supervised ${contribution.eventsSupervised.length}`] : []),
+    `Chaired ${contribution.initiativesChaired.length}`
   ];
   const balanceLine = balanceStatusLine(myBalance);
 
@@ -48,10 +48,11 @@ export default function WelcomeBanner({
           <p className="text-xs text-slate-300">
             Alpha Chapter &bull; {memberCount} members
           </p>
-          {/* Personal, upcoming-only. Facts of assignment shown to the member
-              themself — never a ranking, never a standing input (ADR-0004). */}
+          {/* Personal lifetime counts from GET /api/contribution/me. Facts
+              shown to the member themself — never a ranking, never a standing
+              input (ADR-0004). */}
           <p className="text-xs text-slate-200 pt-1">
-            <span className="text-slate-400">Upcoming:</span> {counts.join(' · ')}
+            <span className="text-slate-400">Record:</span> {counts.join(' · ')}
           </p>
         </div>
 

@@ -313,6 +313,25 @@ export interface InitiativeDto {
   chair_member_ids: string[];
 }
 
+/** GET /api/contribution/me — the member's own derived record (issue #40). */
+export interface ContributionDto {
+  member_id: string;
+  events_organized: { event_id: string; title: string; date: string; attendee_count: number }[];
+  events_supervised: { event_id: string; title: string; date: string; attendee_count: number }[];
+  initiatives_chaired: {
+    initiative_id: string;
+    title: string;
+    date_range: { start: string; end: string | null };
+  }[];
+  jobs_done: {
+    job_id: string;
+    title: string;
+    attached_to: 'event' | 'initiative' | 'standalone';
+    date: string;
+  }[];
+  events_attended_count: number;
+}
+
 // ----------------------------------------------------
 // ENDPOINTS (paths are the exact mounted ones — trailing slashes matter)
 // ----------------------------------------------------
@@ -434,6 +453,8 @@ export const api = {
     request<RecruitDto>('POST', '/api/recruitment/recruits', body),
   setRecruitStage: (id: string, stage: string) =>
     request<RecruitDto>('POST', `/api/recruitment/recruits/${id}/stage`, { stage }),
+
+  getMyContribution: () => request<ContributionDto>('GET', '/api/contribution/me'),
 
   getInitiatives: () => request<InitiativeDto[]>('GET', '/api/initiatives/'),
   createInitiative: (body: Record<string, unknown>) =>

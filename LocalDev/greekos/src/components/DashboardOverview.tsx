@@ -4,11 +4,12 @@ import { ChapterEvent, Member, Task, Initiative, Announcement } from '../types';
 import Card from './ui/Card';
 import ConfirmDialog from './ui/ConfirmDialog';
 import { isoDay } from '../formatters';
-import type { ContributionSummary } from '../lib/contribution';
+import type { ContributionRecord } from '../lib/contribution';
 import type { MemberBalance } from '../lib/balance';
 import { liveDoorEvent } from '../lib/events';
 import { isTaskComplete } from '../lib/tasks';
 import WelcomeBanner from './home/WelcomeBanner';
+import MyRecord from './home/MyRecord';
 
 interface DashboardOverviewProps {
   members: Member[];
@@ -18,7 +19,7 @@ interface DashboardOverviewProps {
   announcements: Announcement[];
   isOfficer: boolean;
   currentMemberName: string;
-  contribution: ContributionSummary;
+  contribution: ContributionRecord;
   myBalance: MemberBalance | null;
   onNavigateTab: (tab: string) => void;
   onOpenEvent: (eventId: string) => void;
@@ -79,6 +80,8 @@ export default function DashboardOverview({
         onOpenAttendance={() => onNavigateTab('attendance')}
         onSelfCheckIn={onSelfCheckIn}
       />
+
+      <MyRecord record={contribution} />
 
       {isOfficer && pendingJobSignOffs.length > 0 && (
         <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">

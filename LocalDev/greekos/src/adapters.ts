@@ -3,6 +3,7 @@
 // (GPA, pledge class) stay defaulted.
 import {
   AnnouncementDto,
+  ContributionDto,
   EventDetailDto,
   EventDto,
   ExcuseDto,
@@ -32,6 +33,7 @@ import {
   SecurityAssignment,
   Task
 } from './types';
+import { ContributionRecord } from './lib/contribution';
 
 const nameOf = (members: Member[], id: string | null | undefined) =>
   members.find(m => m.id === id)?.name || 'Unknown Member';
@@ -390,4 +392,34 @@ export function adaptInitiatives(rows: InitiativeDto[], members: Member[]): Init
     status: 'Active',
     jobs: []
   }));
+}
+
+// ----------------------------------------------------
+// CONTRIBUTION (issue #40 — the member's own derived record)
+// ----------------------------------------------------
+export function adaptContribution(row: ContributionDto): ContributionRecord {
+  const events = (rows: ContributionDto['events_organized']) =>
+    rows.map(e => ({
+      eventId: e.event_id,
+      title: e.title,
+      date: day(e.date),
+      attendeeCount: e.attendee_count
+    }));
+  return {
+    eventsOrganized: events(row.events_organized),
+    eventsSupervised: events(row.events_supervised),
+    initiativesChaired: row.initiatives_chaired.map(i => ({
+      initiativeId: i.initiative_id,
+      title: i.title,
+      start: day(i.date_range.start),
+      end: i.date_range.end ? day(i.date_range.end) : null
+    })),
+    jobsDone: row.jobs_done.map(j => ({
+      jobId: j.job_id,
+      title: j.title,
+      attachedTo: j.attached_to,
+      date: day(j.date)
+    })),
+    eventsAttendedCount: row.events_attended_count
+  };
 }

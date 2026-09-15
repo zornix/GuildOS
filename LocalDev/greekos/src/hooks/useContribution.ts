@@ -1,19 +1,10 @@
-import { useMemo } from 'react';
-import type { ChapterEvent, Initiative } from '../types';
-import { isoDay } from '../formatters';
-import { ContributionSummary, upcomingContribution } from '../lib/contribution';
+import { useState } from 'react';
+import { ContributionRecord, EMPTY_CONTRIBUTION } from '../lib/contribution';
 
-/** Personal contribution counts for the signed-in (or viewed-as) member.
- *  ponytail: upcoming-only, computed from loaded rows. Swap the body for
- *  api.getMyContribution() + an adapter when issue #40 lands; callers keep
- *  the same ContributionSummary. */
-export function useContribution(
-  memberName: string,
-  events: ChapterEvent[],
-  initiatives: Initiative[]
-): ContributionSummary {
-  return useMemo(
-    () => upcomingContribution(memberName, events, initiatives, isoDay()),
-    [memberName, events, initiatives]
-  );
+/** The signed-in member's contribution record, loaded once by useAppData from
+ *  GET /api/contribution/me. Lifetime counts are the server's to derive — the
+ *  UI never recomputes them from whatever rows happen to be loaded. */
+export function useContribution() {
+  const [record, setRecord] = useState<ContributionRecord>(EMPTY_CONTRIBUTION);
+  return { record, setRecord };
 }
