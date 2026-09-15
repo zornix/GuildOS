@@ -19,6 +19,9 @@ class SetPasswordRequest(BaseModel):
 
 class InviteRequest(BaseModel):
     emails: list[EmailStr]
+    # Set only when the officer confirms these people signed an SMS opt-in (#57).
+    # Applies to every address in the batch; default false.
+    sms_consent: bool = False
 
 
 class RedeemSetupCodeRequest(BaseModel):

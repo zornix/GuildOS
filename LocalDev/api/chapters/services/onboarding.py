@@ -3,8 +3,14 @@
 The CSV contract, in one place:
 
     required headers: name,email,phone
-    optional header:  role   (a key from the `roles` catalog, e.g. treasurer)
+    optional header:  role      (a key from the `roles` catalog, e.g. treasurer)
+    optional header:  consent   (yes|y|true|1 = this member signed an SMS opt-in)
     extra columns are ignored
+
+The `consent` column carries the signed SMS opt-in the chapter collected before
+import (#57). A missing column, an empty cell, or any other value leaves
+`sms_consent_at` NULL — silence is never consent, and the delivery paths refuse
+to text a member without it.
 
 Import is **all-or-nothing**: the whole file is validated before a single row is
 written, and any bad row returns 422 with the offending row numbers (1-based on
@@ -17,13 +23,19 @@ from __future__ import annotations
 
 import csv
 import io
+from datetime import datetime, timezone
 
 from api.auth.api.auth import _issue_setup_code
 from api.phone import to_e164
 from api.platform.rpc import call_rpc
+from api.sms_consent import is_truthy
 
 REQUIRED_HEADERS = ("name", "email", "phone")
-OPTIONAL_HEADERS = ("role",)
+OPTIONAL_HEADERS = ("role", "consent")
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 class RosterFileError(Exception):
@@ -34,7 +46,17 @@ class RosterFileError(Exception):
         self.errors = errors
 
 
-def create_chapter(sb, *, name, organization, school, officer_name, officer_email, officer_phone):
+def create_chapter(
+    sb,
+    *,
+    name,
+    organization,
+    school,
+    officer_name,
+    officer_email,
+    officer_phone,
+    sms_consent: bool = False,
+):
     """Create the chapter, its first officer, and the officer's setup code."""
     result = call_rpc(
         "ch_create_chapter",
@@ -49,6 +71,13 @@ def create_chapter(sb, *, name, organization, school, officer_name, officer_emai
         sb=sb,
     )
     created = result.data
+    if sms_consent:
+        # Not an RPC param: a seventh argument would create a second
+        # ch_create_chapter overload rather than replace 0156's. Stamping one
+        # flag on a row we just created is not a trust-boundary multi-write.
+        sb.table("members").update({"sms_consent_at": _now_iso()}).eq(
+            "id", created["officer_id"]
+        ).execute()
     code, expires_at = _issue_setup_code(
         sb, chapter_id=created["chapter_id"], member_id=created["officer_id"]
     )
@@ -104,7 +133,13 @@ def parse_roster_csv(raw: bytes, *, valid_role_keys: set[str]) -> list[dict]:
         if role_key and role_key not in valid_role_keys:
             errors.append({"row": row_no, "error": f"unknown role: {role_key}"})
 
-        rows.append({"name": name, "email": email, "phone": phone, "role_key": role_key})
+        rows.append({
+            "name": name,
+            "email": email,
+            "phone": phone,
+            "role_key": role_key,
+            "sms_consent": is_truthy(cell.get("consent")),
+        })
 
     if errors:
         raise RosterFileError(errors)

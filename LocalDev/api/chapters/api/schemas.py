@@ -10,6 +10,9 @@ class CreateChapterRequest(BaseModel):
     officer_name: str
     officer_email: EmailStr
     officer_phone: str
+    # Did this officer tick the SMS opt-in on the signup form? (#57) Default
+    # false: an absent field is "did not consent", never "probably fine".
+    sms_consent: bool = False
 
     @field_validator("name", "officer_name")
     @classmethod
