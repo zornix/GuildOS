@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     # Shared secret for the Vercel Cron caller (api/cron/api/cron.py). Empty disables
     # every cron endpoint (returns 401) so an unconfigured deploy can't be triggered.
     CRON_SECRET: str = ""
+    # Ops shared secret for POST /api/chapters (api/chapters/auth.py). Empty just
+    # means the ops path is unavailable; the rate-limited bootstrap path stays on.
+    PLATFORM_SECRET: str = ""
     # Set by Vercel at build/runtime ("production" | "preview" | "development").
     # Empty locally. Drives the production boot guard in api/index.py.
     VERCEL_ENV: str = ""
