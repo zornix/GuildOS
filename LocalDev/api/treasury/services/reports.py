@@ -90,6 +90,21 @@ def list_payment_submissions(
     result = qb.execute()
     data = result.data or []
 
+    # Evidence metadata (never the bytes) so a reviewer can open the proof from
+    # the queue row. One extra query for the whole page.
+    if data:
+        evidence_rows = (
+            sb.table("payment_evidence")
+            .select("id, submission_id, content_type, size_bytes, created_at")
+            .eq("chapter_id", chapter_id)
+            .in_("submission_id", [str(row["id"]) for row in data])
+            .execute()
+        ).data or []
+        by_submission: dict[str, list[dict]] = {}
+        for ev in evidence_rows:
+            by_submission.setdefault(str(ev["submission_id"]), []).append(ev)
+        data = [{**row, "evidence": by_submission.get(str(row["id"]), [])} for row in data]
+
     # next_cursor: stringify the next offset if more rows remain
     next_offset = offset + len(data)
     next_cursor: str | None = str(next_offset) if next_offset < total else None
