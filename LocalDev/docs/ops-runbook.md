@@ -166,8 +166,9 @@ Set these in the Vercel project (Production scope):
 | `DEV_AUTH_BYPASS` | unset or `false`. Enables `/api/auth/dev-login` otherwise. |
 | `CRON_SECRET` | non-empty; Vercel Cron sends it as `Authorization: Bearer …`. |
 | `FRONTEND_URL` / `BASE_URL` | real deployed origins (CORS + generated links). |
-| `MESSAGE_DELIVERY_MODE` | `dry_run` until 10DLC clears (§6), then `twilio`. |
-| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER` | required when mode is `twilio`. |
+| `MESSAGE_DELIVERY_MODE` | `dry_run` until toll-free verification clears (§6), then `twilio`. |
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` | required when mode is `twilio`. |
+| `TWILIO_MESSAGING_SERVICE_SID` *or* `TWILIO_FROM_NUMBER` | exactly one, when mode is `twilio`. Prefer the Messaging Service (§6). |
 | `SENTRY_DSN` | enables error reporting; empty disables it (§7). |
 | `CHECKIN_LINK_TTL_MINUTES` | defaults to 10. |
 
@@ -212,26 +213,42 @@ before issuing a code.
 
 ---
 
-## 6. SMS: A2P 10DLC registration must precede go-live
+## 6. SMS: toll-free verified number via a Messaging Service
 
-**Do not set `MESSAGE_DELIVERY_MODE=twilio` before 10DLC registration is
-complete.** US carriers block unregistered application-to-person traffic from
-long codes, silently or with 30007 errors. Registration is not instant —
-brand vetting plus campaign approval typically takes days to weeks — so start
-it in the Twilio console (Messaging → Regulatory Compliance → A2P 10DLC) well
-before launch:
+Decision (issue #54): **toll-free verification, not A2P 10DLC** — ~3 business
+days, no monthly campaign fee. The sender is a **Messaging Service**, so the app
+posts `MessagingServiceSid` and Twilio's Advanced Opt-Out handles STOP/HELP.
+US carriers block unverified application-to-person traffic, so do not flip
+`MESSAGE_DELIVERY_MODE=twilio` before verification is approved. Full research:
+`docs/research/twilio-delivery.md`.
 
-1. Register the **Brand** (legal entity, EIN, address).
-2. Register a **Campaign** — use case "Mixed"/"Low Volume Mixed" fits chapter
-   announcements, attendance links, and dues reminders. Sample messages must
-   match what the app actually sends (see `api/*/notifications.py`).
-3. Attach the sending number (`TWILIO_FROM_NUMBER`, E.164) to the campaign.
-4. Only once the campaign is **approved**: set `MESSAGE_DELIVERY_MODE=twilio`
-   plus the three `TWILIO_*` vars, and redeploy.
+Setup, in order:
+
+1. **Buy a toll-free number** (Twilio console → Phone Numbers → Buy a number,
+   toll-free) and submit **toll-free verification** (Messaging → Regulatory
+   Compliance → Toll-Free Verification): business info, EIN, use case, sample
+   message matching what the app sends (`api/*/notifications.py`), opt-in
+   screenshot, volume estimate.
+2. **Create a Messaging Service** (Messaging → Services) and turn on **Advanced
+   Opt-Out** so STOP/HELP are handled for us.
+3. **Add the toll-free number as a sender** in that Messaging Service's Sender
+   Pool. Copy the service SID (`MG…`).
+4. **Set the env vars** (Vercel for prod, `LocalDev/.env` locally):
+   `MESSAGE_DELIVERY_MODE=twilio`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`,
+   `TWILIO_MESSAGING_SERVICE_SID`. Leave `TWILIO_FROM_NUMBER` empty — the boot
+   guard requires *exactly one* sender and rejects both being set.
+5. **Smoke-test one message** from `LocalDev/`:
+   `npm run sms:test -- +1YOURNUMBER "hello from GuildOS"` (equivalently
+   `python3 scripts/send_test_sms.py +1YOURNUMBER "hello from GuildOS"`). It
+   prints the Twilio message SID, or the full Twilio error body. It refuses to
+   run unless `MESSAGE_DELIVERY_MODE=twilio`.
+
+**Trial accounts:** a trial (unupgraded) Twilio account can only text numbers
+verified in its console, prefixes every message with a trial notice, and cannot
+submit toll-free verification. Upgrade to paid before step 1.
 
 `dry_run` mode marks outbox rows as simulated and sends nothing, so the whole
-product is exercisable while registration is pending. Every campaign needs
-working opt-out (STOP) handling — verify before the first real send.
+product is exercisable while verification is pending.
 
 ---
 

@@ -4,6 +4,7 @@
     "dev": "bash ../local-dev-scripts/scripts/local-dev.sh",
     "migrate": "bash ../local-dev-scripts/scripts/with-demo-db.sh python3 scripts/migrate_db.py",
     "migrate:prod": "python3 scripts/migrate_db.py --prod",
-    "seed": "bash ../local-dev-scripts/scripts/with-demo-db.sh python3 -m scripts.seed"
+    "seed": "bash ../local-dev-scripts/scripts/with-demo-db.sh python3 -m scripts.seed",
+    "sms:test": "python3 scripts/send_test_sms.py"
   }
 }
