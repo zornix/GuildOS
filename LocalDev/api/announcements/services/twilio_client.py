@@ -9,9 +9,10 @@ is part of the settings surface and the production boot guard. A missing or empt
 setting raises a RuntimeError naming it — never a bare KeyError that a caller's
 `except Exception` would silently record as "failed" (GTMLarpChecklist 2.3).
 
-TODO(ops): verify A2P 10DLC campaign registration covers application-initiated
-SMS before enabling MESSAGE_DELIVERY_MODE=twilio. Unregistered traffic is
-carrier-blocked.
+Sender (issue #54): a toll-free verified number attached to a Messaging Service.
+Set TWILIO_MESSAGING_SERVICE_SID and the POST carries MessagingServiceSid, which
+is what gives us Advanced Opt-Out (STOP/HELP handled by Twilio). TWILIO_FROM_NUMBER
+remains as a bare-number fallback; unverified traffic is carrier-blocked.
 """
 
 from __future__ import annotations
@@ -28,13 +29,14 @@ def _require(name: str) -> str:
     if not value:
         raise RuntimeError(
             f"{name} is not configured; MESSAGE_DELIVERY_MODE='twilio' requires "
-            "TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM_NUMBER"
+            "TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and exactly one of "
+            "TWILIO_MESSAGING_SERVICE_SID (preferred) / TWILIO_FROM_NUMBER"
         )
     return value
 
 
-def send_sms(to_e164: str, body: str) -> None:
-    """POST one SMS to the Twilio REST API. Raises on any failure; returns None.
+def send_sms(to_e164: str, body: str) -> str | None:
+    """POST one SMS to the Twilio REST API. Raises on any failure; returns the SID.
 
     `to_e164` is expected to already be E.164 (members.phone is normalized at
     write time); this adapter does not reformat numbers.
@@ -43,15 +45,22 @@ def send_sms(to_e164: str, body: str) -> None:
 
     account_sid = _require("TWILIO_ACCOUNT_SID")
     auth_token = _require("TWILIO_AUTH_TOKEN")
-    from_number = _require("TWILIO_FROM_NUMBER")
+    service_sid = (settings.TWILIO_MESSAGING_SERVICE_SID or "").strip()
+    sender = (
+        {"MessagingServiceSid": service_sid}
+        if service_sid
+        else {"From": _require("TWILIO_FROM_NUMBER")}
+    )
 
     if not (to_e164 or "").strip():
         raise RuntimeError("send_sms requires a destination number")
 
     resp = httpx.post(
         _TWILIO_MESSAGES_URL.format(sid=account_sid),
-        data={"To": to_e164, "From": from_number, "Body": body},
+        data={"To": to_e164, "Body": body, **sender},
         auth=(account_sid, auth_token),
         timeout=_HTTP_TIMEOUT_SECONDS,
     )
     resp.raise_for_status()
+    # Callers on the delivery paths ignore this; scripts/send_test_sms.py prints it.
+    return resp.json().get("sid")

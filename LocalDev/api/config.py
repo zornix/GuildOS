@@ -16,11 +16,15 @@ class Settings(BaseSettings):
     # Empty locally. Drives the production boot guard in api/index.py.
     VERCEL_ENV: str = ""
     # Outbound message delivery: "dry_run" (rows marked simulated, no network) or
-    # "twilio" (real sends; requires the three TWILIO_* settings below).
+    # "twilio" (real sends; requires the TWILIO_* settings below).
     MESSAGE_DELIVERY_MODE: str = "dry_run"
     TWILIO_ACCOUNT_SID: str = ""
     TWILIO_AUTH_TOKEN: str = ""
-    # E.164 sending number, e.g. +15551234567.
+    # Preferred sender: a Messaging Service ("MG..."), which is what carries the
+    # verified toll-free number and Advanced Opt-Out (STOP/HELP) — issue #54.
+    TWILIO_MESSAGING_SERVICE_SID: str = ""
+    # Fallback sender: bare E.164 number, e.g. +15551234567. Set exactly one of
+    # TWILIO_MESSAGING_SERVICE_SID / TWILIO_FROM_NUMBER.
     TWILIO_FROM_NUMBER: str = ""
     # Sentry error reporting. Empty disables Sentry entirely (local/dev default).
     SENTRY_DSN: str = ""

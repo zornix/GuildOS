@@ -77,13 +77,20 @@ def production_config_violations(s: Settings) -> list[str]:
     elif s.MESSAGE_DELIVERY_MODE == "twilio":
         missing = [
             name
-            for name in ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER")
+            for name in ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN")
             if not getattr(s, name)
         ]
         if missing:
             violations.append(
                 "MESSAGE_DELIVERY_MODE=twilio but " + ", ".join(missing) + " is unset "
                 "— set it or fall back to MESSAGE_DELIVERY_MODE=dry_run"
+            )
+        # Exactly one sender: a Messaging Service (preferred — it carries the
+        # verified toll-free number and Advanced Opt-Out) or a bare From number.
+        if bool(s.TWILIO_MESSAGING_SERVICE_SID) == bool(s.TWILIO_FROM_NUMBER):
+            violations.append(
+                "MESSAGE_DELIVERY_MODE=twilio needs exactly one sender — set "
+                "TWILIO_MESSAGING_SERVICE_SID (preferred) or TWILIO_FROM_NUMBER, not both"
             )
 
     return violations

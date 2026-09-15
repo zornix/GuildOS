@@ -138,6 +138,39 @@ def test_fully_configured_twilio_mode_is_accepted():
     assert production_config_violations(s) == []
 
 
+# --- Twilio sender: Messaging Service vs bare From number (issue #54) ------
+
+
+def test_twilio_mode_with_messaging_service_only_is_accepted():
+    s = _prod_settings(
+        MESSAGE_DELIVERY_MODE="twilio",
+        TWILIO_ACCOUNT_SID="AC123",
+        TWILIO_AUTH_TOKEN="secret-token",
+        TWILIO_MESSAGING_SERVICE_SID="MG123",
+    )
+    assert production_config_violations(s) == []
+
+
+def test_twilio_mode_without_any_sender_is_a_violation():
+    s = _prod_settings(
+        MESSAGE_DELIVERY_MODE="twilio",
+        TWILIO_ACCOUNT_SID="AC123",
+        TWILIO_AUTH_TOKEN="secret-token",
+    )
+    assert any("exactly one sender" in v for v in production_config_violations(s))
+
+
+def test_twilio_mode_with_both_senders_is_a_violation():
+    s = _prod_settings(
+        MESSAGE_DELIVERY_MODE="twilio",
+        TWILIO_ACCOUNT_SID="AC123",
+        TWILIO_AUTH_TOKEN="secret-token",
+        TWILIO_MESSAGING_SERVICE_SID="MG123",
+        TWILIO_FROM_NUMBER="+15551234567",
+    )
+    assert any("exactly one sender" in v for v in production_config_violations(s))
+
+
 # --- aggregate / environment gating ---------------------------------------
 
 
