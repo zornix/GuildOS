@@ -109,6 +109,7 @@ from api.recruitment.api.pipeline import router as recruitment_router
 from api.calendar.api.calendar import router as calendar_router
 from api.instrumentation.api.usage import router as usage_router
 from api.initiatives.api.initiatives import router as initiatives_router
+from api.contribution.api.records import router as contribution_router
 from api.tasks.api.operations import router as operations_router
 from api.treasury.api.fines_legacy import router as fines_router
 
@@ -176,6 +177,7 @@ app.include_router(nl_controller_router, prefix="/api/nl-controller", tags=["NL 
 app.include_router(calendar_router, prefix="/api/calendar", tags=["Calendar"])
 app.include_router(usage_router, prefix="/api/usage", tags=["Usage"])
 app.include_router(initiatives_router, prefix="/api/initiatives", tags=["Initiatives"])
+app.include_router(contribution_router, prefix="/api/contribution", tags=["Contribution"])
 
 
 @app.get("/api/health")
