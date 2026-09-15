@@ -36,8 +36,10 @@ from datetime import datetime, timezone
 
 from api.platform.rpc import call_rpc
 from api.announcements.services import twilio_client
+from api.cron.core import templates
 from api.platform.delivery import delivery_mode
 from api.rbac.services.permissions import is_officer
+from api.sms_consent import CONSENT_COLUMNS, has_consent
 
 logger = logging.getLogger(__name__)
 
@@ -230,7 +232,17 @@ def dispatch_send(sb, send_row: dict, *, send_table: str = "announcement_sms_sen
             ).eq("id", row["id"]).execute()
         final_status = "sent"
     elif mode == "twilio":
-        statuses = [_dispatch_twilio_row(sb, row) for row in pending]
+        chapter = (
+            sb.table("chapters")
+            .select("name")
+            .eq("id", send_row["chapter_id"])
+            .maybe_single()
+            .execute()
+        ).data
+        chapter_name = (chapter or {}).get("name") or ""
+        statuses = [
+            _dispatch_twilio_row(sb, row, chapter_name=chapter_name) for row in pending
+        ]
         final_status = "failed" if "failed" in statuses else "sent"
     else:
         raise ValueError(
@@ -250,10 +262,10 @@ def dispatch_send(sb, send_row: dict, *, send_table: str = "announcement_sms_sen
     return refreshed or {**send_row, "status": final_status}
 
 
-def _dispatch_twilio_row(sb, row: dict) -> str:
+def _dispatch_twilio_row(sb, row: dict, *, chapter_name: str = "") -> str:
     member = (
         sb.table("members")
-        .select("id, phone")
+        .select(f"id, phone, {CONSENT_COLUMNS}")
         .eq("id", row["member_id"])
         .maybe_single()
         .execute()
@@ -261,10 +273,19 @@ def _dispatch_twilio_row(sb, row: dict) -> str:
     phone = ((member or {}).get("phone") or "").strip()
     body = (row.get("payload") or {}).get("body", "")
     last_error: str | None = None
+
+    if phone and not has_consent(member):
+        # Same rule as the drain: no prior express consent, no real send (#57).
+        # Recorded verbatim so an officer can filter the outbox on it.
+        sb.table("message_outbox").update(
+            {"status": "failed", "last_error": "no_consent"}
+        ).eq("id", row["id"]).execute()
+        return "failed"
+
     try:
         if not phone:
             raise RuntimeError(f"member {row['member_id']} has no phone")
-        twilio_client.send_sms(phone, body)
+        twilio_client.send_sms(phone, f"{body}\n{templates.footer(chapter_name)}")
         status = "sent"
     except Exception as exc:
         # A swallowed, unlogged failure is how "flip to twilio" turns into
