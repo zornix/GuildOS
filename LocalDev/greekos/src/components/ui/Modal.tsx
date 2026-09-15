@@ -52,7 +52,7 @@ export default function Modal({
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
         onClick={e => e.stopPropagation()}
-        className={`bg-white rounded-2xl border border-slate-200 shadow-2xl ${maxWidth} w-full p-6 animate-in fade-in zoom-in duration-150 outline-none ${className}`}
+        className={`bg-white rounded-2xl border border-slate-200 shadow-2xl ${maxWidth} w-full max-h-[calc(100dvh-2rem)] overflow-y-auto p-4 sm:p-6 animate-in fade-in zoom-in duration-150 outline-none ${className}`}
       >
         {(title || onClose) && (
           <div className="flex justify-between items-center mb-4">
