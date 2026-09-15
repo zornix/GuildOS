@@ -117,13 +117,13 @@ export default function RosterModule({
       {isOfficer && onImportRoster && <RosterCsvImport onImport={onImportRoster} />}
 
       {/* Filter and Search Bar */}
-      <Card className="p-4 flex flex-col sm:flex-row gap-3 items-center justify-between">
+      <Card className="p-4 flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
         <div className="flex flex-wrap items-center gap-1.5 text-xs">
           {['ALL', 'President', 'Treasurer', 'Risk Manager', 'Active', 'Pledge'].map(r => (
             <button
               key={r}
               onClick={() => setFilterRole(r)}
-              className={`px-2.5 py-1 rounded-md font-semibold cursor-pointer transition-all ${
+              className={`px-2.5 py-1 min-h-11 sm:min-h-0 rounded-md font-semibold cursor-pointer transition-all ${
                 filterRole === r ? 'bg-navy text-gold' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
@@ -152,12 +152,12 @@ export default function RosterModule({
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs">
               <tr>
                 <th className="py-3 px-4">Brother & Role</th>
-                <th className="py-3 px-4">Pledge Class</th>
-                <th className="py-3 px-4">Academic Standing</th>
+                <th className="py-3 px-4 hidden md:table-cell">Pledge Class</th>
+                <th className="py-3 px-4 hidden sm:table-cell">Academic Standing</th>
                 {/* Attendance rates are for the member themself and officers only. */}
-                {isOfficer && <th className="py-3 px-4">Attendance</th>}
+                {isOfficer && <th className="py-3 px-4 hidden md:table-cell">Attendance</th>}
                 <th className="py-3 px-4">Unpaid fines</th>
-                <th className="py-3 px-4">Risk Shifts</th>
+                <th className="py-3 px-4 hidden md:table-cell">Risk Shifts</th>
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
@@ -173,11 +173,11 @@ export default function RosterModule({
                       <div className="text-xs text-slate-500">{mem.major} &bull; Room {mem.roomNumber || 'N/A'}</div>
                     </td>
 
-                    <td className="py-3 px-4 text-slate-600">
+                    <td className="py-3 px-4 text-slate-600 hidden md:table-cell">
                       {mem.pledgeClass}
                     </td>
 
-                    <td className="py-3 px-4">
+                    <td className="py-3 px-4 hidden sm:table-cell">
                       <div className="flex items-center gap-1.5">
                         <GraduationCap className="w-3.5 h-3.5 text-slate-500" />
                         <span className="font-bold text-slate-800">{mem.gpa} GPA</span>
@@ -190,7 +190,7 @@ export default function RosterModule({
                     </td>
 
                     {isOfficer && (
-                      <td className="py-3 px-4 font-bold text-slate-800">
+                      <td className="py-3 px-4 font-bold text-slate-800 hidden md:table-cell">
                         <span className={mem.attendanceRate >= 85 ? 'text-emerald-600' : 'text-red-600'}>
                           {mem.attendanceRate}%
                         </span>
@@ -203,7 +203,7 @@ export default function RosterModule({
                       </span>
                     </td>
 
-                    <td className="py-3 px-4 text-slate-600">
+                    <td className="py-3 px-4 text-slate-600 hidden md:table-cell">
                       {mem.securityHoursServed || 0} hrs
                     </td>
 
@@ -222,7 +222,7 @@ export default function RosterModule({
                         <select
                           value={mem.standing}
                           onChange={e => setPendingStanding({ member: mem, standing: e.target.value as Member['standing'] })}
-                          className="text-xs border border-slate-200 rounded p-1 bg-white cursor-pointer"
+                          className="text-xs border border-slate-200 rounded p-1 min-h-11 sm:min-h-0 bg-white cursor-pointer"
                         >
                           <option value="Good Standing">Good Standing</option>
                           <option value="Academic Probation">Academic Probation</option>
@@ -252,12 +252,12 @@ export default function RosterModule({
                   value={name}
                   onChange={e => setName(e.target.value)}
                   placeholder="e.g. Samuel Bennett"
-                  className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-gold"
+                  className="w-full text-sm border border-slate-200 rounded-lg p-2.5 min-h-11 focus:outline-none focus:border-gold"
                   required
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-slate-700 block mb-1">Email</label>
                   <input
@@ -265,7 +265,7 @@ export default function RosterModule({
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     placeholder="s.bennett@university.edu"
-                    className="w-full text-xs border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-gold"
+                    className="w-full text-xs border border-slate-200 rounded-lg p-2.5 min-h-11 focus:outline-none focus:border-gold"
                     required
                   />
                 </div>
@@ -276,19 +276,19 @@ export default function RosterModule({
                     value={phone}
                     onChange={e => setPhone(e.target.value)}
                     placeholder="(555) 019-2834"
-                    className="w-full text-xs border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-gold"
+                    className="w-full text-xs border border-slate-200 rounded-lg p-2.5 min-h-11 focus:outline-none focus:border-gold"
                     required
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-slate-700 block mb-1">Chapter Role</label>
                   <select
                     value={role}
                     onChange={e => setRole(e.target.value as any)}
-                    className="w-full text-xs border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-gold"
+                    className="w-full text-xs border border-slate-200 rounded-lg p-2.5 min-h-11 focus:outline-none focus:border-gold"
                   >
                     <option value="Active">Active Brother</option>
                     <option value="Pledge">New Pledge</option>
@@ -303,13 +303,13 @@ export default function RosterModule({
                     type="text"
                     value={pledgeClass}
                     onChange={e => setPledgeClass(e.target.value)}
-                    className="w-full text-xs border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-gold"
+                    className="w-full text-xs border border-slate-200 rounded-lg p-2.5 min-h-11 focus:outline-none focus:border-gold"
                     required
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-slate-700 block mb-1">Major</label>
                   <input
@@ -317,7 +317,7 @@ export default function RosterModule({
                     value={major}
                     onChange={e => setMajor(e.target.value)}
                     placeholder="Economics"
-                    className="w-full text-xs border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-gold"
+                    className="w-full text-xs border border-slate-200 rounded-lg p-2.5 min-h-11 focus:outline-none focus:border-gold"
                     required
                   />
                 </div>
@@ -328,7 +328,7 @@ export default function RosterModule({
                     step="0.01"
                     value={gpa}
                     onChange={e => setGPA(e.target.value)}
-                    className="w-full text-xs border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-gold"
+                    className="w-full text-xs border border-slate-200 rounded-lg p-2.5 min-h-11 focus:outline-none focus:border-gold"
                     required
                   />
                 </div>
