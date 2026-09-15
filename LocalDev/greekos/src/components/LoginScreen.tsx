@@ -32,7 +32,9 @@ const CODE_COPY = {
   }
 } as const;
 
-export default function LoginScreen({ onLoggedIn }: { onLoggedIn: () => void }) {
+export default function LoginScreen(
+  { onLoggedIn, onStartChapter }: { onLoggedIn: () => void; onStartChapter?: () => void }
+) {
   const [step, setStep] = useState<AuthStep>('signin');
   const [codeKind, setCodeKind] = useState<keyof typeof CODE_COPY>('setup');
   const [email, setEmail] = useState('');
@@ -137,7 +139,12 @@ export default function LoginScreen({ onLoggedIn }: { onLoggedIn: () => void }) 
                 Forgot password?
               </button>
             </div>
-            {/* Start-a-chapter entry point goes here (separate onboarding screen). */}
+            {onStartChapter && (
+              <button type="button" onClick={onStartChapter} disabled={busy}
+                className="w-full text-xs text-slate-500 hover:text-navy pt-1">
+                New here? Start a chapter
+              </button>
+            )}
             {import.meta.env.DEV && (
               <button type="button" onClick={bypass} disabled={busy}
                 className="w-full text-xs text-slate-500 hover:text-navy pt-1">

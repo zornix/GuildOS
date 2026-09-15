@@ -7,6 +7,8 @@ import {
   Plus
 } from 'lucide-react';
 import { Member } from '../types';
+import type { RosterImportResult } from '../api';
+import RosterCsvImport from './roster/RosterCsvImport';
 import Modal from './ui/Modal';
 import MemberRolesPanel from './MemberRolesPanel';
 import Card from './ui/Card';
@@ -20,6 +22,7 @@ interface RosterModuleProps {
   canAssignRoles: boolean;
   onAddMember: (member: Omit<Member, 'id' | 'points' | 'attendanceRate' | 'duesBalance' | 'duesBalanceCents' | 'securityHoursServed'>) => void;
   onUpdateStanding: (memberId: string, standing: 'Good Standing' | 'Academic Probation' | 'Social Suspension' | 'Financial Hold') => void;
+  onImportRoster?: (file: File) => Promise<RosterImportResult>;
 }
 
 export default function RosterModule({
@@ -27,7 +30,8 @@ export default function RosterModule({
   isOfficer,
   canAssignRoles,
   onAddMember,
-  onUpdateStanding
+  onUpdateStanding,
+  onImportRoster
 }: RosterModuleProps) {
   const safeMembers = members || [];
   const [filterRole, setFilterRole] = useState<string>('ALL');
@@ -109,6 +113,8 @@ export default function RosterModule({
           </button>
         )}
       </div>
+
+      {isOfficer && onImportRoster && <RosterCsvImport onImport={onImportRoster} />}
 
       {/* Filter and Search Bar */}
       <Card className="p-4 flex flex-col sm:flex-row gap-3 items-center justify-between">

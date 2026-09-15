@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { api, RosterImportResult } from '../api';
 import { Member } from '../types';
 import { ShowToast } from './useToast';
 
@@ -28,5 +29,16 @@ export function useRoster(showToast: ShowToast) {
     showToast(`Updated brother academic/disciplinary standing.`);
   };
 
-  return { members, setMembers, handleAddMember, handleUpdateStanding };
+  /** CSV roster import (officer only). Throws RosterRejectedError with the
+   *  offending rows when the file is rejected — nothing was imported. */
+  const handleImportRoster = async (chapterId: string, file: File): Promise<RosterImportResult> => {
+    const result = await api.importRoster(chapterId, file);
+    showToast(
+      `Invited ${result.created_count} member${result.created_count === 1 ? '' : 's'}` +
+      (result.skipped_count ? `, skipped ${result.skipped_count} already on the roster.` : '.')
+    );
+    return result;
+  };
+
+  return { members, setMembers, handleAddMember, handleUpdateStanding, handleImportRoster };
 }

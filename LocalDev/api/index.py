@@ -107,6 +107,7 @@ if _violations:
 # Domains whose routes live in one module mount that module's router directly.
 from api.auth.api.auth import router as auth_router
 from api.members.api.members import router as members_router
+from api.chapters.api.chapters import router as chapters_router
 from api.cron.api.cron import router as cron_router
 from api.announcements.api.announcements import router as announcements_router
 from api.bylaws.api.documents import router as bylaws_router
@@ -169,6 +170,7 @@ app.include_router(fines_router, prefix="/api/fines", tags=["Fines"])
 app.include_router(members_router, prefix="/api/members", tags=["Members"])
 app.include_router(checkin_page_router, prefix="/c", tags=["Check-In Page"])
 app.include_router(checkin_links_router, prefix="/api/checkin-links", tags=["Check-In Links"])
+app.include_router(chapters_router, prefix="/api/chapters", tags=["Chapters"])
 app.include_router(cron_router, prefix="/api/cron", tags=["Cron"])
 app.include_router(standing_router, prefix="/api/standing", tags=["Standing"])
 app.include_router(memberadmin_router, prefix="/api/memberadmin", tags=["MemberAdmin"])
