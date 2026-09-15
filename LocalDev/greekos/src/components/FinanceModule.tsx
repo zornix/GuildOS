@@ -194,7 +194,7 @@ export default function FinanceModule({
 
       {/* KPI Cards Ribbon */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="p-5 space-y-1">
+        <Card className="p-4 sm:p-5 space-y-1">
           <span className="text-xs font-bold text-slate-500">Outstanding</span>
           <div className="text-2xl font-display font-black text-slate-900">
             {formatMoney(totalReceivablesCents)}
@@ -202,7 +202,7 @@ export default function FinanceModule({
           <span className="text-xs text-slate-500">Unpaid balances on the roster</span>
         </Card>
 
-        <Card className="p-5 space-y-1">
+        <Card className="p-4 sm:p-5 space-y-1">
           <span className="text-xs font-bold text-emerald-700">Collected</span>
           <div className="text-2xl font-display font-black text-emerald-600">
             {formatMoney(totalPaidCents)}
@@ -210,7 +210,7 @@ export default function FinanceModule({
           <span className="text-xs text-emerald-700/80">{payments.length} verified transactions</span>
         </Card>
 
-        <Card className="p-5 space-y-1">
+        <Card className="p-4 sm:p-5 space-y-1">
           <span className="text-xs font-bold text-red-700">Unpaid fines</span>
           <div className="text-2xl font-display font-black text-red-600">
             {formatMoney(totalUnpaidFinesCents)}
@@ -220,10 +220,10 @@ export default function FinanceModule({
       </div>
 
       {/* Tabs Menu */}
-      <div className="flex border-b border-slate-200 gap-6 text-sm font-semibold">
+      <div className="flex border-b border-slate-200 gap-4 sm:gap-6 text-sm font-semibold overflow-x-auto">
         <button
           onClick={() => setActiveSubTab('overview')}
-          className={`pb-3 transition-all cursor-pointer flex items-center gap-2 ${
+          className={`pb-3 shrink-0 whitespace-nowrap transition-all cursor-pointer flex items-center gap-2 ${
             activeSubTab === 'overview'
               ? 'text-navy border-b-2 border-gold font-bold'
               : 'text-slate-500 hover:text-slate-800'
@@ -235,7 +235,7 @@ export default function FinanceModule({
 
         <button
           onClick={() => setActiveSubTab('ledger')}
-          className={`pb-3 transition-all cursor-pointer flex items-center gap-2 ${
+          className={`pb-3 shrink-0 whitespace-nowrap transition-all cursor-pointer flex items-center gap-2 ${
             activeSubTab === 'ledger'
               ? 'text-navy border-b-2 border-gold font-bold'
               : 'text-slate-500 hover:text-slate-800'
@@ -247,7 +247,7 @@ export default function FinanceModule({
 
         <button
           onClick={() => setActiveSubTab('fines')}
-          className={`pb-3 transition-all cursor-pointer flex items-center gap-2 ${
+          className={`pb-3 shrink-0 whitespace-nowrap transition-all cursor-pointer flex items-center gap-2 ${
             activeSubTab === 'fines'
               ? 'text-navy border-b-2 border-gold font-bold'
               : 'text-slate-500 hover:text-slate-800'
@@ -259,7 +259,7 @@ export default function FinanceModule({
 
         <button
           onClick={() => setActiveSubTab('payments')}
-          className={`pb-3 transition-all cursor-pointer flex items-center gap-2 ${
+          className={`pb-3 shrink-0 whitespace-nowrap transition-all cursor-pointer flex items-center gap-2 ${
             activeSubTab === 'payments'
               ? 'text-navy border-b-2 border-gold font-bold'
               : 'text-slate-500 hover:text-slate-800'
@@ -272,7 +272,7 @@ export default function FinanceModule({
 
       {/* SubTab 1: Member Balances */}
       {activeSubTab === 'overview' && (
-        <Card className="p-5 space-y-4">
+        <Card className="p-4 sm:p-5 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 className="font-display font-bold text-slate-900 text-base">Balances</h3>
@@ -297,8 +297,8 @@ export default function FinanceModule({
               <thead className="bg-slate-50 border-y border-slate-200 text-slate-600 text-xs">
                 <tr>
                   <th className="py-2.5 px-3">Brother</th>
-                  <th className="py-2.5 px-3">Standing</th>
-                  <th className="py-2.5 px-3">Pledge Class</th>
+                  <th className="py-2.5 px-3 hidden sm:table-cell">Standing</th>
+                  <th className="py-2.5 px-3 hidden sm:table-cell">Pledge Class</th>
                   <th className="py-2.5 px-3 text-right">Balance</th>
                   <th className="py-2.5 px-3 text-right">Actions</th>
                 </tr>
@@ -314,7 +314,7 @@ export default function FinanceModule({
                         <div className="font-bold text-slate-900">{mem.name}</div>
                         <div className="text-xs text-slate-500">{mem.role}</div>
                       </td>
-                      <td className="py-3 px-3">
+                      <td className="py-3 px-3 hidden sm:table-cell">
                         <span className={`text-xs px-2 py-0.5 rounded font-semibold ${
                           mem.standing === 'Good Standing' 
                             ? 'bg-emerald-50 text-emerald-800' 
@@ -323,7 +323,7 @@ export default function FinanceModule({
                           {mem.standing}
                         </span>
                       </td>
-                      <td className="py-3 px-3 text-slate-600">{mem.pledgeClass}</td>
+                      <td className="py-3 px-3 text-slate-600 hidden sm:table-cell">{mem.pledgeClass}</td>
                       <td className="py-3 px-3 text-right">
                         <span className={`font-mono font-bold text-xs ${
                           balanceCents > 0 ? 'text-red-600' : 'text-emerald-600'
@@ -335,7 +335,7 @@ export default function FinanceModule({
                         {balanceCents > 0 && isOfficer && (
                           <button
                             onClick={() => setPendingMarkPaid({ member: mem, balanceCents })}
-                            className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold px-2 py-1 rounded transition-all cursor-pointer"
+                            className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold px-2 py-1 min-h-11 sm:min-h-0 rounded transition-all cursor-pointer"
                           >
                             Mark Paid
                           </button>
@@ -352,7 +352,7 @@ export default function FinanceModule({
 
       {/* SubTab 2: Permanent Append-Only Audit Ledger */}
       {activeSubTab === 'ledger' && (
-        <Card className="p-5 space-y-4">
+        <Card className="p-4 sm:p-5 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 className="font-display font-bold text-slate-900 text-base flex items-center gap-2">
@@ -364,12 +364,12 @@ export default function FinanceModule({
               </p>
             </div>
 
-            <div className="flex gap-1 bg-slate-100 p-1 rounded-lg text-xs">
+            <div className="flex gap-1 bg-slate-100 p-1 rounded-lg text-xs overflow-x-auto">
               {['ALL', 'DUES_CHARGE', 'FINE_CHARGE', 'PAYMENT_CREDIT', 'ADJUSTMENT_CORRECTION'].map(ft => (
                 <button
                   key={ft}
                   onClick={() => setLedgerFilter(ft)}
-                  className={`px-2 py-1 rounded font-semibold transition-all cursor-pointer ${
+                  className={`px-2 py-1 min-h-11 sm:min-h-0 shrink-0 whitespace-nowrap rounded font-semibold transition-all cursor-pointer ${
                     ledgerFilter === ft ? 'bg-navy text-gold' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -436,7 +436,7 @@ export default function FinanceModule({
                               setShowCorrectionModal(entry);
                               setCorrectionAmountCents(-entry.amountCents);
                             }}
-                            className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded transition-all cursor-pointer flex items-center gap-1 ml-auto"
+                            className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 min-h-11 sm:min-h-0 rounded transition-all cursor-pointer flex items-center gap-1 ml-auto"
                             title="Add an adjustment row for this entry"
                           >
                             <RotateCcw className="w-3 h-3" />
@@ -455,7 +455,7 @@ export default function FinanceModule({
 
       {/* SubTab 3: Fines Directory */}
       {activeSubTab === 'fines' && (
-        <Card className="p-5 space-y-4">
+        <Card className="p-4 sm:p-5 space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-display font-bold text-slate-900 text-base">Fines</h3>
@@ -487,7 +487,7 @@ export default function FinanceModule({
                   {isOfficer && f.status === 'Unpaid' && (
                     <button
                       onClick={() => setPendingFinePaid(f)}
-                      className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-lg transition-all cursor-pointer"
+                      className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 min-h-11 rounded-lg transition-all cursor-pointer"
                     >
                       Mark paid
                     </button>
@@ -501,7 +501,7 @@ export default function FinanceModule({
 
       {/* SubTab 4: Payment Records */}
       {activeSubTab === 'payments' && (
-        <Card className="p-5 space-y-4">
+        <Card className="p-4 sm:p-5 space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-display font-bold text-slate-900 text-base">Payments</h3>
