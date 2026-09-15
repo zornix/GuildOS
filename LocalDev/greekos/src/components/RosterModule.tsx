@@ -7,6 +7,8 @@ import {
   Plus
 } from 'lucide-react';
 import { Member } from '../types';
+import type { RosterImportResult } from '../api';
+import RosterCsvImport from './roster/RosterCsvImport';
 import Modal from './ui/Modal';
 import Card from './ui/Card';
 import ConfirmDialog from './ui/ConfirmDialog';
@@ -17,13 +19,15 @@ interface RosterModuleProps {
   isOfficer: boolean;
   onAddMember: (member: Omit<Member, 'id' | 'points' | 'attendanceRate' | 'duesBalance' | 'duesBalanceCents' | 'securityHoursServed'>) => void;
   onUpdateStanding: (memberId: string, standing: 'Good Standing' | 'Academic Probation' | 'Social Suspension' | 'Financial Hold') => void;
+  onImportRoster?: (file: File) => Promise<RosterImportResult>;
 }
 
 export default function RosterModule({
   members,
   isOfficer,
   onAddMember,
-  onUpdateStanding
+  onUpdateStanding,
+  onImportRoster
 }: RosterModuleProps) {
   const safeMembers = members || [];
   const [filterRole, setFilterRole] = useState<string>('ALL');
@@ -104,6 +108,8 @@ export default function RosterModule({
           </button>
         )}
       </div>
+
+      {isOfficer && onImportRoster && <RosterCsvImport onImport={onImportRoster} />}
 
       {/* Filter and Search Bar */}
       <Card className="p-4 flex flex-col sm:flex-row gap-3 items-center justify-between">

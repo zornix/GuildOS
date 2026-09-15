@@ -56,6 +56,63 @@ export async function localDevLogin(): Promise<string> {
   return devLogin();
 }
 
+// ----------------------------------------------------
+// CHAPTER ONBOARDING (pre-login: no token, by design)
+// ----------------------------------------------------
+export interface CreateChapterResult {
+  chapter_id: string;
+  officer_id: string;
+  officer_email: string;
+  setup_code: string;
+  setup_code_expires_at: string;
+}
+
+/** POST /api/chapters — the bootstrap path, so deliberately unauthenticated.
+ *  Rate-limited server side; a 429 here means "try again later", not a bug. */
+export async function createChapter(body: {
+  name: string;
+  organization?: string;
+  school?: string;
+  officer_name: string;
+  officer_email: string;
+  officer_phone: string;
+}): Promise<CreateChapterResult> {
+  const res = await fetch('/api/chapters', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...body, officer_email: body.officer_email.trim().toLowerCase() })
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    let detail = text;
+    try {
+      const parsed = JSON.parse(text);
+      detail = typeof parsed.detail === 'string'
+        ? parsed.detail
+        : (parsed.detail?.[0]?.msg || parsed.detail?.message || text);
+    } catch { /* non-JSON */ }
+    throw new Error(detail || `Could not create the chapter (${res.status})`);
+  }
+  return JSON.parse(text) as CreateChapterResult;
+}
+
+export interface RosterRowError { row: number; error: string; }
+
+export interface RosterImportResult {
+  created: { email: string; setup_code: string }[];
+  skipped: string[];
+  created_count: number;
+  skipped_count: number;
+}
+
+/** A rejected roster file: every row that failed, nothing imported. */
+export class RosterRejectedError extends Error {
+  constructor(public rows: RosterRowError[]) {
+    super('No members were imported');
+    this.name = 'RosterRejectedError';
+  }
+}
+
 export async function ensureLogin(): Promise<string> {
   const existing = localStorage.getItem(TOKEN_KEY);
   if (existing) return existing;
@@ -88,6 +145,34 @@ async function request<T>(method: string, path: string, body?: unknown, retry = 
     );
   }
   return (text ? JSON.parse(text) : undefined) as T;
+}
+
+/** Multipart upload. Separate from `request` only because the body is a
+ *  FormData (the browser must set its own Content-Type boundary). */
+async function uploadRoster(chapterId: string, file: File): Promise<RosterImportResult> {
+  const token = await ensureLogin();
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(`/api/chapters/${chapterId}/roster`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: form
+  });
+
+  if (res.status === 401) {
+    localStorage.removeItem(TOKEN_KEY);
+    throw new AuthRequiredError();
+  }
+
+  const text = await res.text();
+  if (!res.ok) {
+    let detail: unknown = text;
+    try { detail = JSON.parse(text).detail; } catch { /* non-JSON */ }
+    const rows = (detail as { errors?: RosterRowError[] })?.errors;
+    if (rows) throw new RosterRejectedError(rows);
+    throw new Error(typeof detail === 'string' ? detail : `Upload failed (${res.status})`);
+  }
+  return JSON.parse(text) as RosterImportResult;
 }
 
 /** Officer-gated reads answer 403 for a member session, which means "this
@@ -327,6 +412,8 @@ export const api = {
   getMyPermissions: () => request<MyPermissionsDto>('GET', '/api/rbac/me/permissions'),
 
   getMembers: () => request<MemberDto[]>('GET', '/api/members/'),
+  /** Officer-only. Rejects the whole file (RosterRejectedError) if any row is bad. */
+  importRoster: (chapterId: string, file: File) => uploadRoster(chapterId, file),
   getStandings: () => request<StandingDto[]>('GET', '/api/standing/'),
   // Officer-gated (STANDING_VIEW_ALL): callers must tolerate a 403.
   getScores: () => request<ScoreDto[]>('GET', '/api/memberadmin/scores'),

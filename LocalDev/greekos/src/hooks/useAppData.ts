@@ -36,6 +36,7 @@ export function useAppData() {
   // The real session (from /me + /rbac/me/permissions) …
   const [permissions, setPermissions] = useState<Set<string>>(new Set());
   const [sessionName, setSessionName] = useState<string>('');
+  const [chapterId, setChapterId] = useState<string>('');
   const [myBalance, setMyBalance] = useState<MemberBalance | null>(null);
   const [isOfficer, setIsOfficer] = useState<boolean>(false);
   const [currentMemberName, setCurrentMemberName] = useState<string>('');
@@ -171,6 +172,7 @@ export function useAppData() {
         setMembers(rosterRows);
         setPermissions(permissionSet);
         setSessionName(me.name);
+        setChapterId(me.chapter_id);
         setMyBalance(myBalanceRow);
         setCurrentMemberName(me.name);
         setIsOfficer(isOfficerView(permissionSet));
@@ -280,6 +282,7 @@ export function useAppData() {
     isOfficer,
     permissions,
     sessionName,
+    chapterId,
     contribution,
     myBalance,
     currentMemberName,

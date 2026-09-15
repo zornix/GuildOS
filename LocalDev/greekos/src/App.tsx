@@ -3,6 +3,7 @@ import { logout } from './api';
 import { useAppData } from './hooks/useAppData';
 import AppShell from './components/layout/AppShell';
 import LoginScreen from './components/LoginScreen';
+import OnboardingScreen from './components/OnboardingScreen';
 import DashboardOverview from './components/DashboardOverview';
 import CalendarModule from './components/CalendarModule';
 import EventsModule from './components/EventsModule';
@@ -21,7 +22,12 @@ import { can } from './lib/session';
 
 export default function App() {
   const [authed, setAuthed] = useState(() => !!localStorage.getItem('g_token'));
-  if (!authed) return <LoginScreen onLoggedIn={() => setAuthed(true)} />;
+  const [onboarding, setOnboarding] = useState(false);
+  if (!authed) {
+    return onboarding
+      ? <OnboardingScreen onBack={() => setOnboarding(false)} />
+      : <LoginScreen onLoggedIn={() => setAuthed(true)} onStartChapter={() => setOnboarding(true)} />;
+  }
   return <ChapterApp onLogout={() => { logout(); setAuthed(false); }} />;
 }
 
@@ -177,6 +183,7 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
         <RosterModule
           members={roster.members}
           isOfficer={isOfficer}
+          onImportRoster={file => roster.handleImportRoster(app.chapterId, file)}
           onAddMember={roster.handleAddMember}
           onUpdateStanding={roster.handleUpdateStanding}
         />

@@ -1,7 +1,9 @@
 import { FormEvent, useState } from 'react';
 import { localDevLogin, login } from '../api';
 
-export default function LoginScreen({ onLoggedIn }: { onLoggedIn: () => void }) {
+export default function LoginScreen(
+  { onLoggedIn, onStartChapter }: { onLoggedIn: () => void; onStartChapter?: () => void }
+) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +62,12 @@ export default function LoginScreen({ onLoggedIn }: { onLoggedIn: () => void }) 
           className="w-full bg-navy hover:bg-[#16304f] text-white font-semibold text-xs py-3 min-h-11 rounded-lg disabled:opacity-60">
           {busy ? 'Signing in…' : 'Sign in'}
         </button>
+        {onStartChapter && (
+          <button type="button" onClick={onStartChapter} disabled={busy}
+            className="w-full text-xs text-slate-500 hover:text-navy">
+            New here? Start a chapter
+          </button>
+        )}
         {import.meta.env.DEV && (
           <button type="button" onClick={bypass} disabled={busy}
             className="w-full text-xs text-slate-500 hover:text-navy">
