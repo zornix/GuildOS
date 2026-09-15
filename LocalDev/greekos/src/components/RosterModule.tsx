@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Member } from '../types';
 import Modal from './ui/Modal';
+import MemberRolesPanel from './MemberRolesPanel';
 import Card from './ui/Card';
 import ConfirmDialog from './ui/ConfirmDialog';
 import { formatMoney } from '../formatters';
@@ -15,6 +16,8 @@ import { formatMoney } from '../formatters';
 interface RosterModuleProps {
   members: Member[];
   isOfficer: boolean;
+  /** `roles:assign` — gates the per-member role toggles. */
+  canAssignRoles: boolean;
   onAddMember: (member: Omit<Member, 'id' | 'points' | 'attendanceRate' | 'duesBalance' | 'duesBalanceCents' | 'securityHoursServed'>) => void;
   onUpdateStanding: (memberId: string, standing: 'Good Standing' | 'Academic Probation' | 'Social Suspension' | 'Financial Hold') => void;
 }
@@ -22,6 +25,7 @@ interface RosterModuleProps {
 export default function RosterModule({
   members,
   isOfficer,
+  canAssignRoles,
   onAddMember,
   onUpdateStanding
 }: RosterModuleProps) {
@@ -30,6 +34,7 @@ export default function RosterModule({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [rolesMember, setRolesMember] = useState<Member | null>(null);
   const [pendingStanding, setPendingStanding] = useState<{ member: Member; standing: Member['standing'] } | null>(null);
 
   // New Member Form State
@@ -197,6 +202,16 @@ export default function RosterModule({
                     </td>
 
                     <td className="py-3 px-4 text-right">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                      {canAssignRoles && (
+                        <button
+                          type="button"
+                          onClick={() => setRolesMember(mem)}
+                          className="text-xs font-semibold border border-slate-200 rounded px-2 py-1 min-h-11 sm:min-h-0 sm:py-1 hover:bg-slate-100 cursor-pointer"
+                        >
+                          Roles
+                        </button>
+                      )}
                       {isOfficer && (
                         <select
                           value={mem.standing}
@@ -209,6 +224,7 @@ export default function RosterModule({
                           <option value="Financial Hold">Financial Hold</option>
                         </select>
                       )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -320,6 +336,14 @@ export default function RosterModule({
               </button>
             </form>
         </Modal>
+      )}
+
+      {rolesMember && (
+        <MemberRolesPanel
+          memberId={rolesMember.id}
+          memberName={rolesMember.name}
+          onClose={() => setRolesMember(null)}
+        />
       )}
 
       {pendingStanding && (
