@@ -16,26 +16,54 @@ export function logout(): void {
   localStorage.removeItem(TOKEN_KEY);
 }
 
-export async function login(email: string, password: string): Promise<string> {
-  const res = await fetch('/api/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: email.trim().toLowerCase(), password })
-  });
-  const text = await res.text();
-  if (!res.ok) {
-    let detail = text;
-    try {
-      const parsed = JSON.parse(text);
-      detail = typeof parsed.detail === 'string'
-        ? parsed.detail
-        : (parsed.detail?.message || parsed.message || text);
-    } catch { /* non-JSON */ }
-    throw new Error(detail || `Login failed (${res.status})`);
+/** Every auth endpoint answers with a session; `password_setup_required` means the
+ *  member holds a grace token and must set a password before anything else. */
+export interface AuthResponse { access_token: string; password_setup_required?: boolean }
+
+/** POSTs to an auth endpoint and stores the returned session token.
+ *  Errors carry `status` and, for the 403 password-required reveal, `code`. */
+async function authPost(path: string, body: unknown, withToken = false): Promise<AuthResponse> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (withToken) headers.Authorization = `Bearer ${localStorage.getItem(TOKEN_KEY) ?? ''}`;
+
+  let res: Response;
+  try {
+    res = await fetch(path, { method: 'POST', headers, body: JSON.stringify(body) });
+  } catch {
+    throw Object.assign(new Error('Network request failed'), { status: 0 });
   }
-  const data = JSON.parse(text) as { access_token: string };
+
+  const text = await res.text();
+  let parsed: { detail?: unknown; message?: string } | undefined;
+  try { parsed = text ? JSON.parse(text) : undefined; } catch { /* non-JSON */ }
+
+  if (!res.ok) {
+    const detail = parsed?.detail;
+    const asObject = (detail && typeof detail === 'object' ? detail : {}) as { message?: string; code?: string };
+    const message = typeof detail === 'string' ? detail : (asObject.message || parsed?.message || text);
+    throw Object.assign(new Error(message || `Request failed (${res.status})`), {
+      status: res.status,
+      code: asObject.code
+    });
+  }
+
+  const data = parsed as unknown as AuthResponse;
   localStorage.setItem(TOKEN_KEY, data.access_token);
-  return data.access_token;
+  return data;
+}
+
+export function login(email: string, password: string): Promise<AuthResponse> {
+  return authPost('/api/auth/login', { email: email.trim().toLowerCase(), password });
+}
+
+/** Invite setup codes and officer-issued reset codes redeem through the same door. */
+export function redeemSetupCode(email: string, code: string): Promise<AuthResponse> {
+  return authPost('/api/auth/redeem-setup-code', { email: email.trim().toLowerCase(), code });
+}
+
+/** Uses the grace/redeem token; the response rotates it, so the caller stays signed in. */
+export function setPassword(password: string): Promise<AuthResponse> {
+  return authPost('/api/auth/set-password', { password }, true);
 }
 
 async function devLogin(): Promise<string> {
