@@ -110,6 +110,7 @@ from api.members.api.members import router as members_router
 from api.chapters.api.chapters import router as chapters_router
 from api.cron.api.cron import router as cron_router
 from api.announcements.api.announcements import router as announcements_router
+from api.announcements.api.twilio_inbound import router as twilio_inbound_router
 from api.bylaws.api.documents import router as bylaws_router
 from api.nl_controller.api.commands import router as nl_controller_router
 from api.rbac.api.roles import router as rbac_router
@@ -180,6 +181,7 @@ app.include_router(rbac_router, prefix="/api/rbac", tags=["RBAC"])
 app.include_router(tasks_router, prefix="/api/tasks", tags=["Tasks"])
 app.include_router(operations_router, prefix="/api/operations", tags=["Operations"])
 app.include_router(announcements_router, prefix="/api/announcements", tags=["Announcements"])
+app.include_router(twilio_inbound_router, prefix="/api/twilio", tags=["Twilio"])
 app.include_router(recruitment_router, prefix="/api/recruitment", tags=["Recruitment"])
 app.include_router(bylaws_router, prefix="/api/bylaws", tags=["Bylaws"])
 app.include_router(nl_controller_router, prefix="/api/nl-controller", tags=["NL Controller"])
