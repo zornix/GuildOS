@@ -138,6 +138,10 @@ export interface MeDto { id: string; name: string; email: string; role: string; 
 /** GET /api/rbac/me/permissions — the only source of authority in the UI. */
 export interface MyPermissionsDto { permissions: string[]; roles: string[]; }
 
+/** GET /api/rbac/roles — the assignable role catalog. */
+export interface RoleDto { key: string; label: string; }
+export interface MemberRoleDto { role_key: string; }
+
 export interface MemberDto { id: string; name: string; email: string; role: string; status: string; }
 
 export interface StandingDto {
@@ -353,6 +357,16 @@ export const api = {
 
   getMe: () => request<MeDto>('GET', '/api/auth/me'),
   getMyPermissions: () => request<MyPermissionsDto>('GET', '/api/rbac/me/permissions'),
+
+  // Role assignment — all four need the caller's `roles:assign` permission
+  // except the catalog, which any member may read.
+  getRoleCatalog: () => request<RoleDto[]>('GET', '/api/rbac/roles'),
+  getMemberRoles: (memberId: string) =>
+    request<MemberRoleDto[]>('GET', `/api/rbac/members/${memberId}/roles`),
+  assignMemberRole: (memberId: string, roleKey: string) =>
+    request<unknown>('POST', `/api/rbac/members/${memberId}/roles`, { role_key: roleKey }),
+  revokeMemberRole: (memberId: string, roleKey: string) =>
+    request<unknown>('DELETE', `/api/rbac/members/${memberId}/roles/${roleKey}`),
 
   getMembers: () => request<MemberDto[]>('GET', '/api/members/'),
   getStandings: () => request<StandingDto[]>('GET', '/api/standing/'),

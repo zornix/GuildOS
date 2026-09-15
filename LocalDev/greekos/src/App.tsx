@@ -177,6 +177,7 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
         <RosterModule
           members={roster.members}
           isOfficer={isOfficer}
+          canAssignRoles={can(app.permissions, 'roles:assign')}
           onAddMember={roster.handleAddMember}
           onUpdateStanding={roster.handleUpdateStanding}
         />
