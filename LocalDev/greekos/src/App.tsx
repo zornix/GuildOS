@@ -13,6 +13,7 @@ import FinanceModule from './components/FinanceModule';
 import TasksModule from './components/TasksModule';
 import RecruitmentModule from './components/RecruitmentModule';
 import CommandModule from './components/CommandModule';
+import OutboxModule from './components/OutboxModule';
 import EventsBar from './components/EventsBar';
 import { useEventsChrome } from './hooks/useEventsChrome';
 import { filterEventsByType } from './lib/events';
@@ -204,6 +205,8 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
           onExtendBid={recruitment.handleExtendBid}
         />
       )}
+
+      {activeTab === 'outbox' && <OutboxModule />}
 
       {activeTab === 'command' && (
         <CommandModule

@@ -250,6 +250,23 @@ export interface Announcement {
   calendarTime?: string; // HH:MM, only ever set alongside calendarDate
 }
 
+/** One row of the chapter's message outbox (GET /api/announcements/outbox). */
+export interface OutboxMessage {
+  id: string;
+  eventType: string;
+  recipientName: string;
+  /** Masked to the last four digits by the backend; '' when the member has no phone. */
+  recipientPhone: string;
+  body: string;
+  status: OutboxStatus;
+  attempts: number;
+  createdAt: string;
+  deliveredAt?: string;
+  error?: string;
+}
+
+export type OutboxStatus = 'pending' | 'sending' | 'sent' | 'failed' | 'simulated';
+
 export interface OutboxNotification {
   id: string;
   timestamp?: string;

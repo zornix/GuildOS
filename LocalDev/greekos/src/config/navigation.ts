@@ -8,6 +8,7 @@ import {
   CheckSquare,
   Sparkles,
   Terminal,
+  Send,
   type LucideIcon
 } from 'lucide-react';
 
@@ -28,5 +29,6 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'tasks', label: 'Jobs', icon: ClipboardList },
   { id: 'roster', label: 'Roster', icon: Users },
   { id: 'recruitment', label: 'Recruitment', icon: UserPlus, permission: 'recruitment:pipeline:view' },
+  { id: 'outbox', label: 'Outbox', icon: Send, permission: 'announcements:send' },
   { id: 'command', label: 'Command console', icon: Terminal, permission: 'nl_controller:execute' }
 ];

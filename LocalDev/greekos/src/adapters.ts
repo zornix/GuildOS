@@ -9,6 +9,7 @@ import {
   FineDto,
   InitiativeDto,
   MemberDto,
+  OutboxMessageDto,
   RecruitDto,
   ScoreDto,
   SecurityAssignmentDto,
@@ -27,6 +28,8 @@ import {
   Member,
   MemberRole,
   MemberStanding,
+  OutboxMessage,
+  OutboxStatus,
   Payment,
   PNM,
   SecurityAssignment,
@@ -371,6 +374,24 @@ export function adaptRecruits(rows: RecruitDto[]): PNM[] {
     notes: row.notes || undefined,
     votesFor: 0,
     votesAgainst: 0
+  }));
+}
+
+// ----------------------------------------------------
+// OUTBOX
+// ----------------------------------------------------
+export function adaptOutbox(rows: OutboxMessageDto[]): OutboxMessage[] {
+  return rows.map(row => ({
+    id: row.id,
+    eventType: row.event_type,
+    recipientName: row.recipient_name || 'Chapter-wide',
+    recipientPhone: row.recipient_phone || '',
+    body: row.body,
+    status: row.status as OutboxStatus,
+    attempts: row.attempts,
+    createdAt: row.created_at,
+    deliveredAt: row.delivered_at || undefined,
+    error: row.error || undefined
   }));
 }
 

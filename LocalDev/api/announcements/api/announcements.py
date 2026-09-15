@@ -13,6 +13,7 @@ from api.announcements.auth import (
 from api.rbac.auth import require_permission
 from api.platform.db import get_db
 from api.announcements.services import announcements as svc
+from api.announcements.services import outbox as outbox_svc
 from api.announcements.services import sms as sms_svc
 from api.dependencies import get_current_user
 from api.rbac.services.permissions import has_permission
@@ -85,6 +86,34 @@ async def sms_log(
     return sms_svc.list_sms_log(
         get_db(), chapter_id=user["chapter_id"], limit=limit
     )
+
+
+@router.get("/outbox")
+async def list_outbox(
+    status: str | None = None,
+    limit: int = outbox_svc.LIST_LIMIT_DEFAULT,
+    user=Depends(require_permission(ANNOUNCEMENTS_SEND)),
+):
+    """The chapter's message_outbox, newest first (issue #48)."""
+    return outbox_svc.list_outbox(
+        get_db(), chapter_id=user["chapter_id"], status=status, limit=limit
+    )
+
+
+@router.post("/outbox/{row_id}/retry")
+async def retry_outbox(
+    row_id: str,
+    user=Depends(require_permission(ANNOUNCEMENTS_SEND)),
+):
+    """Requeue a failed row; the next cron drain picks it up."""
+    try:
+        return outbox_svc.retry_outbox_row(
+            get_db(), chapter_id=user["chapter_id"], row_id=row_id
+        )
+    except outbox_svc.OutboxRowNotFound:
+        raise HTTPException(404, "Outbox message not found")
+    except outbox_svc.OutboxRowNotFailed as exc:
+        raise HTTPException(409, f"Only failed messages can be retried (status: {exc.status})")
 
 
 @router.get("/{announcement_id}/sms-preview")

@@ -325,6 +325,20 @@ export interface AnnouncementDto {
   hidden_from_calendar?: boolean;
 }
 
+/** GET /api/announcements/outbox — one message_outbox row (issue #48). */
+export interface OutboxMessageDto {
+  id: string;
+  event_type: string;
+  recipient_name: string | null;
+  recipient_phone: string | null; // masked to the last four digits
+  body: string;
+  status: string; // pending | sending | sent | failed | simulated
+  attempts: number;
+  created_at: string;
+  delivered_at: string | null;
+  error: string | null;
+}
+
 export interface RecruitDto {
   id: string;
   name: string;
@@ -470,6 +484,15 @@ export const api = {
   sendAnnouncement: (id: string) => request<void>('POST', `/api/announcements/${id}/send`),
   /** Draft -> deleted, sent -> hidden from the calendar. Idempotent. */
   deleteAnnouncement: (id: string) => request<void>('DELETE', `/api/announcements/${id}`),
+
+  getOutbox: (status?: string) =>
+    request<OutboxMessageDto[]>(
+      'GET',
+      `/api/announcements/outbox${status ? `?status=${encodeURIComponent(status)}` : ''}`
+    ),
+  /** Failed -> pending; the next cron drain re-sends it. 409 on any other status. */
+  retryOutboxMessage: (id: string) =>
+    request<void>('POST', `/api/announcements/outbox/${id}/retry`, {}),
 
   getRecruits: () => request<RecruitDto[]>('GET', '/api/recruitment/recruits'),
   createRecruit: (body: Record<string, unknown>) =>
