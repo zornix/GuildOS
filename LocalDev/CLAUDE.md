@@ -8,7 +8,8 @@ GuildOS / FraternityOS — operational software for fraternity chapters (events,
 attendance, dues/fines treasury, standing, tasks, announcements, roster, RBAC).
 This directory (`LocalDev/`) is the active development sandbox. The git root is
 one level up at `/home/mshi/GuildOS`. The product frontend is `LocalDev/greekos`
-(Vite + React). `LocalDev/fratos` is the previous Next.js UI and is not deployed.
+(Vite + React). The previous Next.js UI (`LocalDev/fratos`) was archived to the
+gitignored `archive/` on 2026-09-15 (git tag `last-with-localdev-fratos`).
 
 Stack: **FastAPI (Python)** backend + **Vite/React (greekos)** frontend +
 **PostgreSQL** (raw SQL migrations). Local preview can use this folder's
@@ -92,8 +93,8 @@ segments must be registered before parameterized ones); such a router is
 append-only — sub-routers `include_router` into it and existing includes are
 never removed. Domains that also expose standalone routers on their own mount
 prefixes (`excuses_router`, `checkin_links_router`, `fines_router`) re-export
-them for `index.py`. **Mounted URL paths are frozen**: check `greekos/src/api.ts` (and
-`fratos/lib/api-client.ts` if you touch the old app) before changing any prefix.
+them for `index.py`. **Mounted URL paths are frozen**: check `greekos/src/api.ts`
+before changing any prefix.
 
 **No legacy flat modules.** `api/routes/`, `api/services/` and `api/models/`
 are gone — every handler, service and schema lives in its domain package.

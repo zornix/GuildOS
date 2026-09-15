@@ -4,7 +4,6 @@
     "dev": "bash ../local-dev-scripts/scripts/local-dev.sh",
     "migrate": "bash ../local-dev-scripts/scripts/with-demo-db.sh python3 scripts/migrate_db.py",
     "migrate:prod": "python3 scripts/migrate_db.py --prod",
-    "seed": "bash ../local-dev-scripts/scripts/with-demo-db.sh python3 -m scripts.seed",
-    "test:e2e": "cd fratos && npm run test:e2e"
+    "seed": "bash ../local-dev-scripts/scripts/with-demo-db.sh python3 -m scripts.seed"
   }
 }

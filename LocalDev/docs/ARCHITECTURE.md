@@ -34,8 +34,9 @@ as the Next app (see `vercel.json`).
 The git root is `/home/mshi/GuildOS`, one level **above** this directory.
 
 - `LocalDev/` — **the active development sandbox. All new work happens here.**
-- `Prod/` — sibling backend copy. Its stale `fratos/` frontend was archived out
-  of the repo (2026-09-08), so `LocalDev/fratos` is the only tracked frontend.
+- `Prod/` — the Vercel root: `Prod/api` (LocalDev FastAPI) + `Prod/fratos` (clone
+  of greekos). The old Next.js `LocalDev/fratos` was archived on 2026-09-15 (tag
+  `last-with-localdev-fratos`); `LocalDev/greekos` is the only tracked frontend.
 - The marketing site (`greekos-landing/`) was archived alongside it; both now
   live in the gitignored `archive/` at the git root, as does the older
   `GreekV1/` copy under `docs/archive/GreekV1/`.
@@ -252,6 +253,10 @@ rot (a hardcoded June-2026 window already caused one flake).
 ---
 
 ## 6. Frontend (`fratos/`)
+
+> **Archived 2026-09-15.** This section describes the old Next.js app, now in
+> gitignored `archive/LocalDev-fratos` (tag `last-with-localdev-fratos`). The
+> product frontend is `greekos/` (Vite + React); see `docs/GREEKOS-WIRE.md`.
 
 Layered so visual redesigns stay independent of business logic. Full spec:
 `../../FrontendConventions.md`. Audit + migration plan:

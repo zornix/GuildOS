@@ -5,8 +5,8 @@ dues/fines treasury, standing, tasks, announcements, roster, and RBAC.
 
 Active development happens in [`LocalDev/`](LocalDev/) (FastAPI + Vite/React
 **greekos** + PostgreSQL) — see `LocalDev/CLAUDE.md` for the project guide.
-`LocalDev/greekos` stays the sandbox UI. `LocalDev/fratos` is the old Next.js
-app and is not deployed.
+`LocalDev/greekos` is the only tracked frontend. The old Next.js `LocalDev/fratos`
+app was archived (2026-09-15, tag `last-with-localdev-fratos`).
 
 The FraternityOS Vercel project roots at [`Prod/`](Prod/): API in `Prod/api`,
 hosted UI in `Prod/fratos` (clone of greekos). See `Prod/vercel.json`.
@@ -31,8 +31,7 @@ release. Officers and members can run the real workflows in greekos against
 the demo database: login, roster, events and jobs, security shifts and swaps,
 initiatives, attendance and excuses, treasury (dues/fines as invoices),
 standing, tasks, announcements, and recruitment. Permission keys (not
-`user.role === "officer"`) gate the UI. The Next.js `LocalDev/fratos` app is
-left behind.
+`user.role === "officer"`) gate the UI.
 
 **What is real**
 

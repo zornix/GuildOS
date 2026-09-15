@@ -21,9 +21,9 @@ Do not treat it as truth.
 | Domain services & rules | `api/<domain>/services/`, `core/`, `auth.py` | Orchestration; I/O-free value objects (`Money`, event rules); permission-key constants. |
 | Platform | `api/platform/`, `api/index.py`, `api/dependencies.py` | The one DB path: `get_db`, `PostgresClient`, `call_rpc`, `unwrap_row`, `delivery_mode`. JWT → member. |
 | Schema & RPCs | `migrations/*.sql` | Lexical SQL: tables, RLS, plpgsql RPCs, `big_ledger` / `audit_logs`. |
-| Frontend UI | `fratos/app/`, `components/` | Thin App Router page, shell, modules, UI primitives, leftover `views/`. |
-| Frontend data | `fratos/lib/`, `hooks/`, `config/` | `api-client` → adapters → contracts → formatters. Nav + tokens. |
-| Tests | `tests/`, `fratos/**/*.test.ts`, `fratos/e2e/` | Real Postgres pytest; Vitest; Playwright role flows. |
+| Frontend UI | `greekos/src/components/` | Vite + React modules and UI primitives (old `fratos/` archived 2026-09-15). |
+| Frontend data | `greekos/src/api.ts`, `adapters.ts`, `hooks/` | One API client → adapters → hooks. |
+| Tests | `tests/`, `greekos/src/**/*.test.ts` | Real Postgres pytest; node:test. |
 | Ship | `vercel.json`, `.github/workflows/`, `scripts/` | Vercel dual-runtime, CI, `migrate_db.py`, `db_guard.py`. |
 
 ---
@@ -115,11 +115,11 @@ Still a single-route SPA over `views/`; new work goes in `components/modules/`.
 
 - `tests/treasury/conftest.py` — real Postgres harness reused across domains
 - `tests/treasury/test_chunkH_tenant_guards.py` — cross-chapter ids rejected
-- `fratos/` Vitest + `fratos/e2e/` Playwright
+- `greekos/` node:test (`npm test`), `npm run lint` (tsc)
 
 ### 14. How it ships
 
-- `vercel.json` — `api/index.py` + `fratos/`; `/api/*` and `/c/*` → FastAPI
+- `vercel.json` — `api/index.py` + `greekos/`; `/api/*` and `/c/*` → FastAPI
 - `.github/workflows/ci.yml` — Postgres 16 service, LocalDev verification
 - `scripts/migrate_db.py` — lexical, idempotent via `schema_migrations`
 - `scripts/db_guard.py` — refuses writes to production URLs
