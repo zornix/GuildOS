@@ -92,8 +92,8 @@ export default function CalendarModule({
       {/* Main Grid: 2 cols Calendar on Left, 1 col Day Details on Right */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Calendar Box */}
-        <Card className="lg:col-span-2 p-5 space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <Card className="lg:col-span-2 p-3 sm:p-5 space-y-4">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3">
             <div>
               <h3 className="font-display font-extrabold text-slate-900 text-lg">
                 {month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
@@ -101,24 +101,24 @@ export default function CalendarModule({
               <p className="text-xs text-slate-500">Click any date to inspect scheduled chapter operations.</p>
             </div>
 
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs font-bold text-slate-600">
+            <div className="flex items-center gap-1 shrink-0 bg-slate-100 p-1 rounded-lg text-xs font-bold text-slate-600">
               <button
                 onClick={() => shiftMonth(-1)}
                 aria-label="Previous month"
-                className="px-2 py-1 rounded hover:bg-white hover:text-slate-900 transition-all cursor-pointer"
+                className="px-2 py-1 min-h-11 sm:min-h-0 rounded hover:bg-white hover:text-slate-900 transition-all cursor-pointer flex items-center"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => setMonth(new Date(new Date().getFullYear(), new Date().getMonth(), 1))}
-                className="px-2.5 py-1 bg-white text-slate-900 rounded shadow-2xs cursor-pointer"
+                className="px-2.5 py-1 min-h-11 sm:min-h-0 bg-white text-slate-900 rounded shadow-2xs cursor-pointer"
               >
                 {month.toLocaleDateString('en-US', { month: 'short' })}
               </button>
               <button
                 onClick={() => shiftMonth(1)}
                 aria-label="Next month"
-                className="px-2 py-1 rounded hover:bg-white hover:text-slate-900 transition-all cursor-pointer"
+                className="px-2 py-1 min-h-11 sm:min-h-0 rounded hover:bg-white hover:text-slate-900 transition-all cursor-pointer flex items-center"
               >
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
@@ -137,7 +137,7 @@ export default function CalendarModule({
           </div>
 
           {/* Calendar Grid */}
-          <div className="grid grid-cols-7 gap-1.5">
+          <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
             {calendarCells.map((cell, idx) => {
               const isSelected = cell.dateStr === selectedDateStr;
               const isToday = cell.dateStr === today;
@@ -149,7 +149,7 @@ export default function CalendarModule({
                 <div
                   key={idx}
                   onClick={() => cell.dateStr && setSelectedDateStr(cell.dateStr)}
-                  className={`min-h-[84px] p-1.5 rounded-xl border flex flex-col justify-between transition-all ${
+                  className={`min-h-16 sm:min-h-[84px] p-1 sm:p-1.5 rounded-lg sm:rounded-xl border flex flex-col justify-between transition-all ${
                     !cell.day
                       ? 'bg-slate-50/40 border-dashed border-slate-100 cursor-default'
                       : isSelected

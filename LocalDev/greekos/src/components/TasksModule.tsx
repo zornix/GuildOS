@@ -97,13 +97,13 @@ export default function TasksModule({
       </div>
 
       {/* Filter Ribbon */}
-      <div className="flex items-center gap-2 text-xs">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className="text-slate-500 font-bold">Priority:</span>
         {['ALL', 'Urgent', 'High', 'Medium', 'Low'].map(p => (
           <button
             key={p}
             onClick={() => setFilterPriority(p)}
-            className={`px-2.5 py-1 rounded-md font-semibold cursor-pointer transition-all ${
+            className={`px-2.5 py-1 min-h-11 sm:min-h-0 rounded-md font-semibold cursor-pointer transition-all ${
               filterPriority === p ? 'bg-navy text-gold' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
@@ -145,7 +145,7 @@ export default function TasksModule({
                   disabled={statusReadOnly}
                   title={task.parent ? `Report and review this job in its ${task.parent.kind}.` : undefined}
                   onClick={() => onToggleTaskStatus(task.id)}
-                  className={`text-xs font-bold px-2 py-0.5 rounded flex items-center gap-1 cursor-pointer transition-all ${
+                  className={`text-xs font-bold px-2 py-0.5 min-h-11 sm:min-h-0 rounded flex items-center gap-1 cursor-pointer transition-all ${
                     isDone 
                       ? 'bg-emerald-100 text-emerald-800' 
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -168,7 +168,7 @@ export default function TasksModule({
                 <p className="text-xs text-slate-600 mt-1">{task.description}</p>
               </div>
 
-              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+              <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
                 <span className="flex items-center gap-1">
                   <User className="w-3 h-3 text-slate-500" />
                   <span>
@@ -179,7 +179,7 @@ export default function TasksModule({
 
                 {currentMember && canClaimTask(task, currentMember.id) && (
                   <button type="button" onClick={() => onClaimTask(task.id, currentMember.name, currentMember.id)}
-                    className="text-xs bg-gold hover:bg-[#c5a02b] text-navy font-bold px-2.5 py-1 rounded-md cursor-pointer">
+                    className="text-xs bg-gold hover:bg-[#c5a02b] text-navy font-bold px-2.5 py-1 min-h-11 sm:min-h-0 rounded-md cursor-pointer">
                     Claim
                   </button>
                 )}
@@ -206,7 +206,7 @@ export default function TasksModule({
                   value={title}
                   onChange={e => setTitle(e.target.value)}
                   placeholder="e.g. Empty the kitchen bins"
-                  className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-gold"
+                  className="w-full text-sm border border-slate-200 rounded-lg p-2.5 min-h-11 focus:outline-none focus:border-gold"
                   required
                 />
               </div>
@@ -218,17 +218,17 @@ export default function TasksModule({
                   onChange={e => setDescription(e.target.value)}
                   placeholder="e.g. Empty all 3 bins, wipe counter, and take bags to outer dumpster."
                   rows={2}
-                  className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-gold"
+                  className="w-full text-sm border border-slate-200 rounded-lg p-2.5 min-h-11 focus:outline-none focus:border-gold"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-slate-700 block mb-1">Assign to</label>
                   <select
                     value={assignedToId}
                     onChange={e => setAssignedToId(e.target.value)}
-                    className="w-full text-xs border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-gold"
+                    className="w-full text-xs border border-slate-200 rounded-lg p-2.5 min-h-11 focus:outline-none focus:border-gold"
                   >
                     {members.map(m => (
                       <option key={m.id} value={m.id}>{m.name} ({m.role})</option>
@@ -241,7 +241,7 @@ export default function TasksModule({
                   <select
                     value={priority}
                     onChange={e => setPriority(e.target.value as any)}
-                    className="w-full text-xs border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-gold"
+                    className="w-full text-xs border border-slate-200 rounded-lg p-2.5 min-h-11 focus:outline-none focus:border-gold"
                   >
                     <option value="Low">Low</option>
                     <option value="Medium">Medium</option>
@@ -257,7 +257,7 @@ export default function TasksModule({
                   type="date"
                   value={dueDate}
                   onChange={e => setDueDate(e.target.value)}
-                  className="w-full text-xs border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-gold"
+                  className="w-full text-xs border border-slate-200 rounded-lg p-2.5 min-h-11 focus:outline-none focus:border-gold"
                   required
                 />
               </div>
