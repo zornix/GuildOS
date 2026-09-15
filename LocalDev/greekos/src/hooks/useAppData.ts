@@ -4,8 +4,10 @@ import { api, AuthRequiredError, ensureLogin, logout, optionalOfficerCall, Event
 import { isoDay } from '../formatters';
 import { MemberBalance, adaptMemberBalance } from '../lib/balance';
 import { isOfficerView } from '../lib/session';
+import { EMPTY_CONTRIBUTION } from '../lib/contribution';
 import {
   adaptAnnouncements,
+  adaptContribution,
   adaptEventDetail,
   adaptEvents,
   adaptExcuses,
@@ -71,7 +73,7 @@ export function useAppData() {
     refetchJobs
   });
   const recruitment = useRecruitment({ syncApi, showToast, enqueueOutbox });
-  const contribution = useContribution(currentMemberName, events.events, initiatives.initiatives);
+  const contribution = useContribution();
 
   /** Stamp the job rows onto whichever event/initiative owns each one. The chip
    *  counts live on the event rows, so restamp those in the same update when
@@ -124,7 +126,7 @@ export function useAppData() {
         const permissionSet = new Set(perms.permissions);
         const rosterRows = adaptMembers(memberRows, standingRows, scoreRows);
 
-        const [eventRows, excuseRows, fineRows, treasury, taskRows, annRows, recruitRows, initRows, myBalanceRow] =
+        const [eventRows, excuseRows, fineRows, treasury, taskRows, annRows, recruitRows, initRows, contributionRow, myBalanceRow] =
           await Promise.all([
             api.getEvents(),
             api.getExcuses(),
@@ -134,6 +136,12 @@ export function useAppData() {
             api.getAnnouncements(),
             optionalOfficerCall(api.getRecruits(), []),
             api.getInitiatives(),
+            // Lifetime contribution counts. A failure here empties the "My
+            // record" panel rather than failing the whole load.
+            api.getMyContribution().then(adaptContribution).catch(err => {
+              console.error('Contribution load failed', err);
+              return EMPTY_CONTRIBUTION;
+            }),
             api.getMemberTreasuryDashboard(me.id).then(adaptMemberBalance).catch(err => {
               console.error('Member balance load failed', err);
               return null;
@@ -172,6 +180,7 @@ export function useAppData() {
         setPermissions(permissionSet);
         setSessionName(me.name);
         setMyBalance(myBalanceRow);
+        contribution.setRecord(contributionRow);
         setCurrentMemberName(me.name);
         setIsOfficer(isOfficerView(permissionSet));
         events.setEvents(adaptedEvents.map(e => ({
@@ -280,7 +289,7 @@ export function useAppData() {
     isOfficer,
     permissions,
     sessionName,
-    contribution,
+    contribution: contribution.record,
     myBalance,
     currentMemberName,
     announcements,
