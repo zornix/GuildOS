@@ -17,6 +17,7 @@ from api.members.api.schemas import UserProfile
 from api.platform.db import get_db
 from api.platform.rows import unwrap_row
 from api.config import settings
+from api.auth.notifications import RESET_CODE, SETUP_CODE, notify_code
 
 router = APIRouter()
 
@@ -107,11 +108,18 @@ def _client_ip(request: Request | None) -> str | None:
     return request.client.host if request.client else None
 
 
-def _issue_setup_code(sb, *, chapter_id: str, member_id: str) -> tuple[str, str]:
+def _issue_setup_code(
+    sb, *, chapter_id: str, member_id: str, event_type: str = SETUP_CODE
+) -> tuple[str, str]:
     """Create a setup code for a member. Returns (plaintext_code, expires_at_iso).
 
     Only the bcrypt hash is stored; the plaintext is returned to the caller once
     and never recoverable afterwards.
+
+    Every caller (invite, chapter creation, roster import, officer reset) also
+    gets the code emailed to the member from here — this is the one place a code
+    is minted, so no producer can forget (ADR-0005). `event_type` picks the copy:
+    SETUP_CODE for a new account, RESET_CODE for a reset.
     """
     code = _generate_setup_code()
     expires_at = datetime.now(timezone.utc) + timedelta(days=SETUP_CODE_TTL_DAYS)
@@ -121,6 +129,14 @@ def _issue_setup_code(sb, *, chapter_id: str, member_id: str) -> tuple[str, str]
         "code_hash": _hash_secret(code),
         "expires_at": expires_at.isoformat(),
     }).execute()
+    notify_code(
+        sb,
+        event_type=event_type,
+        chapter_id=chapter_id,
+        member_id=member_id,
+        code=code,
+        expires_at=expires_at.isoformat(),
+    )
     return code, expires_at.isoformat()
 
 
@@ -437,7 +453,10 @@ async def issue_reset_code(
         raise HTTPException(404, "Member not found")
 
     code, expires_at = _issue_setup_code(
-        sb, chapter_id=member["chapter_id"], member_id=member["id"]
+        sb,
+        chapter_id=member["chapter_id"],
+        member_id=member["id"],
+        event_type=RESET_CODE,
     )
 
     sb.rpc("au_bump_token_version", {

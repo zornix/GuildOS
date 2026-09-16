@@ -41,6 +41,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- 0153's rule: nothing in public is executable by PUBLIC.
+REVOKE ALL ON FUNCTION outbox_pin_sms_channel() FROM PUBLIC;
+
 DROP TRIGGER IF EXISTS trg_outbox_pin_sms_channel ON message_outbox;
 CREATE TRIGGER trg_outbox_pin_sms_channel
     BEFORE INSERT ON message_outbox
