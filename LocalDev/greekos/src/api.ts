@@ -104,6 +104,8 @@ export async function createChapter(body: {
   officer_name: string;
   officer_email: string;
   officer_phone: string;
+  /** Did the officer tick the SMS opt-in? Absent means no (#57). */
+  sms_consent?: boolean;
 }): Promise<CreateChapterResult> {
   const res = await fetch('/api/chapters', {
     method: 'POST',
@@ -227,7 +229,15 @@ export interface MyPermissionsDto { permissions: string[]; roles: string[]; }
 export interface RoleDto { key: string; label: string; }
 export interface MemberRoleDto { role_key: string; }
 
-export interface MemberDto { id: string; name: string; email: string; role: string; status: string; }
+export interface MemberDto {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: string;
+  /** May we text them? (#57) Absent on an older backend, which means no. */
+  sms_consent?: boolean;
+}
 
 export interface StandingDto {
   member_id: string;
@@ -599,6 +609,9 @@ export const api = {
   /** Failed -> pending; the next cron drain re-sends it. 409 on any other status. */
   retryOutboxMessage: (id: string) =>
     request<void>('POST', `/api/announcements/outbox/${id}/retry`, {}),
+
+  /** The signed-in member opting themselves in to SMS; also clears any STOP. */
+  optInToSms: () => request<void>('POST', '/api/members/me/sms-consent', {}),
 
   getRecruits: () => request<RecruitDto[]>('GET', '/api/recruitment/recruits'),
   createRecruit: (body: Record<string, unknown>) =>

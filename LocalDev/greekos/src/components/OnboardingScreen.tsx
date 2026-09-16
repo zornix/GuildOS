@@ -1,5 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { createChapter, CreateChapterResult } from '../api';
+import { SMS_CONSENT_LABEL } from '../lib/consent';
 
 /** Self-serve chapter signup: the pre-login half of onboarding. The officer
  *  gets a one-time setup code here and redeems it on the sign-in screen —
@@ -11,6 +12,9 @@ export default function OnboardingScreen({ onBack }: { onBack: () => void }) {
   const [officerName, setOfficerName] = useState('');
   const [officerEmail, setOfficerEmail] = useState('');
   const [officerPhone, setOfficerPhone] = useState('');
+  // Unchecked by default and it stays that way: carriers require prior express
+  // consent, and a pre-ticked box is not consent (#57).
+  const [smsConsent, setSmsConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState<CreateChapterResult | null>(null);
@@ -26,7 +30,8 @@ export default function OnboardingScreen({ onBack }: { onBack: () => void }) {
         school: school || undefined,
         officer_name: officerName,
         officer_email: officerEmail,
-        officer_phone: officerPhone
+        officer_phone: officerPhone,
+        sms_consent: smsConsent
       }));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create the chapter');
@@ -102,6 +107,16 @@ export default function OnboardingScreen({ onBack }: { onBack: () => void }) {
           <input id="officer-phone" type="tel" autoComplete="tel" required value={officerPhone}
             onChange={e => setOfficerPhone(e.target.value)} placeholder="+1 555 111 0001" className={field} />
         </div>
+
+        <label className="flex items-start gap-3 text-xs text-slate-600 leading-relaxed min-h-11 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={smsConsent}
+            onChange={e => setSmsConsent(e.target.checked)}
+            className="mt-0.5 w-4 h-4 shrink-0 accent-navy cursor-pointer"
+          />
+          <span>{SMS_CONSENT_LABEL}</span>
+        </label>
 
         {error && (
           <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
