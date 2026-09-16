@@ -7,6 +7,7 @@ from api.rbac.auth import require_permission
 from api.rbac.core.policy import LEGACY_ROLE_COMPAT
 from api.platform.db import get_db
 from api.platform.rpc import call_rpc
+from api.sms_consent import CONSENT_COLUMNS, has_consent
 
 ROLES_ASSIGN = "roles:assign"
 
@@ -20,17 +21,31 @@ router = APIRouter()
 
 @router.get("/")
 async def list_members(user=Depends(get_current_user)):
-    """List the chapter roster: active members plus pending invitees."""
+    """List the chapter roster: active members plus pending invitees.
+
+    `sms_consent` rides along (#57) so officers can see who is textable and a
+    member can see their own state — the rule itself stays in api/sms_consent.py.
+    """
     sb = get_db()
     result = (
         sb.table("members")
-        .select("id, name, email, role, status")
+        .select(f"id, name, email, role, status, {CONSENT_COLUMNS}")
         .eq("chapter_id", user["chapter_id"])
         .in_("status", ROSTER_STATUSES)
         .order("name")
         .execute()
     )
-    return result.data
+    return [
+        {
+            "id": m["id"],
+            "name": m["name"],
+            "email": m["email"],
+            "role": m["role"],
+            "status": m["status"],
+            "sms_consent": has_consent(m),
+        }
+        for m in (result.data or [])
+    ]
 
 
 @router.post("/me/sms-consent")
