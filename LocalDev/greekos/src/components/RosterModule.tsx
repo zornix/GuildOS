@@ -20,6 +20,8 @@ interface RosterModuleProps {
   isOfficer: boolean;
   /** `roles:assign` — gates the per-member role toggles. */
   canAssignRoles: boolean;
+  /** `members:invite` — gates the per-member "Texts: on/off" indicator (#57). */
+  canSeeSmsConsent: boolean;
   onAddMember: (member: Omit<Member, 'id' | 'points' | 'attendanceRate' | 'duesBalance' | 'duesBalanceCents' | 'securityHoursServed'>) => void;
   onUpdateStanding: (memberId: string, standing: 'Good Standing' | 'Academic Probation' | 'Social Suspension' | 'Financial Hold') => void;
   onImportRoster?: (file: File) => Promise<RosterImportResult>;
@@ -29,6 +31,7 @@ export default function RosterModule({
   members,
   isOfficer,
   canAssignRoles,
+  canSeeSmsConsent,
   onAddMember,
   onUpdateStanding,
   onImportRoster
@@ -171,6 +174,15 @@ export default function RosterModule({
                       <div className="font-bold text-slate-900 text-sm">{mem.name}</div>
                       <div className="text-xs text-gold-muted font-semibold">{mem.role}</div>
                       <div className="text-xs text-slate-500">{mem.major} &bull; Room {mem.roomNumber || 'N/A'}</div>
+                      {canSeeSmsConsent && (
+                        <div className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
+                          <span
+                            aria-hidden="true"
+                            className={`w-2 h-2 rounded-full ${mem.smsConsent ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                          />
+                          Texts: {mem.smsConsent ? 'on' : 'off'}
+                        </div>
+                      )}
                     </td>
 
                     <td className="py-3 px-4 text-slate-600 hidden md:table-cell">

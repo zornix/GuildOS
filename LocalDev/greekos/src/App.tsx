@@ -197,6 +197,7 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
           members={roster.members}
           isOfficer={isOfficer}
           canAssignRoles={can(app.permissions, 'roles:assign')}
+          canSeeSmsConsent={can(app.permissions, 'members:invite')}
           onImportRoster={file => roster.handleImportRoster(app.chapterId, file)}
           onAddMember={roster.handleAddMember}
           onUpdateStanding={roster.handleUpdateStanding}
