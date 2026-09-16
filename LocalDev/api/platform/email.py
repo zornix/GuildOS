@@ -33,11 +33,6 @@ def _require(name: str) -> str:
     return value
 
 
-def email_delivery_mode() -> str:
-    """"dry_run" (nothing leaves the process) or "smtp". Settings, not env."""
-    return settings.EMAIL_DELIVERY_MODE or "dry_run"
-
-
 def send_email(to: str, subject: str, text_body: str) -> None:
     """Send one plain-text email. Raises on any failure, like send_sms."""
     if not (to or "").strip():

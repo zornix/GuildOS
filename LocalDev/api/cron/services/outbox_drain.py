@@ -44,8 +44,8 @@ from datetime import datetime, timezone
 
 from api.announcements.services import twilio_client
 from api.cron.core import templates
-from api.platform.delivery import delivery_mode
-from api.platform.email import email_delivery_mode, send_email
+from api.platform.delivery import delivery_mode, email_delivery_mode
+from api.platform.email import send_email
 from api.platform.rpc import call_rpc
 from api.sms_consent import CONSENT_COLUMNS, has_consent
 
