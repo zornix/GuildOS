@@ -3,6 +3,7 @@ import { AlertTriangle, Inbox, RefreshCw, Send } from 'lucide-react';
 import { OutboxMessage, OutboxStatus } from '../types';
 import { useOutboxFeed } from '../hooks/useOutbox';
 import Card from './ui/Card';
+import { outboxFailure } from '../lib/consent';
 
 type Filter = OutboxStatus | 'all';
 
@@ -144,6 +145,10 @@ function MessageRow({
   /** No @types/react in this project, so `key` is an ordinary prop. */
   key?: string | number;
 }) {
+  // "no_consent" is not an error the officer can retry away — only the member
+  // can opt in — so it reads as an explanation and hides Retry (#57).
+  const failure = outboxFailure(message.error);
+
   return (
     <Card className="p-4 space-y-2">
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
@@ -168,7 +173,7 @@ function MessageRow({
           >
             {STATUS_LABEL[message.status] || message.status}
           </span>
-          {message.status === 'failed' && (
+          {message.status === 'failed' && failure.retryable && (
             <button
               type="button"
               onClick={onRetry}
@@ -185,8 +190,13 @@ function MessageRow({
       {message.body && <p className="text-sm text-slate-700 break-words">{message.body}</p>}
 
       {message.error && (
-        <p className="text-xs font-semibold text-rose-700 break-words">
-          {message.error} (attempt {message.attempts})
+        <p
+          className={`text-xs font-semibold break-words ${
+            failure.retryable ? 'text-rose-700' : 'text-slate-600'
+          }`}
+        >
+          {failure.text}
+          {failure.retryable && ` (attempt ${message.attempts})`}
         </p>
       )}
     </Card>
