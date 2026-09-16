@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Upload } from 'lucide-react';
 import type { RosterImportResult, RosterRowError } from '../../api';
 import Card from '../ui/Card';
+import { ROSTER_CONSENT_NOTE, ROSTER_CSV_HEADER } from '../../lib/consent';
 
 /** Officer-only roster CSV upload. The import is all-or-nothing: a rejected
  *  file imported nothing, so the row list below is a to-fix list, not a
@@ -39,9 +40,14 @@ export default function RosterCsvImport(
         <div>
           <h3 className="text-sm font-display font-bold text-slate-900">Import a roster</h3>
           <p className="text-xs text-slate-500 mt-1">
-            CSV with <code className="font-mono">name,email,phone</code> and an optional{' '}
-            <code className="font-mono">role</code> column. Everyone gets a setup code; nobody is
-            texted yet.
+            CSV with the header{' '}
+            <code className="font-mono break-all">{ROSTER_CSV_HEADER}</code>.{' '}
+            <code className="font-mono">role</code> and <code className="font-mono">consent</code>{' '}
+            are optional; put <code className="font-mono">yes</code> in{' '}
+            <code className="font-mono">consent</code> only for members who signed an SMS opt-in.
+          </p>
+          <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+            {ROSTER_CONSENT_NOTE}
           </p>
         </div>
         <label className="bg-navy hover:bg-[#16304f] text-white font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-sm flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap">
