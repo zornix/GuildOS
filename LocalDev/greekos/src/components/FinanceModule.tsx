@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   DollarSign,
   CreditCard,
@@ -18,14 +18,17 @@ import ConfirmDialog from './ui/ConfirmDialog';
 import AddTransactionModal from './finance/AddTransactionModal';
 import DuesRunModal from './finance/DuesRunModal';
 import InvoiceView, { InvoiceStatusBadge } from './finance/InvoiceView';
+import ProofQueue from './finance/ProofQueue';
 import { formatMoney } from '../formatters';
 import type { MemberBalance } from '../lib/balance';
 import { can } from '../lib/session';
 import {
   INVOICE_CREATE_KEY,
+  PAYMENT_VERIFY_KEY,
   DuesRunDraft,
   Invoice,
   ProofDraft,
+  ProofSubmission,
   formatDueDate,
   invoiceTitle
 } from '../lib/dues';
@@ -45,8 +48,14 @@ interface FinanceModuleProps {
   /** The signed-in member's open invoices, dues and fines alike. */
   myInvoices: Invoice[];
   pendingProofCentsOf: (invoiceId: string) => number;
+  submissions: ProofSubmission[];
+  queueLoading: boolean;
+  onRefreshQueue: () => Promise<void>;
   onCreateDuesRun: (draft: DuesRunDraft) => Promise<void>;
   onSubmitProof: (invoice: Invoice, draft: ProofDraft, evidence: File | null) => Promise<void>;
+  onVerifyProof: (submission: ProofSubmission) => Promise<void>;
+  onRejectProof: (submission: ProofSubmission, reason: string) => Promise<void>;
+  onOpenEvidence: (evidenceId: string) => Promise<string>;
   /** The one balance reader, from useFinance. */
   balanceCentsOf: (memberId: string) => number;
   onRecordPayment: (payment: Omit<Payment, 'id' | 'date'>) => void;
@@ -68,8 +77,14 @@ export default function FinanceModule({
   myBalance,
   myInvoices,
   pendingProofCentsOf,
+  submissions,
+  queueLoading,
+  onRefreshQueue,
   onCreateDuesRun,
   onSubmitProof,
+  onVerifyProof,
+  onRejectProof,
+  onOpenEvidence,
   balanceCentsOf,
   onRecordPayment,
   onIssueFine,
@@ -82,12 +97,20 @@ export default function FinanceModule({
   const safePayments = payments || [];
   const safeLedger = ledger || [];
 
-  const [activeSubTab, setActiveSubTab] = useState<'invoices' | 'overview' | 'fines' | 'ledger' | 'payments'>('invoices');
-  const [openInvoice, setOpenInvoice] = useState<Invoice | null>(null);
+  const [activeSubTab, setActiveSubTab] = useState<'invoices' | 'overview' | 'fines' | 'ledger' | 'payments' | 'queue'>('invoices');
   const [showAddTransaction, setShowAddTransaction] = useState(false);
   const [showDuesRun, setShowDuesRun] = useState(false);
+  const [openInvoice, setOpenInvoice] = useState<Invoice | null>(null);
 
   const canCreateDuesRun = can(permissions, INVOICE_CREATE_KEY);
+  const canVerifyPayments = can(permissions, PAYMENT_VERIFY_KEY);
+
+  // The queue is only read when it is on screen — it is the one list that goes
+  // stale while another officer works.
+  useEffect(() => {
+    if (activeSubTab === 'queue' && canVerifyPayments) void onRefreshQueue();
+  }, [activeSubTab, canVerifyPayments]);
+
   const [showPayModal, setShowPayModal] = useState(false);
   const [showCorrectionModal, setShowCorrectionModal] = useState<LedgerEntry | null>(null);
   const [pendingMarkPaid, setPendingMarkPaid] = useState<{ member: Member; balanceCents: number } | null>(null);
@@ -321,6 +344,20 @@ export default function FinanceModule({
           <History className="w-4 h-4" />
           Payments ({payments.length})
         </button>
+
+        {canVerifyPayments && (
+          <button
+            onClick={() => setActiveSubTab('queue')}
+            className={`pb-3 shrink-0 whitespace-nowrap transition-all cursor-pointer flex items-center gap-2 ${
+              activeSubTab === 'queue'
+                ? 'text-navy border-b-2 border-gold font-bold'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4" />
+            Proof queue{submissions.length ? ` (${submissions.length})` : ''}
+          </button>
+        )}
       </div>
 
       {/* SubTab 0: The member's own invoices — dues runs and fines alike */}
@@ -637,6 +674,16 @@ export default function FinanceModule({
             </table>
           </div>
         </Card>
+      )}
+
+      {activeSubTab === 'queue' && canVerifyPayments && (
+        <ProofQueue
+          submissions={submissions}
+          loading={queueLoading}
+          onOpenEvidence={onOpenEvidence}
+          onVerify={onVerifyProof}
+          onReject={onRejectProof}
+        />
       )}
 
       {showAddTransaction && (

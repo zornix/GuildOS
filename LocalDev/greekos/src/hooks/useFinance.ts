@@ -8,7 +8,9 @@ import {
   DuesRunDraft,
   Invoice,
   ProofDraft,
+  ProofSubmission,
   adaptInvoices,
+  adaptSubmissions,
   planDuesRun,
   planProof,
   toBase64
@@ -35,8 +37,10 @@ export function useFinance({ members, setMembers, currentMemberId, currentMember
   const [payments, setPayments] = useState<Payment[]>([]);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   // The signed-in member's real treasury record — the one read behind both the
-  // balance banner and, next, their invoices.
+  // balance banner and the invoice list.
   const [myTreasury, setMyTreasury] = useState<MemberTreasuryDashboardDto | null>(null);
+  const [submissions, setSubmissions] = useState<ProofSubmission[]>([]);
+  const [queueLoading, setQueueLoading] = useState(false);
 
   const myBalance = myTreasury ? adaptMemberBalance(myTreasury) : null;
   const myInvoices = adaptInvoices(myTreasury?.open_invoices);
@@ -50,6 +54,16 @@ export function useFinance({ members, setMembers, currentMemberId, currentMember
   const refreshMyTreasury = async () => {
     if (!currentMemberId) return;
     setMyTreasury(await api.getMemberTreasuryDashboard(currentMemberId));
+  };
+
+  const refreshQueue = async () => {
+    setQueueLoading(true);
+    try {
+      const page = await api.listPaymentSubmissions('pending');
+      setSubmissions(adaptSubmissions(page.data, new Map(members.map(m => [m.id, m.name]))));
+    } finally {
+      setQueueLoading(false);
+    }
   };
 
   /** One dues run = one bulk batch of invoices, all with the same due date. */
@@ -83,6 +97,24 @@ export function useFinance({ members, setMembers, currentMemberId, currentMember
     }
     await refreshMyTreasury();
     showToast('Payment submitted. The treasury board will verify it.');
+  };
+
+  const handleVerifyProof = async (submission: ProofSubmission) => {
+    await api.verifyPaymentSubmission(submission.id);
+    await Promise.all([refreshQueue(), refreshMyTreasury()]);
+    showToast(`Verified ${formatMoney(submission.claimedCents)} from ${submission.memberName}.`);
+  };
+
+  const handleRejectProof = async (submission: ProofSubmission, reason: string) => {
+    await api.rejectPaymentSubmission(submission.id, reason);
+    await refreshQueue();
+    showToast(`Rejected ${submission.memberName}'s payment.`);
+  };
+
+  /** Evidence bytes as a data: URL the proof modal can render. */
+  const openEvidence = async (evidenceId: string) => {
+    const evidence = await api.getPaymentEvidence(evidenceId);
+    return `data:${evidence.content_type};base64,${evidence.data_base64}`;
   };
 
   const refetchFines = async () => setFines(adaptFines(await api.getFines(), members));
@@ -254,8 +286,14 @@ export function useFinance({ members, setMembers, currentMemberId, currentMember
     myInvoices,
     setMyTreasury,
     pendingProofCentsOf,
+    submissions,
+    queueLoading,
+    refreshQueue,
     handleCreateDuesRun,
     handleSubmitProof,
+    handleVerifyProof,
+    handleRejectProof,
+    openEvidence,
     balanceCentsOf,
     handleRecordPayment,
     handleIssueFine,
