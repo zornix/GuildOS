@@ -10,6 +10,7 @@ import { liveDoorEvent } from '../lib/events';
 import { isTaskComplete } from '../lib/tasks';
 import WelcomeBanner from './home/WelcomeBanner';
 import MyRecord from './home/MyRecord';
+import SmsConsentCard from './home/SmsConsentCard';
 
 interface DashboardOverviewProps {
   members: Member[];
@@ -82,6 +83,10 @@ export default function DashboardOverview({
       />
 
       <MyRecord record={contribution} />
+
+      {/* Only once the roster has loaded: an absent row would render "off" for
+          a member who has in fact opted in. */}
+      {currentMember && <SmsConsentCard consented={currentMember.smsConsent === true} />}
 
       {isOfficer && pendingJobSignOffs.length > 0 && (
         <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
