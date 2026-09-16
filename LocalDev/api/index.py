@@ -21,6 +21,7 @@ from api.observability import init_observability
 MIN_JWT_SECRET_LENGTH = 32
 MIN_CRON_SECRET_LENGTH = 16
 VALID_DELIVERY_MODES = ("dry_run", "twilio")
+VALID_EMAIL_DELIVERY_MODES = ("dry_run", "smtp")
 
 
 def production_config_violations(s: Settings) -> list[str]:
@@ -91,6 +92,25 @@ def production_config_violations(s: Settings) -> list[str]:
             violations.append(
                 "MESSAGE_DELIVERY_MODE=twilio needs exactly one sender — set "
                 "TWILIO_MESSAGING_SERVICE_SID (preferred) or TWILIO_FROM_NUMBER, not both"
+            )
+
+    # Email carries everything automatic (ADR-0005) — setup codes included — so a
+    # misconfigured sender is a bigger outage than a misconfigured Twilio.
+    if s.EMAIL_DELIVERY_MODE not in VALID_EMAIL_DELIVERY_MODES:
+        violations.append(
+            f"EMAIL_DELIVERY_MODE={s.EMAIL_DELIVERY_MODE!r} is not one of "
+            f"{' | '.join(VALID_EMAIL_DELIVERY_MODES)} — a typo silently disables all email"
+        )
+    elif s.EMAIL_DELIVERY_MODE == "smtp":
+        missing = [
+            name
+            for name in ("SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "EMAIL_FROM")
+            if not getattr(s, name)
+        ]
+        if missing:
+            violations.append(
+                "EMAIL_DELIVERY_MODE=smtp but " + ", ".join(missing) + " is unset "
+                "— set it or fall back to EMAIL_DELIVERY_MODE=dry_run"
             )
 
     return violations
