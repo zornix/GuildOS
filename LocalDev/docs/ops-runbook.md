@@ -250,6 +250,74 @@ submit toll-free verification. Upgrade to paid before step 1.
 `dry_run` mode marks outbox rows as simulated and sends nothing, so the whole
 product is exercisable while verification is pending.
 
+### 6.1 Consent — the real blocker (issue #57)
+
+Carriers require **prior express consent** before an application texts a person,
+and an honored opt-out afterwards. The app enforces this itself, so an
+unconsented member is never texted even if everything above is configured:
+
+| Fact | Where it lives |
+|------|----------------|
+| Consent given | `members.sms_consent_at` (migration 0157) |
+| Opt-out | `members.sms_opted_out_at` — set, it overrides consent |
+| The rule | `api/sms_consent.py` — consented = `sms_consent_at` set **and** `sms_opted_out_at` null |
+
+In `twilio` mode both delivery paths (the outbox drain and the inline
+announcement send) close a row for an unconsented member as **`failed` with
+`last_error = no_consent`** and send nothing. `dry_run` still simulates every
+row, so local dev is unaffected. Every outbound body ends with
+`— GuildOS for <chapter name>. Reply STOP to opt out.`
+
+**Where consent is captured**
+
+- **Roster CSV** — the optional `consent` column
+  (`name,email,phone,role,consent`). `yes`, `y`, `true` or `1` records consent
+  at import; an empty cell, any other value, or no column at all leaves it
+  unset. Silence is never consent.
+- **`POST /api/chapters`** — `sms_consent: true` in the body records it for the
+  first officer (the signup form's opt-in checkbox).
+- **`POST /api/auth/invite`** — `sms_consent: true` applies to every address in
+  that batch.
+- **`POST /api/members/me/sms-consent`** — a signed-in member opting themselves
+  in; also clears any prior opt-out.
+
+**What the pilot chapter must do before you import their roster**
+
+1. Collect a written opt-in from every member — a signed form or a digital form
+   with an **unchecked** SMS box, naming GuildOS as the sender, the message
+   types (dues reminders, event and job notifications, chapter announcements),
+   "message and data rates may apply", and "reply STOP to opt out".
+2. Keep those forms. If a carrier files a complaint, they are the evidence.
+3. Fill the CSV's `consent` column with `yes` **only** for members who signed.
+   Everyone else imports without consent and simply is not texted until they
+   opt in themselves in the app.
+
+**Inbound webhook (STOP / START / HELP)**
+
+Paste this into the Messaging Service → Integration → "Incoming Messages", as a
+webhook, `HTTP POST`:
+
+```
+https://<your-production-domain>/api/twilio/inbound
+```
+
+It must match `BASE_URL` exactly, including scheme and any trailing path —
+the URL is part of the `X-Twilio-Signature` HMAC, so a mismatch makes every
+callback a 403. The endpoint has no JWT; the signature (HMAC-SHA1 over
+`TWILIO_AUTH_TOKEN`) is its only authentication, and it fails closed when that
+token is unset.
+
+- `STOP` / `STOPALL` / `UNSUBSCRIBE` / `CANCEL` / `END` / `QUIT` → stamps
+  `sms_opted_out_at` on every member holding that number.
+- `START` / `YES` / `UNSTOP` → clears the opt-out and records fresh consent.
+- `HELP` → replies with one line of TwiML.
+
+Leave **Advanced Opt-Out** on in the Messaging Service. Twilio still handles the
+carrier-level STOP — it stops delivering to that number and sends the
+confirmation reply itself. This webhook exists so *our* database knows too;
+without it the product keeps queueing rows for a member who will never receive
+them and shows an officer no reason why.
+
 ---
 
 ## 7. Monitoring
