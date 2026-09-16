@@ -389,6 +389,7 @@ export function adaptOutbox(rows: OutboxMessageDto[]): OutboxMessage[] {
     eventType: row.event_type,
     recipientName: row.recipient_name || 'Chapter-wide',
     recipientPhone: row.recipient_phone || '',
+    channel: row.channel === 'email' ? 'email' : 'sms',
     body: row.body,
     status: row.status as OutboxStatus,
     attempts: row.attempts,

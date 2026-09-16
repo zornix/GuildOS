@@ -1,11 +1,25 @@
 import { useState } from 'react';
 import { AlertTriangle, Inbox, RefreshCw, Send } from 'lucide-react';
-import { OutboxMessage, OutboxStatus } from '../types';
+import { OutboxChannel, OutboxMessage, OutboxStatus } from '../types';
 import { useOutboxFeed } from '../hooks/useOutbox';
 import Card from './ui/Card';
 import { outboxFailure } from '../lib/consent';
 
 type Filter = OutboxStatus | 'all';
+type ChannelFilter = OutboxChannel | 'all';
+
+const CHANNEL_FILTERS: { id: ChannelFilter; label: string }[] = [
+  { id: 'all', label: 'All channels' },
+  { id: 'email', label: 'Email' },
+  { id: 'sms', label: 'SMS' }
+];
+
+const CHANNEL_LABEL: Record<OutboxChannel, string> = { email: 'Email', sms: 'SMS' };
+
+/** Channel is a client-side cut — the API filters by status only. */
+export function visibleMessages(messages: OutboxMessage[], channel: ChannelFilter) {
+  return channel === 'all' ? messages : messages.filter(m => m.channel === channel);
+}
 
 const FILTERS: { id: Filter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -34,10 +48,12 @@ const STATUS_LABEL: Record<string, string> = {
 
 const when = (iso?: string) => (iso ? new Date(iso).toLocaleString() : '');
 
-/** Every SMS the chapter has queued, sent or failed to send. */
+/** Every message — email or SMS — the chapter has queued, sent or failed to send. */
 export default function OutboxModule() {
   const [filter, setFilter] = useState<Filter>('all');
+  const [channel, setChannel] = useState<ChannelFilter>('all');
   const { messages, loading, error, refetch, retry } = useOutboxFeed(filter);
+  const shown = visibleMessages(messages, channel);
   const [retrying, setRetrying] = useState<string | null>(null);
   const [retryError, setRetryError] = useState<string | null>(null);
 
@@ -78,22 +94,14 @@ export default function OutboxModule() {
         </button>
       </div>
 
-      {/* Status filter chips — scroll sideways on a phone rather than wrapping. */}
+      {/* Status then channel chips — scroll sideways on a phone rather than wrapping. */}
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
         {FILTERS.map(f => (
-          <button
-            key={f.id}
-            type="button"
-            onClick={() => setFilter(f.id)}
-            aria-pressed={filter === f.id}
-            className={`shrink-0 min-h-11 px-4 rounded-full border text-xs font-bold cursor-pointer transition-all ${
-              filter === f.id
-                ? 'bg-navy text-gold border-navy'
-                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            {f.label}
-          </button>
+          <Chip key={f.id} on={filter === f.id} onClick={() => setFilter(f.id)} label={f.label} />
+        ))}
+        <span aria-hidden="true" className="shrink-0 self-center w-px h-6 bg-slate-200" />
+        {CHANNEL_FILTERS.map(c => (
+          <Chip key={c.id} on={channel === c.id} onClick={() => setChannel(c.id)} label={c.label} />
         ))}
       </div>
 
@@ -108,19 +116,21 @@ export default function OutboxModule() {
         <Card className="p-8 text-center text-xs font-semibold text-rose-700">{error}</Card>
       ) : loading ? (
         <Card className="p-8 text-center text-xs text-slate-500">Loading messages…</Card>
-      ) : messages.length === 0 ? (
+      ) : shown.length === 0 ? (
         <Card className="p-10 text-center space-y-2">
           <Inbox className="w-8 h-8 text-slate-300 mx-auto" />
           <p className="text-sm font-bold text-slate-700">Nothing here</p>
           <p className="text-xs text-slate-500">
-            {filter === 'all'
+            {filter === 'all' && channel === 'all'
               ? 'No messages have been queued for this chapter yet.'
-              : `No ${STATUS_LABEL[filter]?.toLowerCase()} messages.`}
+              : `No ${filter === 'all' ? '' : `${STATUS_LABEL[filter]?.toLowerCase()} `}${
+                  channel === 'all' ? '' : `${CHANNEL_LABEL[channel]} `
+                }messages.`}
           </p>
         </Card>
       ) : (
         <div className="space-y-3">
-          {messages.map(m => (
+          {shown.map(m => (
             <MessageRow
               key={m.id}
               message={m}
@@ -145,8 +155,8 @@ function MessageRow({
   /** No @types/react in this project, so `key` is an ordinary prop. */
   key?: string | number;
 }) {
-  // "no_consent" is not an error the officer can retry away — only the member
-  // can opt in — so it reads as an explanation and hides Retry (#57).
+  // "no_consent" and "no_email" are not errors an officer can retry away, so
+  // they read as explanations and hide Retry.
   const failure = outboxFailure(message.error);
 
   return (
@@ -166,6 +176,9 @@ function MessageRow({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          <span className="px-2.5 py-1 rounded-full border border-slate-200 bg-slate-50 text-slate-600 text-xs font-bold">
+            {CHANNEL_LABEL[message.channel]}
+          </span>
           <span
             className={`px-2.5 py-1 rounded-full border text-xs font-bold ${
               STATUS_TONE[message.status] || STATUS_TONE.simulated
@@ -200,5 +213,22 @@ function MessageRow({
         </p>
       )}
     </Card>
+  );
+}
+
+function Chip(
+  { on, label, onClick }: { on: boolean; label: string; onClick: () => void; key?: string }
+) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={on}
+      className={`shrink-0 min-h-11 px-4 rounded-full border text-xs font-bold cursor-pointer transition-all ${
+        on ? 'bg-navy text-gold border-navy' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+      }`}
+    >
+      {label}
+    </button>
   );
 }
