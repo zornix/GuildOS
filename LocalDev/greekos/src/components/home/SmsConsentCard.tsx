@@ -33,7 +33,7 @@ export default function SmsConsentCard({ consented }: { consented: boolean }) {
       <div className="flex items-center justify-between border-b border-slate-100 pb-2">
         <h3 className="font-display font-extrabold text-slate-900 text-sm flex items-center gap-2">
           <MessageSquare className="w-4 h-4 text-gold-muted" />
-          Text me chapter notifications
+          Text me chapter announcements
         </h3>
         <span
           className={`text-xs font-bold px-2 py-0.5 rounded-full border ${
@@ -50,8 +50,8 @@ export default function SmsConsentCard({ consented }: { consented: boolean }) {
 
       {on ? (
         <p className="text-xs text-slate-500">
-          Texts are on. Reply <span className="font-mono font-semibold">STOP</span> to any message
-          to turn them off.
+          Announcement texts are on. Reply <span className="font-mono font-semibold">STOP</span> to
+          any message to turn them off. Everything else still reaches you by email.
         </p>
       ) : (
         <button

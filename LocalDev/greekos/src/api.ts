@@ -461,6 +461,7 @@ export interface OutboxMessageDto {
   event_type: string;
   recipient_name: string | null;
   recipient_phone: string | null; // masked to the last four digits
+  channel?: string; // email | sms; absent on an older backend, which only sent SMS
   body: string;
   status: string; // pending | sending | sent | failed | simulated
   attempts: number;

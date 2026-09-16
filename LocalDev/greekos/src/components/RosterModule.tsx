@@ -20,7 +20,7 @@ interface RosterModuleProps {
   isOfficer: boolean;
   /** `roles:assign` — gates the per-member role toggles. */
   canAssignRoles: boolean;
-  /** `members:invite` — gates the per-member "Texts: on/off" indicator (#57). */
+  /** `members:invite` — gates the per-member announcement-texts indicator (#57). */
   canSeeSmsConsent: boolean;
   onAddMember: (member: Omit<Member, 'id' | 'points' | 'attendanceRate' | 'duesBalance' | 'duesBalanceCents' | 'securityHoursServed'>) => void;
   onUpdateStanding: (memberId: string, standing: 'Good Standing' | 'Academic Probation' | 'Social Suspension' | 'Financial Hold') => void;
@@ -175,12 +175,15 @@ export default function RosterModule({
                       <div className="text-xs text-gold-muted font-semibold">{mem.role}</div>
                       <div className="text-xs text-slate-500">{mem.major} &bull; Room {mem.roomNumber || 'N/A'}</div>
                       {canSeeSmsConsent && (
-                        <div className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
+                        <div
+                          className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5"
+                          title={`Announcement texts are ${mem.smsConsent ? 'on' : 'off'} for ${mem.name}. Everything else is emailed.`}
+                        >
                           <span
                             aria-hidden="true"
                             className={`w-2 h-2 rounded-full ${mem.smsConsent ? 'bg-emerald-500' : 'bg-slate-300'}`}
                           />
-                          Texts: {mem.smsConsent ? 'on' : 'off'}
+                          Announcement texts: {mem.smsConsent ? 'on' : 'off'}
                         </div>
                       )}
                     </td>

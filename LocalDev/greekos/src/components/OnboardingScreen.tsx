@@ -49,9 +49,10 @@ export default function OnboardingScreen({ onBack }: { onBack: () => void }) {
         <div className="w-full max-w-sm bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
           <h1 className="font-display font-bold text-xl text-navy">{name} is ready</h1>
           <p className="text-xs text-slate-500">
-            Write this setup code down — it is shown once. Go back to sign in, enter{' '}
-            <span className="font-semibold text-slate-700 break-all">{created.officer_email}</span>{' '}
-            and redeem the code to set your password.
+            We emailed the setup code to{' '}
+            <span className="font-semibold text-slate-700 break-all">{created.officer_email}</span>.
+            It is also below — write it down, it is shown here only once. Go back to sign in, enter
+            that address and redeem the code to set your password.
           </p>
           <p className="font-display font-bold text-2xl tracking-[0.3em] text-navy bg-slate-50 border border-slate-200 rounded-lg py-4 text-center break-all">
             {created.setup_code}

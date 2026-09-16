@@ -44,7 +44,8 @@ export default function RosterCsvImport(
             <code className="font-mono break-all">{ROSTER_CSV_HEADER}</code>.{' '}
             <code className="font-mono">role</code> and <code className="font-mono">consent</code>{' '}
             are optional; put <code className="font-mono">yes</code> in{' '}
-            <code className="font-mono">consent</code> only for members who signed an SMS opt-in.
+            <code className="font-mono">consent</code> only for members who signed an opt-in for
+            chapter announcement texts.
           </p>
           <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
             {ROSTER_CONSENT_NOTE}
@@ -70,7 +71,10 @@ export default function RosterCsvImport(
             </p>
           ))}
           {result.created.length > 0 && (
-            <p className="text-emerald-700">Hand each code over; they are shown only once.</p>
+            <p className="text-emerald-700">
+              Each setup code was emailed to its member. They are shown here only once, so hand
+              over a code yourself if the email does not land.
+            </p>
           )}
         </div>
       )}

@@ -256,6 +256,8 @@ export interface Announcement {
 export interface OutboxMessage {
   id: string;
   eventType: string;
+  /** How it goes out. Only officer-sent announcements are 'sms'; the rest is email. */
+  channel: OutboxChannel;
   recipientName: string;
   /** Masked to the last four digits by the backend; '' when the member has no phone. */
   recipientPhone: string;
@@ -266,6 +268,8 @@ export interface OutboxMessage {
   deliveredAt?: string;
   error?: string;
 }
+
+export type OutboxChannel = 'email' | 'sms';
 
 export type OutboxStatus = 'pending' | 'sending' | 'sent' | 'failed' | 'simulated';
 

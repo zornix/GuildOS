@@ -330,7 +330,7 @@ export default function RecruitmentModule({
       {canUpdate && pendingBid && (
         <ConfirmDialog
           title="Extend a bid?"
-          body={<p><strong>{pendingBid.name}</strong> moves to Bid Extended and gets a text saying the chapter has offered them membership.</p>}
+          body={<p><strong>{pendingBid.name}</strong> moves to Bid Extended and is emailed that the chapter has offered them membership.</p>}
           confirmLabel="Extend bid"
           onCancel={() => setPendingBid(null)}
           onConfirm={() => { onExtendBid(pendingBid.id); setPendingBid(null); }}

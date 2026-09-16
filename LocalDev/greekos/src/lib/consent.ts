@@ -3,25 +3,36 @@
  *  The opt-in wording is a compliance artifact, not copy: it must name GuildOS
  *  as the sender, say what gets texted, and carry the rates + STOP lines. It
  *  lives here so the signup form and the member toggle cannot drift apart.
+ *
+ *  Texts are now only the manual ones — chapter announcements and event
+ *  notices an officer sends. Everything automatic (setup and reset codes,
+ *  dues, jobs, security) goes by email and needs no consent.
  */
 
 export const SMS_CONSENT_LABEL =
-  'Text me at this number. GuildOS sends sign-in codes, dues and event reminders, ' +
-  'and chapter announcements. Message and data rates may apply. Reply STOP to opt out.';
+  'Text me at this number. GuildOS sends chapter announcements and event notices ' +
+  'an officer sends out. Message and data rates may apply. Reply STOP to opt out.';
 
 /** The roster CSV's header row, consent column included. */
 export const ROSTER_CSV_HEADER = 'name,email,phone,role,consent';
 
 export const ROSTER_CONSENT_NOTE =
-  'Anyone imported without consent=yes is not texted until they opt in themselves.';
+  'consent=yes only affects chapter announcement texts. Anyone imported without it ' +
+  'is not texted until they opt in themselves; everything else still reaches them by email.';
 
 /** message_outbox.last_error written for a member who never opted in. */
 export const NO_CONSENT = 'no_consent';
 
+/** message_outbox.last_error written for an email with no address to send to. */
+export const NO_EMAIL = 'no_email';
+
 /** How a failed outbox row reads, and whether retrying could ever help.
- *  A no_consent row would fail identically forever — only the member can fix it. */
+ *  no_consent and no_email would fail identically forever — retrying cannot
+ *  conjure an opt-in or an address, so both read as explanations instead. */
 export function outboxFailure(error?: string): { text: string; retryable: boolean } {
-  return error === NO_CONSENT
-    ? { text: 'Not sent: member has not opted in to texts.', retryable: false }
-    : { text: error || '', retryable: true };
+  if (error === NO_CONSENT)
+    return { text: 'Not sent: member has not opted in to texts.', retryable: false };
+  if (error === NO_EMAIL)
+    return { text: 'Not sent: member has no email address.', retryable: false };
+  return { text: error || '', retryable: true };
 }

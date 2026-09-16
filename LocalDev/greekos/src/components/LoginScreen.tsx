@@ -22,12 +22,12 @@ const linkClass = 'text-xs text-slate-500 hover:text-navy underline underline-of
 const CODE_COPY = {
   setup: {
     title: 'Enter your setup code',
-    hint: 'Your chapter sent you an 8-character setup code when they added you.',
+    hint: 'Check your email for the 8-character setup code your chapter sent when they added you.',
     button: 'Redeem code'
   },
   reset: {
     title: 'Reset your password',
-    hint: 'Ask an officer to issue you a reset code, then enter it here. Codes expire in 7 days.',
+    hint: 'Ask an officer to send you a reset code; it arrives by email. Codes expire in 7 days.',
     button: 'Use reset code'
   }
 } as const;
