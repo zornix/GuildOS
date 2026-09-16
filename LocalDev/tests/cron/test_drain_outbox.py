@@ -31,7 +31,23 @@ def drain(sb_client, chapter_id):
 
 @pytest.fixture
 def member_with_phone(member_factory, cursor):
+    """A member the drain may actually text: phone on file AND consent (#57)."""
+
     def _make(phone: str = "+15551110001") -> str:
+        m = member_factory()
+        cursor.execute(
+            "UPDATE members SET phone = %s, sms_consent_at = now() WHERE id = %s", (phone, m)
+        )
+        return m
+
+    return _make
+
+
+@pytest.fixture
+def member_without_consent(member_factory, cursor):
+    """A phone number on file and nothing else — the pre-#57 roster's state."""
+
+    def _make(phone: str = "+15551110002") -> str:
         m = member_factory()
         cursor.execute("UPDATE members SET phone = %s WHERE id = %s", (phone, m))
         return m
@@ -248,7 +264,10 @@ def test_twilio_mode_sends_and_records_delivered_at(
     after = read_outbox(row["id"])
     assert after["status"] == "sent"
     assert after["delivered_at"] is not None
-    assert fake_twilio == [("+15551119999", "Job approved: Setup crew. Credit recorded.")]
+    assert len(fake_twilio) == 1
+    to, body = fake_twilio[0]
+    assert to == "+15551119999"
+    assert body.startswith("Job approved: Setup crew. Credit recorded.")
 
 
 def test_provider_error_fails_the_row_with_the_error_recorded(
@@ -299,7 +318,7 @@ def test_invoice_amount_is_read_from_the_target_row(
     )
 
     drain()
-    assert [body for _, body in fake_twilio] == [
+    assert [body.split("\n")[0] for _, body in fake_twilio] == [
         "New charge: $42.00 — Late dues. Log in to view."
     ]
 
@@ -410,7 +429,7 @@ def test_payment_reminder_renders_the_owed_total(
     )
     drain()
 
-    assert [body for _, body in fake_twilio] == [
+    assert [body.split("\n")[0] for _, body in fake_twilio] == [
         "Reminder: 3 unpaid charges totaling $75.00. Log in to pay."
     ]
 
@@ -501,3 +520,69 @@ def test_a_row_past_the_attempt_cap_is_failed_instead_of_claimed(
     after = read_outbox(row["id"])
     assert after["status"] == "failed"
     assert "attempt cap" in after["last_error"]
+
+
+# ── Consent (#57) ────────────────────────────────────────────────────────────
+
+
+def test_twilio_mode_refuses_a_member_without_consent(
+    drain, delivery_mode, outbox_row, read_outbox, member_without_consent, fake_twilio
+):
+    """A phone number is not permission to text it (#57)."""
+    delivery_mode("twilio")
+    row = outbox_row(
+        event_type="JOB_APPROVED",
+        member_id=member_without_consent(),
+        payload={"title": "Setup crew"},
+    )
+
+    assert drain()["failed"] == 1
+
+    after = read_outbox(row["id"])
+    assert after["status"] == "failed"
+    assert after["last_error"] == "no_consent"
+    assert fake_twilio == []
+
+
+def test_twilio_mode_refuses_a_member_who_replied_stop(
+    drain, delivery_mode, outbox_row, read_outbox, member_with_phone, cursor, fake_twilio
+):
+    member = member_with_phone()
+    cursor.execute("UPDATE members SET sms_opted_out_at = now() WHERE id = %s", (member,))
+    delivery_mode("twilio")
+    row = outbox_row(event_type="JOB_APPROVED", member_id=member, payload={"title": "Setup"})
+
+    drain()
+
+    assert read_outbox(row["id"])["last_error"] == "no_consent"
+    assert fake_twilio == []
+
+
+def test_a_consenting_member_is_sent_a_body_with_the_opt_out_footer(
+    drain, delivery_mode, outbox_row, read_outbox, member_with_phone, fake_twilio
+):
+    delivery_mode("twilio")
+    row = outbox_row(
+        event_type="JOB_APPROVED", member_id=member_with_phone(), payload={"title": "Setup"}
+    )
+
+    assert drain()["sent"] == 1
+
+    assert read_outbox(row["id"])["status"] == "sent"
+    assert len(fake_twilio) == 1
+    assert fake_twilio[0][1].endswith("Reply STOP to opt out.")
+
+
+def test_dry_run_still_simulates_a_member_without_consent(
+    drain, delivery_mode, outbox_row, read_outbox, member_without_consent, fake_twilio
+):
+    """Consent gates real sends only — local dev must still show the message."""
+    delivery_mode("dry_run")
+    row = outbox_row(
+        event_type="JOB_APPROVED", member_id=member_without_consent(), payload={"title": "X"}
+    )
+
+    assert drain()["simulated"] == 1
+
+    assert read_outbox(row["id"])["status"] == "simulated"
+    assert fake_twilio == []

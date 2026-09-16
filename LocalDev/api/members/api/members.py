@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.dependencies import get_current_user
@@ -29,6 +31,26 @@ async def list_members(user=Depends(get_current_user)):
         .execute()
     )
     return result.data
+
+
+@router.post("/me/sms-consent")
+async def opt_in_to_sms(user=Depends(get_current_user)):
+    """The member opts themselves in to SMS (#57).
+
+    Mounted before the parameterized routes below, which is why it lives here and
+    not at the end of the file. Clearing `sms_opted_out_at` is the point: a member
+    who texted STOP and later turns the toggle back on is opting back in, and a
+    stale opt-out would silently keep them unreachable forever.
+
+    No permission gate — consent is the member's own to give, and it is only ever
+    given for themself (`sub` from the token, never a path id).
+    """
+    sb = get_db()
+    now = datetime.now(timezone.utc).isoformat()
+    sb.table("members").update(
+        {"sms_consent_at": now, "sms_opted_out_at": None}
+    ).eq("id", user["id"]).execute()
+    return {"sms_consent": True, "sms_consent_at": now}
 
 
 @router.put("/{member_id}/role")

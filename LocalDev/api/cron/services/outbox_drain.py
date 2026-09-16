@@ -41,6 +41,7 @@ from api.announcements.services import twilio_client
 from api.cron.core import templates
 from api.platform.delivery import delivery_mode
 from api.platform.rpc import call_rpc
+from api.sms_consent import CONSENT_COLUMNS, has_consent
 
 logger = logging.getLogger(__name__)
 
@@ -125,15 +126,15 @@ def _enrich(sb, row: dict) -> dict:
     return payload
 
 
-def _member_phone(sb, member_id: str) -> str:
-    member = (
+def _member_sms(sb, member_id: str) -> dict:
+    """The member row the delivery decision needs: phone plus consent state."""
+    return (
         sb.table("members")
-        .select("id, phone")
+        .select(f"id, phone, {CONSENT_COLUMNS}")
         .eq("id", member_id)
         .maybe_single()
         .execute()
-    ).data
-    return ((member or {}).get("phone") or "").strip()
+    ).data or {}
 
 
 def _close_row(sb, row: dict, *, status: str, last_error: str | None) -> None:
@@ -152,7 +153,22 @@ def _close_row(sb, row: dict, *, status: str, last_error: str | None) -> None:
     sb.table("message_outbox").update(patch).eq("id", row["id"]).execute()
 
 
-def _deliver_row(sb, row: dict, *, mode: str) -> str:
+def _chapter_name(sb, chapter_id, cache: dict) -> str:
+    """Chapter name for the message footer, looked up once per batch."""
+    key = str(chapter_id)
+    if key not in cache:
+        row = (
+            sb.table("chapters")
+            .select("name")
+            .eq("id", chapter_id)
+            .maybe_single()
+            .execute()
+        ).data
+        cache[key] = (row or {}).get("name") or ""
+    return cache[key]
+
+
+def _deliver_row(sb, row: dict, *, mode: str, names: dict) -> str:
     """Deliver one row. Returns its terminal status; never raises."""
     try:
         if not row.get("member_id"):
@@ -163,15 +179,26 @@ def _deliver_row(sb, row: dict, *, mode: str) -> str:
             return "failed"
 
         payload = _enrich(sb, row)
-        body = templates.render(row["event_type"], payload)
+        body = templates.render(
+            row["event_type"],
+            payload,
+            chapter_name=_chapter_name(sb, row["chapter_id"], names),
+        )
 
         if mode == DRY_RUN:
             _close_row(sb, row, status="simulated", last_error=None)
             return "simulated"
 
-        phone = _member_phone(sb, row["member_id"])
+        member = _member_sms(sb, row["member_id"])
+        phone = (member.get("phone") or "").strip()
         if not phone:
             _close_row(sb, row, status="failed", last_error="no phone")
+            return "failed"
+        if not has_consent(member):
+            # Texting without prior express consent is the carrier violation that
+            # gets a sender shut off (#57). A real send is refused; dry_run above
+            # still simulates it, so local dev keeps showing the message.
+            _close_row(sb, row, status="failed", last_error="no_consent")
             return "failed"
 
         twilio_client.send_sms(phone, body)
@@ -214,8 +241,9 @@ def drain_outbox(
     )
 
     counts = {"processed": 0, "sent": 0, "simulated": 0, "failed": 0}
+    names: dict = {}  # chapter_id -> name, for the message footer
     for row in claimed:
-        status = _deliver_row(client, row, mode=mode)
+        status = _deliver_row(client, row, mode=mode, names=names)
         counts["processed"] += 1
         counts[status] = counts.get(status, 0) + 1
 

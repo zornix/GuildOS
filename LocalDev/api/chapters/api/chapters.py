@@ -46,6 +46,7 @@ async def create_chapter_endpoint(
             officer_name=body.officer_name,
             officer_email=str(body.officer_email).strip().lower(),
             officer_phone=body.officer_phone,
+            sms_consent=body.sms_consent,
         )
     except Exception as exc:
         message = str(exc)

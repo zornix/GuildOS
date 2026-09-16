@@ -208,8 +208,22 @@ TEMPLATES: dict[str, Callable[[dict], str]] = {
 }
 
 
-def render(event_type: str, payload: dict | None) -> str:
-    """Render one outbox row's message body.
+def footer(chapter_name: str | None = None) -> str:
+    """The sender identification + opt-out line every outbound message carries.
+
+    Twilio and the carriers require an SMS campaign to say who is texting and how
+    to stop (#57). One line, appended to every body rather than written into each
+    template, so no template can be added without it.
+    """
+    who = (chapter_name or "").strip()
+    return f"— GuildOS for {who}. Reply STOP to opt out." if who else _FOOTER_NO_NAME
+
+
+_FOOTER_NO_NAME = "— GuildOS. Reply STOP to opt out."
+
+
+def render(event_type: str, payload: dict | None, *, chapter_name: str | None = None) -> str:
+    """Render one outbox row's message body, footer included.
 
     Raises UnknownEventType for an unregistered event_type and TemplateError when
     the payload is unusable. The drain catches both and marks the row 'failed'
@@ -226,4 +240,4 @@ def render(event_type: str, payload: dict | None) -> str:
         raise TemplateError(f"{type(exc).__name__}: {exc}") from exc
     if not body:
         raise TemplateError(f"template for {event_type!r} produced an empty body")
-    return body
+    return f"{body}\n{footer(chapter_name)}"

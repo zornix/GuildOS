@@ -77,6 +77,39 @@ def test_optional_role_column_grants_the_catalog_role(
     assert [r["role_key"] for r in cursor.fetchall()] == ["treasurer"]
 
 
+@pytest.mark.parametrize("cell", ["yes", "Y", "TRUE", "1"])
+def test_a_truthy_consent_column_records_sms_consent(
+    upload, csv_bytes, unique, cleanup, cursor, cell
+):
+    line, email = _row(unique)
+    cleanup["emails"].append(email)
+
+    res = upload(csv_bytes([f"{line},{cell}"], header="name,email,phone,consent"))
+
+    assert res.status_code == 200, res.text
+    cursor.execute(
+        "SELECT sms_consent_at, sms_opted_out_at FROM members WHERE email = %s", (email,)
+    )
+    row = cursor.fetchone()
+    assert row["sms_consent_at"] is not None
+    assert row["sms_opted_out_at"] is None
+
+
+@pytest.mark.parametrize("header,suffix", [("name,email,phone,consent", ",no"), ("name,email,phone", "")])
+def test_a_falsy_or_missing_consent_column_leaves_consent_unset(
+    upload, csv_bytes, unique, cleanup, cursor, header, suffix
+):
+    """Silence is never consent (#57)."""
+    line, email = _row(unique)
+    cleanup["emails"].append(email)
+
+    res = upload(csv_bytes([f"{line}{suffix}"], header=header))
+
+    assert res.status_code == 200, res.text
+    cursor.execute("SELECT sms_consent_at FROM members WHERE email = %s", (email,))
+    assert cursor.fetchone()["sms_consent_at"] is None
+
+
 def test_one_bad_row_rejects_the_whole_file_and_inserts_nothing(
     upload, csv_bytes, unique, cursor
 ):

@@ -316,6 +316,10 @@ async def invite_members(
                 "email": email,
                 "role": "member",
                 "status": "invited",
+                # NULL unless the officer affirmed a signed opt-in (#57).
+                "sms_consent_at": (
+                    datetime.now(timezone.utc).isoformat() if body.sms_consent else None
+                ),
             }).execute()
             if result.data:
                 row = unwrap_row(result)
