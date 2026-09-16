@@ -29,6 +29,18 @@ class Settings(BaseSettings):
     # Fallback sender: bare E.164 number, e.g. +15551234567. Set exactly one of
     # TWILIO_MESSAGING_SERVICE_SID / TWILIO_FROM_NUMBER.
     TWILIO_FROM_NUMBER: str = ""
+    # Outbound email — everything automatic (ADR-0005). "dry_run" (rows marked
+    # simulated, no network) or "smtp" (real sends via SMTP_*/EMAIL_FROM below).
+    EMAIL_DELIVERY_MODE: str = "dry_run"
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587  # STARTTLS
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""  # a Google app password, not the account password
+    # RFC 5322 sender, e.g. 'GuildOS <ops@chapter.org>'. Gmail rewrites this to
+    # SMTP_USER unless the address is a verified "send mail as" alias.
+    EMAIL_FROM: str = ""
+    EMAIL_REPLY_TO: str = ""
+
     # Sentry error reporting. Empty disables Sentry entirely (local/dev default).
     SENTRY_DSN: str = ""
 

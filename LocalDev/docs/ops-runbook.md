@@ -169,6 +169,11 @@ Set these in the Vercel project (Production scope):
 | `MESSAGE_DELIVERY_MODE` | `dry_run` until toll-free verification clears (§6), then `twilio`. |
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` | required when mode is `twilio`. |
 | `TWILIO_MESSAGING_SERVICE_SID` *or* `TWILIO_FROM_NUMBER` | exactly one, when mode is `twilio`. Prefer the Messaging Service (§6). |
+| `EMAIL_DELIVERY_MODE` | `dry_run` until the Gmail app password is set (§5a), then `smtp`. Everything automatic is email (ADR-0005). |
+| `SMTP_HOST` / `SMTP_PORT` | `smtp.gmail.com` / `587`. Defaults; only set to override. |
+| `SMTP_USER` / `SMTP_PASSWORD` | the Workspace mailbox and its **app password**. Required when mode is `smtp`. |
+| `EMAIL_FROM` | e.g. `GuildOS <ops@chapter.org>`. Required when mode is `smtp`. |
+| `EMAIL_REPLY_TO` | optional; where replies land if not `EMAIL_FROM`. |
 | `SENTRY_DSN` | enables error reporting; empty disables it (§7). |
 | `CHECKIN_LINK_TTL_MINUTES` | defaults to 10. |
 
@@ -187,14 +192,16 @@ guarded.
 
 ## 5. Password reset (officer-assisted)
 
-There is no email provider, so there is **no self-serve "forgot password"**
-(GTM checklist 3.3). The supported path is officer-assisted:
+There is still **no self-serve "forgot password"** — nothing takes an email
+address and mails a link. The supported path is officer-assisted, and since
+ADR-0005 the code is *also* emailed to the member automatically:
 
 1. The locked-out member asks an officer.
 2. The officer calls `POST /api/auth/reset-code/{member_id}`, which returns a
    one-time setup code.
-3. The officer hands the code to the member out of band (in person, SMS, group
-   chat).
+3. The member gets the code by email (`RESET_CODE`, sent by the outbox drain).
+   The officer also sees the plaintext once and can hand it over directly if the
+   mail does not arrive.
 4. The member redeems it at `POST /api/auth/redeem-setup-code` to set a new
    password.
 
@@ -202,7 +209,8 @@ Only the bcrypt hash of the code is stored (`member_setup_codes`, migration
 0148); the plaintext is shown to the issuing officer exactly once. Codes are
 single-use and short-lived, and issuing a new one invalidates the old. Because
 the officer is the delivery channel, they must verify the member's identity
-before issuing a code.
+before issuing a code. Invites, chapter creation and roster import mint setup
+codes the same way, and email them the same way (`SETUP_CODE`).
 
 > If *every* officer of a chapter is locked out, the break-glass fallback is an
 > operator running `scripts/set_officer_password.py <email>` against the prod
@@ -213,13 +221,61 @@ before issuing a code.
 
 ---
 
+## 5a. Email: Gmail / Google Workspace SMTP
+
+Decision ADR-0005: **everything automatic goes by email**, SMS is only the two
+manual announcement blasts (§6). Email needs no carrier verification and no
+consent record, so a chapter can run the whole product before Twilio exists.
+
+Setup, in order:
+
+1. **Pick the sending mailbox** — a Workspace account you control, e.g.
+   `ops@yourchapter.org`. A free `@gmail.com` account works for testing.
+2. **Turn on 2-step verification** for that account
+   (myaccount.google.com → Security). App passwords are unavailable without it.
+3. **Create an app password** (Security → App passwords). Google shows a
+   16-character string once — that is `SMTP_PASSWORD`, not the account password.
+4. **Set the env vars** (Vercel Production scope, and `LocalDev/.env` to test):
+   `EMAIL_DELIVERY_MODE=smtp`, `SMTP_USER=ops@yourchapter.org`,
+   `SMTP_PASSWORD=<app password>`, `EMAIL_FROM="GuildOS <ops@yourchapter.org>"`.
+   `SMTP_HOST`/`SMTP_PORT` default to `smtp.gmail.com`/`587` (STARTTLS). The boot
+   guard refuses a deploy with `smtp` mode and any of host/user/password/from
+   missing.
+5. **Prove it end to end**:
+   `npm run email:test -- someone@example.com` (equivalently
+   `python3 scripts/send_test_email.py someone@example.com`). It prints the
+   sender it used or the SMTP error. It refuses to run unless
+   `EMAIL_DELIVERY_MODE=smtp`.
+
+**Send limits:** a free Gmail account is ~500 recipients/day; Google Workspace is
+2,000/day. A chapter of 80 sending event-creation fan-out plus treasury
+notifications stays far under that. Crossing it means moving to a transactional
+mail API — that replaces the body of `api/platform/email.py::send_email` and
+nothing else.
+
+**Sender rewriting:** Gmail rewrites `From` to `SMTP_USER` unless the address is
+a verified "send mail as" alias on that account. Set `EMAIL_FROM` to the mailbox
+itself unless you have configured the alias.
+
+**Failures** land on the outbox row: `no_email` means the member has no usable
+address, anything else is the SMTP error verbatim. Officers see them in the
+outbox surface; codes are the exception — `SETUP_CODE`/`RESET_CODE` bodies are
+never rendered there, because the payload holds a live credential.
+
+---
+
 ## 6. SMS: toll-free verified number via a Messaging Service
 
 Decision (issue #54): **toll-free verification, not A2P 10DLC** — ~3 business
 days, no monthly campaign fee. The sender is a **Messaging Service**, so the app
 posts `MessagingServiceSid` and Twilio's Advanced Opt-Out handles STOP/HELP.
 US carriers block unverified application-to-person traffic, so do not flip
-`MESSAGE_DELIVERY_MODE=twilio` before verification is approved. Full research:
+`MESSAGE_DELIVERY_MODE=twilio` before verification is approved.
+
+Scope since ADR-0005: SMS carries **only** the manual announcement blast and the
+manual event notify blast. Everything else — codes, treasury, jobs, security,
+event creation — is email (§5a), so a chapter with no Twilio account still gets
+every automatic message. Full research:
 `docs/research/twilio-delivery.md`.
 
 Setup, in order:

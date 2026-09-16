@@ -5,7 +5,9 @@ lifecycle notification is *enqueued* into `message_outbox` rather than sent
 inline; the scheduled drain worker (`api/cron/services/outbox_drain.py`, run by
 Vercel Cron every 5 minutes) flips rows from `pending` to `sent`/`simulated`/
 `failed`. This keeps the money-moving RPCs decoupled from a flaky SMS / email
-provider and gives us at-least-once persistence + exactly-once dedup.
+provider and gives us at-least-once persistence + exactly-once dedup. The
+enqueue itself lives in api/platform/outbox.py — auth and events use the same
+one. Every treasury notification is email (ADR-0005).
 
 Exactly-once / idempotent on retry:
   Each logical event derives a deterministic `dedup_key` from its
@@ -27,89 +29,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from api.platform.delivery import delivery_mode
-from api.platform.rows import unwrap_row
-
-
-def _resolve_sb(sb):
-    if sb is not None:
-        return sb
-    from api.platform.db import get_db
-
-    return get_db()
-
-
-def _enqueue(
-    sb,
-    *,
-    event_type: str,
-    chapter_id: str,
-    member_id: str | None,
-    target_table: str,
-    target_id: str,
-    dedup_key: str | None = None,
-    payload: dict | None = None,
-) -> dict | None:
-    """Idempotently enqueue one notification into the outbox.
-
-    Returns the freshly-enqueued row, or None if this event was already enqueued
-    (the dedup_key conflict short-circuited the insert) — making a retry a no-op.
-
-    `dedup_key` defaults to the lifecycle form "{event_type}:{target_id}" (one
-    notification per logical event). Producers whose event may legitimately recur
-    on a schedule (e.g. a daily payment reminder) pass their own key. `payload`
-    defaults to the identifying triple; extra keys ride along for the drain
-    worker's message templates (api/cron/core/templates.py).
-    """
-    client = _resolve_sb(sb)
-    mode = delivery_mode()
-    dedup_key = dedup_key or f"{event_type}:{target_id}"
-    body_payload = {
-        "event_type": event_type,
-        "chapter_id": chapter_id,
-        "member_id": member_id,
-        **(payload or {}),
-    }
-
-    # supabase-py / the shim both surface a unique-violation as a raised error on
-    # .insert(); we treat that as "already enqueued" so the call stays exactly-once.
-    existing = (
-        client.table("message_outbox")
-        .select("id")
-        .eq("dedup_key", dedup_key)
-        .maybe_single()
-        .execute()
-    ).data
-    if existing:
-        return None
-
-    try:
-        result = (
-            client.table("message_outbox")
-            .insert(
-                {
-                    "chapter_id": chapter_id,
-                    "event_type": event_type,
-                    "member_id": member_id,
-                    "target_table": target_table,
-                    "target_id": target_id,
-                    "dedup_key": dedup_key,
-                    "delivery_mode": mode,
-                    "status": "pending",
-                    "payload": body_payload,
-                }
-            )
-            .execute()
-        )
-    except Exception:
-        # Lost a race on the UNIQUE(dedup_key) backstop → another caller enqueued
-        # it first. Still exactly-once.
-        return None
-
-    row = unwrap_row(result)
-    # Nothing is dispatched inline: the row stays 'pending' until the drain
-    # worker picks it up (api/cron/services/outbox_drain.py).
-    return row
+from api.platform.outbox import enqueue as _enqueue
 
 
 def notify_invoice_issued(
@@ -117,6 +37,7 @@ def notify_invoice_issued(
 ) -> dict | None:
     return _enqueue(
         sb,
+        channel="email",
         event_type="INVOICE_ISSUED",
         chapter_id=chapter_id,
         member_id=member_id,
@@ -130,6 +51,7 @@ def notify_payment_approved(
 ) -> dict | None:
     return _enqueue(
         sb,
+        channel="email",
         event_type="PAYMENT_APPROVED",
         chapter_id=chapter_id,
         member_id=member_id,
@@ -143,6 +65,7 @@ def notify_payment_rejected(
 ) -> dict | None:
     return _enqueue(
         sb,
+        channel="email",
         event_type="PAYMENT_REJECTED",
         chapter_id=chapter_id,
         member_id=member_id,
@@ -156,6 +79,7 @@ def notify_refund_issued(
 ) -> dict | None:
     return _enqueue(
         sb,
+        channel="email",
         event_type="REFUND_ISSUED",
         chapter_id=chapter_id,
         member_id=member_id,
@@ -188,6 +112,7 @@ def enqueue_payment_reminder(
     day = (on_date or date.today()).isoformat()
     return _enqueue(
         sb,
+        channel="email",
         event_type="PAYMENT_REMINDER",
         chapter_id=chapter_id,
         member_id=member_id,
