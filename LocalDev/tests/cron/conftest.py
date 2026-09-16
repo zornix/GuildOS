@@ -67,7 +67,12 @@ def auth_header(cron_secret):
 
 @pytest.fixture
 def outbox_row(cursor, chapter_id):
-    """Insert one message_outbox row directly and return it as a dict."""
+    """Insert one message_outbox row directly and return it as a dict.
+
+    `channel` defaults to 'sms' so the SMS assertions below (Twilio, consent,
+    phone) stay about SMS; email rows pass channel="email" explicitly. Production
+    defaults the other way — see migration 0159.
+    """
     import json
 
     def _make(
@@ -78,6 +83,7 @@ def outbox_row(cursor, chapter_id):
         target_id: str | None = None,
         payload: dict | None = None,
         status: str = "pending",
+        channel: str = "sms",
         delivery_mode: str = "dry_run",
         dedup_key: str | None = None,
     ) -> dict:
@@ -87,8 +93,8 @@ def outbox_row(cursor, chapter_id):
             """
             INSERT INTO message_outbox
                 (chapter_id, event_type, member_id, target_table, target_id,
-                 dedup_key, payload, status, delivery_mode)
-            VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s)
+                 dedup_key, payload, status, delivery_mode, channel)
+            VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s)
             RETURNING *
             """,
             (
@@ -101,6 +107,7 @@ def outbox_row(cursor, chapter_id):
                 json.dumps(payload or {}),
                 status,
                 delivery_mode,
+                channel,
             ),
         )
         return dict(cursor.fetchone())
@@ -115,3 +122,27 @@ def read_outbox(cursor):
         return dict(cursor.fetchone())
 
     return _read
+
+
+@pytest.fixture
+def email_mode(monkeypatch):
+    """Set settings.EMAIL_DELIVERY_MODE (the source of truth, not env)."""
+    from api.config import settings
+
+    def _set(mode: str) -> str:
+        monkeypatch.setattr(settings, "EMAIL_DELIVERY_MODE", mode)
+        return mode
+
+    _set("dry_run")
+    return _set
+
+
+@pytest.fixture
+def fake_email(monkeypatch):
+    """Capture (to, subject, body) instead of opening an SMTP connection."""
+    sent: list = []
+    monkeypatch.setattr(
+        "api.cron.services.outbox_drain.send_email",
+        lambda to, subject, body: sent.append((to, subject, body)),
+    )
+    return sent

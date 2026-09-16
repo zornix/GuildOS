@@ -36,9 +36,21 @@ def _mask_phone(phone: str | None) -> str | None:
     return f"•••• {digits[-4:]}" if len(digits) >= 4 else None
 
 
+# A setup/reset code in the payload is a live credential. Officers can issue
+# their own, but the outbox is a different surface with a different reader, so
+# the code itself never renders here.
+_SECRET_EVENT_TYPES = {"SETUP_CODE", "RESET_CODE"}
+
+
 def _body(row: dict) -> str:
+    if row["event_type"] in _SECRET_EVENT_TYPES:
+        return "Account code (hidden)."
     try:
-        return templates.render(row["event_type"], row.get("payload"))
+        return templates.render(
+            row["event_type"],
+            row.get("payload"),
+            channel=row.get("channel") or "email",
+        )
     except Exception:
         return ""
 
@@ -79,6 +91,7 @@ def list_outbox(
             {
                 "id": r["id"],
                 "event_type": r["event_type"],
+                "channel": r.get("channel") or "email",
                 "recipient_name": member.get("name"),
                 "recipient_phone": _mask_phone(member.get("phone")),
                 "body": _body(r),

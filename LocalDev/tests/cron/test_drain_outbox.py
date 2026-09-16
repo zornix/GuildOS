@@ -415,21 +415,27 @@ def test_payment_reminder_can_be_resent_on_a_later_day(
 
 
 def test_payment_reminder_renders_the_owed_total(
-    drain, sb_client, delivery_mode, chapter_id, member_with_phone, fake_twilio
+    drain, sb_client, cursor, email_mode, chapter_id, member_factory, fake_email
 ):
+    """Treasury reminders are email now (ADR-0005), not SMS."""
     from api.treasury.notifications import enqueue_payment_reminder
 
-    delivery_mode("twilio")
+    member = member_factory()
+    cursor.execute(
+        "UPDATE members SET email = %s WHERE id = %s",
+        (f"reminder-{member}@example.test", member),
+    )
+    email_mode("smtp")
     enqueue_payment_reminder(
         chapter_id=chapter_id,
-        member_id=member_with_phone("+15551113333"),
+        member_id=member,
         unpaid_count=3,
         unpaid_total_cents=7500,
         sb=sb_client,
     )
     drain()
 
-    assert [body.split("\n")[0] for _, body in fake_twilio] == [
+    assert [body.split("\n")[0] for _, _, body in fake_email] == [
         "Reminder: 3 unpaid charges totaling $75.00. Log in to pay."
     ]
 

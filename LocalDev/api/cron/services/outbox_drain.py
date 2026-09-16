@@ -7,6 +7,11 @@ every treasury lifecycle notification, every job report/approval/rejection, ever
 security assignment and swap — sat 'pending' forever. A member was never told
 their payment was approved or that they caught a security shift.
 
+Two channels (0159 / ADR-0005): a row's `channel` decides its provider — 'sms'
+goes to Twilio with the consent check, 'email' to api/platform/email.py without
+one. MESSAGE_DELIVERY_MODE governs SMS, EMAIL_DELIVERY_MODE email; either in
+dry_run marks its rows 'simulated'.
+
 This module sweeps the whole table: oldest pending rows first, one batch per run,
 invoked by Vercel Cron every 5 minutes (GET /api/cron/drain-outbox, authenticated
 by CRON_SECRET). It is deliberately cross-chapter — it is a system worker, not a
@@ -40,6 +45,7 @@ from datetime import datetime, timezone
 from api.announcements.services import twilio_client
 from api.cron.core import templates
 from api.platform.delivery import delivery_mode
+from api.platform.email import email_delivery_mode, send_email
 from api.platform.rpc import call_rpc
 from api.sms_consent import CONSENT_COLUMNS, has_consent
 
@@ -53,7 +59,9 @@ DEFAULT_BATCH_LIMIT = 100
 # how a row is delivered — see _global_mode.
 DRY_RUN = "dry_run"
 TWILIO = "twilio"
+SMTP = "smtp"
 _DISPATCH_MODES = (DRY_RUN, TWILIO)
+_EMAIL_MODES = (DRY_RUN, SMTP)
 
 # event_type -> (target table, columns) used to enrich a payload with facts the
 # producer did not inline. The treasury enqueue path writes identifiers only, so
@@ -76,6 +84,16 @@ def _resolve_sb(sb):
     from api.platform.db import get_db
 
     return get_db()
+
+
+def _email_mode() -> str:
+    """The email twin of _global_mode: dry_run simulates, smtp really sends."""
+    mode = email_delivery_mode()
+    if mode not in _EMAIL_MODES:
+        raise ValueError(
+            f"Unknown EMAIL_DELIVERY_MODE {mode!r}; expected 'dry_run' or 'smtp'"
+        )
+    return mode
 
 
 def _global_mode() -> str:
@@ -137,6 +155,13 @@ def _member_sms(sb, member_id: str) -> dict:
     ).data or {}
 
 
+def _member_email(sb, member_id: str) -> str:
+    row = (
+        sb.table("members").select("id, email").eq("id", member_id).maybe_single().execute()
+    ).data or {}
+    return (row.get("email") or "").strip()
+
+
 def _close_row(sb, row: dict, *, status: str, last_error: str | None) -> None:
     """Move a claimed row from 'sending' to its terminal status.
 
@@ -168,42 +193,71 @@ def _chapter_name(sb, chapter_id, cache: dict) -> str:
     return cache[key]
 
 
+def _deliver_sms(sb, row: dict, *, mode: str, chapter_name: str, payload: dict) -> str:
+    body = templates.render(
+        row["event_type"], payload, chapter_name=chapter_name, channel="sms"
+    )
+    if mode == DRY_RUN:
+        _close_row(sb, row, status="simulated", last_error=None)
+        return "simulated"
+
+    member = _member_sms(sb, row["member_id"])
+    phone = (member.get("phone") or "").strip()
+    if not phone:
+        _close_row(sb, row, status="failed", last_error="no phone")
+        return "failed"
+    if not has_consent(member):
+        # Texting without prior express consent is the carrier violation that
+        # gets a sender shut off (#57). A real send is refused; dry_run above
+        # still simulates it, so local dev keeps showing the message.
+        _close_row(sb, row, status="failed", last_error="no_consent")
+        return "failed"
+
+    twilio_client.send_sms(phone, body)
+    _close_row(sb, row, status="sent", last_error=None)
+    return "sent"
+
+
+def _deliver_email(sb, row: dict, *, chapter_name: str, payload: dict) -> str:
+    """Email needs no consent check: this is transactional mail to a member of
+    the chapter that is writing to them (ADR-0005)."""
+    subject, body = templates.render_email(
+        row["event_type"], payload, chapter_name=chapter_name
+    )
+    if _email_mode() == DRY_RUN:
+        _close_row(sb, row, status="simulated", last_error=None)
+        return "simulated"
+
+    address = _member_email(sb, row["member_id"])
+    if not address:
+        _close_row(sb, row, status="failed", last_error="no_email")
+        return "failed"
+
+    send_email(address, subject, body)
+    _close_row(sb, row, status="sent", last_error=None)
+    return "sent"
+
+
 def _deliver_row(sb, row: dict, *, mode: str, names: dict) -> str:
-    """Deliver one row. Returns its terminal status; never raises."""
+    """Deliver one row by its channel. Returns its terminal status; never raises.
+
+    `mode` is the SMS mode; the email mode is read per row from settings.
+    """
     try:
         if not row.get("member_id"):
-            # Chapter-wide events (ANNOUNCEMENT_PUBLISHED) have no SMS recipient;
+            # Chapter-wide events (ANNOUNCEMENT_PUBLISHED) have no recipient;
             # they exist for the in-app feed. Close them out honestly instead of
             # leaving them pending forever.
             _close_row(sb, row, status="failed", last_error="no member_id (no recipient)")
             return "failed"
 
         payload = _enrich(sb, row)
-        body = templates.render(
-            row["event_type"],
-            payload,
-            chapter_name=_chapter_name(sb, row["chapter_id"], names),
-        )
-
-        if mode == DRY_RUN:
-            _close_row(sb, row, status="simulated", last_error=None)
-            return "simulated"
-
-        member = _member_sms(sb, row["member_id"])
-        phone = (member.get("phone") or "").strip()
-        if not phone:
-            _close_row(sb, row, status="failed", last_error="no phone")
-            return "failed"
-        if not has_consent(member):
-            # Texting without prior express consent is the carrier violation that
-            # gets a sender shut off (#57). A real send is refused; dry_run above
-            # still simulates it, so local dev keeps showing the message.
-            _close_row(sb, row, status="failed", last_error="no_consent")
-            return "failed"
-
-        twilio_client.send_sms(phone, body)
-        _close_row(sb, row, status="sent", last_error=None)
-        return "sent"
+        chapter_name = _chapter_name(sb, row["chapter_id"], names)
+        if (row.get("channel") or "email") == "sms":
+            return _deliver_sms(
+                sb, row, mode=mode, chapter_name=chapter_name, payload=payload
+            )
+        return _deliver_email(sb, row, chapter_name=chapter_name, payload=payload)
     except Exception as exc:
         logger.exception("outbox drain failed for row %s", row.get("id"))
         detail = f"{type(exc).__name__}: {exc}"
