@@ -217,3 +217,36 @@ def test_index_import_time_guard_raises_for_bad_production_config():
     with pytest.raises(RuntimeError):
         if violations:
             raise RuntimeError(f"Refusing to boot in {s.VERCEL_ENV} — fix: " + "; ".join(violations))
+
+
+# --- EMAIL_DELIVERY_MODE / SMTP (ADR-0005) ---------------------------------
+
+_SMTP_OK = dict(
+    EMAIL_DELIVERY_MODE="smtp",
+    SMTP_HOST="smtp.gmail.com",
+    SMTP_USER="ops@chapter.example",
+    SMTP_PASSWORD="app-password",
+    EMAIL_FROM="GuildOS <ops@chapter.example>",
+)
+
+
+def test_misspelled_email_delivery_mode_is_a_violation():
+    s = _prod_settings(EMAIL_DELIVERY_MODE="smpt")
+    assert any("EMAIL_DELIVERY_MODE" in v for v in production_config_violations(s))
+
+
+def test_email_dry_run_needs_no_smtp_settings():
+    s = _prod_settings(EMAIL_DELIVERY_MODE="dry_run")
+    assert not any("EMAIL" in v or "SMTP" in v for v in production_config_violations(s))
+
+
+@pytest.mark.parametrize(
+    "missing", ["SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "EMAIL_FROM"]
+)
+def test_smtp_mode_missing_a_credential_is_a_violation(missing):
+    s = _prod_settings(**{**_SMTP_OK, missing: ""})
+    assert any(missing in v for v in production_config_violations(s))
+
+
+def test_a_complete_smtp_config_is_clean():
+    assert production_config_violations(_prod_settings(**_SMTP_OK)) == []

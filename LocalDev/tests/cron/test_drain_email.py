@@ -97,12 +97,18 @@ def test_sms_row_still_goes_to_twilio(
 
 
 def test_email_row_without_an_address_fails_with_no_email(
-    drain, outbox_row, read_outbox, email_mode, member_factory, cursor, fake_email
+    drain, outbox_row, read_outbox, email_mode, member_factory, monkeypatch, fake_email
 ):
-    """members.email is NOT NULL but nothing stops a blank one on an import."""
+    """members.email is NOT NULL, but a blank one is reachable through an import.
+
+    The address is stubbed rather than blanked in the table because a blank email
+    is globally UNIQUE and the demo DB is shared — one test would own it forever.
+    """
     email_mode("smtp")
+    monkeypatch.setattr(
+        "api.cron.services.outbox_drain._member_email", lambda sb, member_id: ""
+    )
     member = member_factory()
-    cursor.execute("UPDATE members SET email = %s WHERE id = %s", ("   ", member))
     row = outbox_row(
         event_type="JOB_APPROVED", channel="email", member_id=member, payload={"title": "X"}
     )

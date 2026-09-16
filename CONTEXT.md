@@ -84,3 +84,17 @@ Whoever holds `treasury:payment:verify` — the members who review the payments
 brothers claim to have made and either verify or reject them. Not an office:
 a treasurer and a narrow treasury-viewer role can both hold the key.
 _Avoid_: finance committee, treasury team
+
+**Setup code**:
+The one-time, single-use code a member redeems to claim their account or reset
+their password — issued on invite, chapter creation, roster import, or by an
+officer. It is emailed to the member automatically and shown to the issuing
+officer once as a hand-over fallback. There is no self-serve password reset.
+_Avoid_: invite link, magic link, temporary password
+
+**Channel**:
+Which provider carries one queued message: `email` or `sms`. Everything
+automatic is email; SMS is only the two announcement blasts an officer composes
+and sends on purpose, and only those carry consent enforcement and the opt-out
+footer (ADR-0005).
+_Avoid_: delivery mode (that is dry_run vs. the live provider), transport
