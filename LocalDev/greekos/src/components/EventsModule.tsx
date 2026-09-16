@@ -1064,7 +1064,7 @@ export default function EventsModule({
       {showRejectModal && (
         <Modal title="Reject Job Completion" onClose={() => setShowRejectModal(null)}>
             <p className="text-xs text-slate-600 mb-4">
-              Work is never silently undone. State the exact reason why this job was rejected so claimants receive the notice in their SMS / push outbox.
+              Work is never silently undone. State the exact reason why this job was rejected so claimants can read the reason in the notice emailed to them.
             </p>
 
             <textarea
