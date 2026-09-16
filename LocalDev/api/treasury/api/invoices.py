@@ -49,6 +49,9 @@ class BulkInvoiceItem(BaseModel):
     kind: str = Field(pattern="^(dues|rent|utilities|fine|assessment|manual)$")
     amount_cents: int = Field(gt=0)
     description: str | None = None
+    # A dues run has one due date for the whole batch; the RPC reads it per item
+    # so a caller can still vary it (0157).
+    due_at: datetime | None = None
 
 
 class BulkInvoiceCreate(BaseModel):
@@ -127,7 +130,9 @@ async def bulk_create_invoices(
     return svc.bulk_create_invoices(
         sb,
         chapter_id=user["chapter_id"],
-        invoices=[i.model_dump() for i in body.invoices],
+        # mode="json" so due_at reaches the RPC as an ISO string, not a datetime
+        # the JSON encoder would choke on.
+        invoices=[i.model_dump(mode="json") for i in body.invoices],
         actor_id=user["id"],
         idempotency_key=idempotency_key,
     )

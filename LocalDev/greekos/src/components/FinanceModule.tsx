@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   DollarSign,
   CreditCard,
   AlertCircle,
+  FileText,
   Plus,
   History,
   Search,
@@ -15,8 +16,22 @@ import Modal from './ui/Modal';
 import Card from './ui/Card';
 import ConfirmDialog from './ui/ConfirmDialog';
 import AddTransactionModal from './finance/AddTransactionModal';
+import DuesRunModal from './finance/DuesRunModal';
+import InvoiceView, { InvoiceStatusBadge } from './finance/InvoiceView';
+import ProofQueue from './finance/ProofQueue';
 import { formatMoney } from '../formatters';
 import type { MemberBalance } from '../lib/balance';
+import { can } from '../lib/session';
+import {
+  INVOICE_CREATE_KEY,
+  PAYMENT_VERIFY_KEY,
+  DuesRunDraft,
+  Invoice,
+  ProofDraft,
+  ProofSubmission,
+  formatDueDate,
+  invoiceTitle
+} from '../lib/dues';
 import type { TransactionDraft, TransactionPreview } from '../lib/transaction';
 
 interface FinanceModuleProps {
@@ -25,8 +40,22 @@ interface FinanceModuleProps {
   payments: Payment[];
   ledger: LedgerEntry[];
   isOfficer: boolean;
+  /** The backend's own permission keys — every new control gates on one. */
+  permissions: Set<string>;
+  chapterName: string;
   currentMemberName: string;
   myBalance: MemberBalance | null;
+  /** The signed-in member's open invoices, dues and fines alike. */
+  myInvoices: Invoice[];
+  pendingProofCentsOf: (invoiceId: string) => number;
+  submissions: ProofSubmission[];
+  queueLoading: boolean;
+  onRefreshQueue: () => Promise<void>;
+  onCreateDuesRun: (draft: DuesRunDraft) => Promise<void>;
+  onSubmitProof: (invoice: Invoice, draft: ProofDraft, evidence: File | null) => Promise<void>;
+  onVerifyProof: (submission: ProofSubmission) => Promise<void>;
+  onRejectProof: (submission: ProofSubmission, reason: string) => Promise<void>;
+  onOpenEvidence: (evidenceId: string) => Promise<string>;
   /** The one balance reader, from useFinance. */
   balanceCentsOf: (memberId: string) => number;
   onRecordPayment: (payment: Omit<Payment, 'id' | 'date'>) => void;
@@ -42,8 +71,20 @@ export default function FinanceModule({
   payments,
   ledger,
   isOfficer,
+  permissions,
+  chapterName,
   currentMemberName,
   myBalance,
+  myInvoices,
+  pendingProofCentsOf,
+  submissions,
+  queueLoading,
+  onRefreshQueue,
+  onCreateDuesRun,
+  onSubmitProof,
+  onVerifyProof,
+  onRejectProof,
+  onOpenEvidence,
   balanceCentsOf,
   onRecordPayment,
   onIssueFine,
@@ -56,8 +97,20 @@ export default function FinanceModule({
   const safePayments = payments || [];
   const safeLedger = ledger || [];
 
-  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'fines' | 'ledger' | 'payments'>('overview');
+  const [activeSubTab, setActiveSubTab] = useState<'invoices' | 'overview' | 'fines' | 'ledger' | 'payments' | 'queue'>('invoices');
   const [showAddTransaction, setShowAddTransaction] = useState(false);
+  const [showDuesRun, setShowDuesRun] = useState(false);
+  const [openInvoice, setOpenInvoice] = useState<Invoice | null>(null);
+
+  const canCreateDuesRun = can(permissions, INVOICE_CREATE_KEY);
+  const canVerifyPayments = can(permissions, PAYMENT_VERIFY_KEY);
+
+  // The queue is only read when it is on screen — it is the one list that goes
+  // stale while another officer works.
+  useEffect(() => {
+    if (activeSubTab === 'queue' && canVerifyPayments) void onRefreshQueue();
+  }, [activeSubTab, canVerifyPayments]);
+
   const [showPayModal, setShowPayModal] = useState(false);
   const [showCorrectionModal, setShowCorrectionModal] = useState<LedgerEntry | null>(null);
   const [pendingMarkPaid, setPendingMarkPaid] = useState<{ member: Member; balanceCents: number } | null>(null);
@@ -168,7 +221,7 @@ export default function FinanceModule({
           </p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {!isOfficer && (
             <button
               onClick={() => { setPayAmount(myBalance ? (myBalance.outstandingCents / 100).toFixed(2) : ''); setShowPayModal(true); }}
@@ -179,11 +232,22 @@ export default function FinanceModule({
             </button>
           )}
 
+          {canCreateDuesRun && (
+            <button
+              type="button"
+              onClick={() => setShowDuesRun(true)}
+              className="bg-gold hover:bg-[#c5a02b] text-navy font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer"
+            >
+              <FileText className="w-4 h-4" />
+              New dues run
+            </button>
+          )}
+
           {isOfficer && (
             <button
               type="button"
               onClick={() => setShowAddTransaction(true)}
-              className="bg-gold hover:bg-[#c5a02b] text-navy font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer"
+              className="border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               Add transaction
@@ -221,6 +285,18 @@ export default function FinanceModule({
 
       {/* Tabs Menu */}
       <div className="flex border-b border-slate-200 gap-4 sm:gap-6 text-sm font-semibold overflow-x-auto">
+        <button
+          onClick={() => setActiveSubTab('invoices')}
+          className={`pb-3 shrink-0 whitespace-nowrap transition-all cursor-pointer flex items-center gap-2 ${
+            activeSubTab === 'invoices'
+              ? 'text-navy border-b-2 border-gold font-bold'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <FileText className="w-4 h-4" />
+          My invoices ({myInvoices.length})
+        </button>
+
         <button
           onClick={() => setActiveSubTab('overview')}
           className={`pb-3 shrink-0 whitespace-nowrap transition-all cursor-pointer flex items-center gap-2 ${
@@ -268,7 +344,69 @@ export default function FinanceModule({
           <History className="w-4 h-4" />
           Payments ({payments.length})
         </button>
+
+        {canVerifyPayments && (
+          <button
+            onClick={() => setActiveSubTab('queue')}
+            className={`pb-3 shrink-0 whitespace-nowrap transition-all cursor-pointer flex items-center gap-2 ${
+              activeSubTab === 'queue'
+                ? 'text-navy border-b-2 border-gold font-bold'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4" />
+            Proof queue{submissions.length ? ` (${submissions.length})` : ''}
+          </button>
+        )}
       </div>
+
+      {/* SubTab 0: The member's own invoices — dues runs and fines alike */}
+      {activeSubTab === 'invoices' && (
+        <Card className="p-4 sm:p-5 space-y-4">
+          <div>
+            <h3 className="font-display font-bold text-slate-900 text-base">My invoices</h3>
+            <p className="text-xs text-slate-500">
+              Everything the chapter has billed you. Open one to see how to pay and submit proof.
+            </p>
+          </div>
+
+          {myInvoices.length === 0 ? (
+            <p className="text-xs text-slate-500">Nothing outstanding. You are square with the chapter.</p>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {myInvoices.map(inv => {
+                const due = formatDueDate(inv.dueAt);
+                const pending = pendingProofCentsOf(inv.id);
+                return (
+                  <button
+                    key={inv.id}
+                    type="button"
+                    onClick={() => setOpenInvoice(inv)}
+                    className="w-full text-left py-3.5 flex flex-col sm:flex-row sm:items-center gap-2 hover:bg-slate-50/60 cursor-pointer min-h-11"
+                  >
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-xs text-slate-900">{invoiceTitle(inv)}</span>
+                        <InvoiceStatusBadge status={inv.status} />
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        {due ? `Due ${due}` : 'No due date'}
+                        {pending > 0 && ` · ${formatMoney(pending)} awaiting verification`}
+                      </p>
+                    </div>
+                    <div className="text-left sm:text-right shrink-0">
+                      <div className={`font-mono font-bold text-sm ${inv.remainingCents > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                        {formatMoney(inv.remainingCents)}
+                      </div>
+                      <div className="text-xs text-slate-500">of {formatMoney(inv.amountCents)}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* SubTab 1: Member Balances */}
       {activeSubTab === 'overview' && (
@@ -538,12 +676,41 @@ export default function FinanceModule({
         </Card>
       )}
 
+      {activeSubTab === 'queue' && canVerifyPayments && (
+        <ProofQueue
+          submissions={submissions}
+          loading={queueLoading}
+          onOpenEvidence={onOpenEvidence}
+          onVerify={onVerifyProof}
+          onReject={onRejectProof}
+        />
+      )}
+
       {showAddTransaction && (
         <AddTransactionModal
           members={safeMembers}
           balanceCentsOf={balanceCentsOf}
           onSubmit={submitTransaction}
           onClose={() => setShowAddTransaction(false)}
+        />
+      )}
+
+      {showDuesRun && (
+        <DuesRunModal
+          candidates={safeMembers.filter(m => m.status === 'Active' || m.status === 'Pledge')}
+          onSubmit={onCreateDuesRun}
+          onClose={() => setShowDuesRun(false)}
+        />
+      )}
+
+      {openInvoice && (
+        <InvoiceView
+          invoice={openInvoice}
+          chapterName={chapterName}
+          canSubmitProof
+          pendingProofCents={pendingProofCentsOf(openInvoice.id)}
+          onSubmitProof={onSubmitProof}
+          onClose={() => setOpenInvoice(null)}
         />
       )}
 

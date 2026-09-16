@@ -72,3 +72,15 @@ A member granted a slice of officer work in one domain (risk, social,
 recruitment, brotherhood, philanthropy, standards). A chair holds only that
 chair role's permissions and is not an officer.
 _Avoid_: assistant, supervisor (a supervisor is per-event, not a standing role)
+
+**Dues run**:
+One batch of identical dues invoices — same title, amount and due date — issued
+to every active member at once, minus anyone the treasurer excludes. A fine is
+an invoice too, just issued one at a time; both land in the same member view.
+_Avoid_: dues cycle, billing batch, invoice blast
+
+**Treasury board**:
+Whoever holds `treasury:payment:verify` — the members who review the payments
+brothers claim to have made and either verify or reject them. Not an office:
+a treasurer and a narrow treasury-viewer role can both hold the key.
+_Avoid_: finance committee, treasury team

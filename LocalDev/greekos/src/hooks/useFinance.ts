@@ -1,8 +1,20 @@
 import { useState, type Dispatch, type SetStateAction } from 'react';
 import { Fine, LedgerEntry, Member, Payment } from '../types';
-import { api } from '../api';
+import { api, type MemberTreasuryDashboardDto } from '../api';
 import { adaptFines } from '../adapters';
 import { formatMoney } from '../formatters';
+import { adaptMemberBalance } from '../lib/balance';
+import {
+  DuesRunDraft,
+  Invoice,
+  ProofDraft,
+  ProofSubmission,
+  adaptInvoices,
+  adaptSubmissions,
+  planDuesRun,
+  planProof,
+  toBase64
+} from '../lib/dues';
 import { ShowToast } from './useToast';
 import { EnqueueOutbox } from './useOutbox';
 import { SyncApi } from './useBackend';
@@ -10,6 +22,7 @@ import { SyncApi } from './useBackend';
 interface Deps {
   members: Member[];
   setMembers: Dispatch<SetStateAction<Member[]>>;
+  currentMemberId: string;
   currentMemberName: string;
   isOfficer: boolean;
   syncApi: SyncApi;
@@ -19,10 +32,90 @@ interface Deps {
 
 /** Fines, payments and the chapter ledger. Balances live on the member
  *  rows, so this hook writes into the roster state too. */
-export function useFinance({ members, setMembers, currentMemberName, isOfficer, syncApi, showToast, enqueueOutbox }: Deps) {
+export function useFinance({ members, setMembers, currentMemberId, currentMemberName, isOfficer, syncApi, showToast, enqueueOutbox }: Deps) {
   const [fines, setFines] = useState<Fine[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
+  // The signed-in member's real treasury record — the one read behind both the
+  // balance banner and the invoice list.
+  const [myTreasury, setMyTreasury] = useState<MemberTreasuryDashboardDto | null>(null);
+  const [submissions, setSubmissions] = useState<ProofSubmission[]>([]);
+  const [queueLoading, setQueueLoading] = useState(false);
+
+  const myBalance = myTreasury ? adaptMemberBalance(myTreasury) : null;
+  const myInvoices = adaptInvoices(myTreasury?.open_invoices);
+
+  /** Cents already submitted against each invoice and still awaiting review. */
+  const pendingProofCentsOf = (invoiceId: string) =>
+    (myTreasury?.pending_submissions || [])
+      .filter(s => s.invoice_id === invoiceId)
+      .reduce((sum, s) => sum + s.claimed_amount_cents, 0);
+
+  const refreshMyTreasury = async () => {
+    if (!currentMemberId) return;
+    setMyTreasury(await api.getMemberTreasuryDashboard(currentMemberId));
+  };
+
+  const refreshQueue = async () => {
+    setQueueLoading(true);
+    try {
+      const page = await api.listPaymentSubmissions('pending');
+      setSubmissions(adaptSubmissions(page.data, new Map(members.map(m => [m.id, m.name]))));
+    } finally {
+      setQueueLoading(false);
+    }
+  };
+
+  /** One dues run = one bulk batch of invoices, all with the same due date. */
+  const handleCreateDuesRun = async (draft: DuesRunDraft) => {
+    const plan = planDuesRun(draft);
+    if (!plan.valid) { showToast(plan.error as string); return; }
+    const result = await api.bulkCreateInvoices(plan.items);
+    await refreshMyTreasury();
+    showToast(`Created ${result.count} invoice${result.count === 1 ? '' : 's'} · ${formatMoney(plan.totalCents)} billed.`);
+  };
+
+  /** A member's claim that they paid. Evidence is a second call because the
+   *  submission has to exist before anything can hang off it. */
+  const handleSubmitProof = async (invoice: Invoice, draft: ProofDraft, evidence: File | null) => {
+    const plan = planProof(invoice, draft);
+    if (!plan.valid) { showToast(plan.error as string); return; }
+
+    const submission = await api.submitPaymentProof(plan.body);
+    if (evidence) {
+      try {
+        const bytes = new Uint8Array(await evidence.arrayBuffer());
+        await api.addPaymentEvidence(submission.id, evidence.type || 'image/png', toBase64(bytes));
+      } catch (err) {
+        // The claim is already filed; a failed screenshot must not look like a
+        // failed payment submission.
+        console.error('Evidence upload failed', err);
+        showToast('Payment submitted, but the screenshot did not upload.');
+        await refreshMyTreasury();
+        return;
+      }
+    }
+    await refreshMyTreasury();
+    showToast('Payment submitted. The treasury board will verify it.');
+  };
+
+  const handleVerifyProof = async (submission: ProofSubmission) => {
+    await api.verifyPaymentSubmission(submission.id);
+    await Promise.all([refreshQueue(), refreshMyTreasury()]);
+    showToast(`Verified ${formatMoney(submission.claimedCents)} from ${submission.memberName}.`);
+  };
+
+  const handleRejectProof = async (submission: ProofSubmission, reason: string) => {
+    await api.rejectPaymentSubmission(submission.id, reason);
+    await refreshQueue();
+    showToast(`Rejected ${submission.memberName}'s payment.`);
+  };
+
+  /** Evidence bytes as a data: URL the proof modal can render. */
+  const openEvidence = async (evidenceId: string) => {
+    const evidence = await api.getPaymentEvidence(evidenceId);
+    return `data:${evidence.content_type};base64,${evidence.data_base64}`;
+  };
 
   const refetchFines = async () => setFines(adaptFines(await api.getFines(), members));
 
@@ -189,6 +282,18 @@ export function useFinance({ members, setMembers, currentMemberName, isOfficer, 
     setPayments,
     ledger,
     setLedger,
+    myBalance,
+    myInvoices,
+    setMyTreasury,
+    pendingProofCentsOf,
+    submissions,
+    queueLoading,
+    refreshQueue,
+    handleCreateDuesRun,
+    handleSubmitProof,
+    handleVerifyProof,
+    handleRejectProof,
+    openEvidence,
     balanceCentsOf,
     handleRecordPayment,
     handleIssueFine,

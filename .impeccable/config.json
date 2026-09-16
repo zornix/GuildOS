@@ -8,6 +8,12 @@
         "value": "inter",
         "createdAt": "2026-08-18T22:52:54.073Z",
         "reason": "product-register UI: skill's own product.md sanctions Inter/system sans for app surfaces; pre-existing choice in greekos, not introduced by this session"
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "bg-slate-50 border-slate-200 text-slate-800",
+        "createdAt": "2026-09-15T23:59:26.750Z",
+        "reason": "slate-50 is a neutral surface, not a colored background; slate-800 on it is ~13:1 contrast and matches the house error/idle panel style"
       }
     ]
   }
