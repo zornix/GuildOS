@@ -43,6 +43,8 @@ export interface Member {
   securityHoursServed?: number;
   /** Approved security jobs already held (D17) — picker decoration only. */
   priorSecurityShifts?: number;
+  /** May we text them? (#57) Absent or false until they opt in; never assumed. */
+  smsConsent?: boolean;
 }
 
 export type EventType = 

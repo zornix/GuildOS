@@ -81,7 +81,8 @@ export function adaptMembers(
       attendanceRate: s && s.total_required ? Math.round((s.attended / s.total_required) * 100) : 0,
       pledgeClass: '',
       securityHoursServed: 0,
-      priorSecurityShifts: shiftsById.get(row.id) || 0
+      priorSecurityShifts: shiftsById.get(row.id) || 0,
+      smsConsent: row.sms_consent === true
     };
   });
 }
