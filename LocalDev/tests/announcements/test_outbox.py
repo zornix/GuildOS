@@ -79,7 +79,9 @@ def test_list_returns_chapter_rows_masked(officer, as_member, outbox_factory, ch
     entry = next(r for r in body if r["id"] == row)
     assert entry["status"] == "pending"
     assert entry["recipient_phone"] == "•••• 4567"  # never the full number
-    assert entry["body"] == "Chapter meeting at 7pm."
+    # The footer (#57) is part of what is actually sent, so the preview shows it.
+    assert entry["body"].startswith("Chapter meeting at 7pm.")
+    assert entry["body"].endswith("Reply STOP to opt out.")
     assert entry["recipient_name"]
 
 

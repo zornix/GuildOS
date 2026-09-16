@@ -11,7 +11,17 @@ from __future__ import annotations
 import pytest
 
 from api.cron.core import templates
-from api.cron.core.templates import TemplateError, UnknownEventType, render
+from api.cron.core.templates import TemplateError, UnknownEventType
+from api.cron.core.templates import render as _render_with_footer
+
+
+def render(event_type, payload=None, **kwargs) -> str:
+    """The message body without its opt-out footer.
+
+    Every body ends with the same sender/opt-out line (#57), which would make
+    every copy assertion below restate it. The footer has its own tests instead.
+    """
+    return _render_with_footer(event_type, payload, **kwargs).rsplit("\n", 1)[0]
 
 # The event_type CHECK catalog after 0070 + 0086 + 0131 + 0142 + 0143 + 0145,
 # plus PAYMENT_REMINDER (0150). Every one must have a template.
@@ -156,3 +166,18 @@ def test_job_rejected_includes_the_reason():
     assert render("JOB_REJECTED", {"title": "Setup crew", "reason": "photo missing"}) == (
         "Job sent back: Setup crew — photo missing. Log in for details."
     )
+
+
+# ── Sender identification + opt-out footer (#57) ─────────────────────────────
+
+
+@pytest.mark.parametrize("event_type", CATALOG)
+def test_every_rendered_body_ends_with_the_opt_out_line(event_type):
+    body = _render_with_footer(event_type, FULL_PAYLOADS[event_type], chapter_name="Beta Theta")
+    assert body.endswith("— GuildOS for Beta Theta. Reply STOP to opt out.")
+
+
+def test_the_footer_degrades_without_a_chapter_name():
+    assert templates.footer("") == "— GuildOS. Reply STOP to opt out."
+    assert templates.footer(None) == "— GuildOS. Reply STOP to opt out."
+    assert _render_with_footer("JOB_APPROVED", {}).endswith(templates.footer(None))
