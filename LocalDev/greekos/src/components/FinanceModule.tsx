@@ -17,10 +17,18 @@ import Card from './ui/Card';
 import ConfirmDialog from './ui/ConfirmDialog';
 import AddTransactionModal from './finance/AddTransactionModal';
 import DuesRunModal from './finance/DuesRunModal';
+import InvoiceView, { InvoiceStatusBadge } from './finance/InvoiceView';
 import { formatMoney } from '../formatters';
 import type { MemberBalance } from '../lib/balance';
 import { can } from '../lib/session';
-import { INVOICE_CREATE_KEY, DuesRunDraft } from '../lib/dues';
+import {
+  INVOICE_CREATE_KEY,
+  DuesRunDraft,
+  Invoice,
+  ProofDraft,
+  formatDueDate,
+  invoiceTitle
+} from '../lib/dues';
 import type { TransactionDraft, TransactionPreview } from '../lib/transaction';
 
 interface FinanceModuleProps {
@@ -31,9 +39,14 @@ interface FinanceModuleProps {
   isOfficer: boolean;
   /** The backend's own permission keys — every new control gates on one. */
   permissions: Set<string>;
+  chapterName: string;
   currentMemberName: string;
   myBalance: MemberBalance | null;
+  /** The signed-in member's open invoices, dues and fines alike. */
+  myInvoices: Invoice[];
+  pendingProofCentsOf: (invoiceId: string) => number;
   onCreateDuesRun: (draft: DuesRunDraft) => Promise<void>;
+  onSubmitProof: (invoice: Invoice, draft: ProofDraft, evidence: File | null) => Promise<void>;
   /** The one balance reader, from useFinance. */
   balanceCentsOf: (memberId: string) => number;
   onRecordPayment: (payment: Omit<Payment, 'id' | 'date'>) => void;
@@ -50,9 +63,13 @@ export default function FinanceModule({
   ledger,
   isOfficer,
   permissions,
+  chapterName,
   currentMemberName,
   myBalance,
+  myInvoices,
+  pendingProofCentsOf,
   onCreateDuesRun,
+  onSubmitProof,
   balanceCentsOf,
   onRecordPayment,
   onIssueFine,
@@ -65,7 +82,8 @@ export default function FinanceModule({
   const safePayments = payments || [];
   const safeLedger = ledger || [];
 
-  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'fines' | 'ledger' | 'payments'>('overview');
+  const [activeSubTab, setActiveSubTab] = useState<'invoices' | 'overview' | 'fines' | 'ledger' | 'payments'>('invoices');
+  const [openInvoice, setOpenInvoice] = useState<Invoice | null>(null);
   const [showAddTransaction, setShowAddTransaction] = useState(false);
   const [showDuesRun, setShowDuesRun] = useState(false);
 
@@ -245,6 +263,18 @@ export default function FinanceModule({
       {/* Tabs Menu */}
       <div className="flex border-b border-slate-200 gap-4 sm:gap-6 text-sm font-semibold overflow-x-auto">
         <button
+          onClick={() => setActiveSubTab('invoices')}
+          className={`pb-3 shrink-0 whitespace-nowrap transition-all cursor-pointer flex items-center gap-2 ${
+            activeSubTab === 'invoices'
+              ? 'text-navy border-b-2 border-gold font-bold'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <FileText className="w-4 h-4" />
+          My invoices ({myInvoices.length})
+        </button>
+
+        <button
           onClick={() => setActiveSubTab('overview')}
           className={`pb-3 shrink-0 whitespace-nowrap transition-all cursor-pointer flex items-center gap-2 ${
             activeSubTab === 'overview'
@@ -292,6 +322,54 @@ export default function FinanceModule({
           Payments ({payments.length})
         </button>
       </div>
+
+      {/* SubTab 0: The member's own invoices — dues runs and fines alike */}
+      {activeSubTab === 'invoices' && (
+        <Card className="p-4 sm:p-5 space-y-4">
+          <div>
+            <h3 className="font-display font-bold text-slate-900 text-base">My invoices</h3>
+            <p className="text-xs text-slate-500">
+              Everything the chapter has billed you. Open one to see how to pay and submit proof.
+            </p>
+          </div>
+
+          {myInvoices.length === 0 ? (
+            <p className="text-xs text-slate-500">Nothing outstanding. You are square with the chapter.</p>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {myInvoices.map(inv => {
+                const due = formatDueDate(inv.dueAt);
+                const pending = pendingProofCentsOf(inv.id);
+                return (
+                  <button
+                    key={inv.id}
+                    type="button"
+                    onClick={() => setOpenInvoice(inv)}
+                    className="w-full text-left py-3.5 flex flex-col sm:flex-row sm:items-center gap-2 hover:bg-slate-50/60 cursor-pointer min-h-11"
+                  >
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-xs text-slate-900">{invoiceTitle(inv)}</span>
+                        <InvoiceStatusBadge status={inv.status} />
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        {due ? `Due ${due}` : 'No due date'}
+                        {pending > 0 && ` · ${formatMoney(pending)} awaiting verification`}
+                      </p>
+                    </div>
+                    <div className="text-left sm:text-right shrink-0">
+                      <div className={`font-mono font-bold text-sm ${inv.remainingCents > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                        {formatMoney(inv.remainingCents)}
+                      </div>
+                      <div className="text-xs text-slate-500">of {formatMoney(inv.amountCents)}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* SubTab 1: Member Balances */}
       {activeSubTab === 'overview' && (
@@ -575,6 +653,17 @@ export default function FinanceModule({
           candidates={safeMembers.filter(m => m.status === 'Active' || m.status === 'Pledge')}
           onSubmit={onCreateDuesRun}
           onClose={() => setShowDuesRun(false)}
+        />
+      )}
+
+      {openInvoice && (
+        <InvoiceView
+          invoice={openInvoice}
+          chapterName={chapterName}
+          canSubmitProof
+          pendingProofCents={pendingProofCentsOf(openInvoice.id)}
+          onSubmitProof={onSubmitProof}
+          onClose={() => setOpenInvoice(null)}
         />
       )}
 

@@ -4,7 +4,15 @@ import { api, type MemberTreasuryDashboardDto } from '../api';
 import { adaptFines } from '../adapters';
 import { formatMoney } from '../formatters';
 import { adaptMemberBalance } from '../lib/balance';
-import { DuesRunDraft, planDuesRun } from '../lib/dues';
+import {
+  DuesRunDraft,
+  Invoice,
+  ProofDraft,
+  adaptInvoices,
+  planDuesRun,
+  planProof,
+  toBase64
+} from '../lib/dues';
 import { ShowToast } from './useToast';
 import { EnqueueOutbox } from './useOutbox';
 import { SyncApi } from './useBackend';
@@ -31,6 +39,13 @@ export function useFinance({ members, setMembers, currentMemberId, currentMember
   const [myTreasury, setMyTreasury] = useState<MemberTreasuryDashboardDto | null>(null);
 
   const myBalance = myTreasury ? adaptMemberBalance(myTreasury) : null;
+  const myInvoices = adaptInvoices(myTreasury?.open_invoices);
+
+  /** Cents already submitted against each invoice and still awaiting review. */
+  const pendingProofCentsOf = (invoiceId: string) =>
+    (myTreasury?.pending_submissions || [])
+      .filter(s => s.invoice_id === invoiceId)
+      .reduce((sum, s) => sum + s.claimed_amount_cents, 0);
 
   const refreshMyTreasury = async () => {
     if (!currentMemberId) return;
@@ -44,6 +59,30 @@ export function useFinance({ members, setMembers, currentMemberId, currentMember
     const result = await api.bulkCreateInvoices(plan.items);
     await refreshMyTreasury();
     showToast(`Created ${result.count} invoice${result.count === 1 ? '' : 's'} · ${formatMoney(plan.totalCents)} billed.`);
+  };
+
+  /** A member's claim that they paid. Evidence is a second call because the
+   *  submission has to exist before anything can hang off it. */
+  const handleSubmitProof = async (invoice: Invoice, draft: ProofDraft, evidence: File | null) => {
+    const plan = planProof(invoice, draft);
+    if (!plan.valid) { showToast(plan.error as string); return; }
+
+    const submission = await api.submitPaymentProof(plan.body);
+    if (evidence) {
+      try {
+        const bytes = new Uint8Array(await evidence.arrayBuffer());
+        await api.addPaymentEvidence(submission.id, evidence.type || 'image/png', toBase64(bytes));
+      } catch (err) {
+        // The claim is already filed; a failed screenshot must not look like a
+        // failed payment submission.
+        console.error('Evidence upload failed', err);
+        showToast('Payment submitted, but the screenshot did not upload.');
+        await refreshMyTreasury();
+        return;
+      }
+    }
+    await refreshMyTreasury();
+    showToast('Payment submitted. The treasury board will verify it.');
   };
 
   const refetchFines = async () => setFines(adaptFines(await api.getFines(), members));
@@ -212,8 +251,11 @@ export function useFinance({ members, setMembers, currentMemberId, currentMember
     ledger,
     setLedger,
     myBalance,
+    myInvoices,
     setMyTreasury,
+    pendingProofCentsOf,
     handleCreateDuesRun,
+    handleSubmitProof,
     balanceCentsOf,
     handleRecordPayment,
     handleIssueFine,
