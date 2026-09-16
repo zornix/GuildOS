@@ -41,6 +41,11 @@ CATALOG = [
     "SECURITY_SWAP_REQUESTED",
     "SECURITY_SWAP_ACCEPTED",
     "SECURITY_SWAP_DECLINED",
+    # Email-only, added by 0159 (ADR-0005).
+    "SETUP_CODE",
+    "RESET_CODE",
+    "EVENT_CREATED",
+    "EVENT_ROLE_ASSIGNED",
 ]
 
 # Minimal payloads that exercise the fully-populated branch of each template.
@@ -60,6 +65,27 @@ FULL_PAYLOADS = {
     "SECURITY_SWAP_REQUESTED": {"note": "family emergency"},
     "SECURITY_SWAP_ACCEPTED": {},
     "SECURITY_SWAP_DECLINED": {},
+    "SETUP_CODE": {
+        "code": "AB12CD",
+        "expires_at": "2026-09-22T00:00:00+00:00",
+        "frontend_url": "https://app.guildos.example",
+    },
+    "RESET_CODE": {
+        "code": "AB12CD",
+        "expires_at": "2026-09-22T00:00:00+00:00",
+        "frontend_url": "https://app.guildos.example",
+    },
+    "EVENT_CREATED": {
+        "title": "Rush Kickoff",
+        "date": "2026-10-01",
+        "time": "18:00",
+        "location": "The House",
+    },
+    "EVENT_ROLE_ASSIGNED": {
+        "title": "Rush Kickoff",
+        "date": "2026-10-01",
+        "role": "organizer",
+    },
 }
 
 
@@ -77,7 +103,13 @@ def test_every_template_renders_a_non_empty_body(event_type):
 
 @pytest.mark.parametrize(
     "event_type",
-    [e for e in CATALOG if e not in ("ANNOUNCEMENT_SMS", "EVENT_NOTIFY")],
+    [
+        e
+        for e in CATALOG
+        # The pass-through and code templates have nothing to degrade to: an
+        # empty body or a missing code is a failure, not a weaker sentence.
+        if e not in ("ANNOUNCEMENT_SMS", "EVENT_NOTIFY", "SETUP_CODE", "RESET_CODE")
+    ],
 )
 def test_templates_degrade_on_an_empty_payload(event_type):
     """A missing optional field weakens the sentence; it never crashes."""
@@ -181,3 +213,37 @@ def test_the_footer_degrades_without_a_chapter_name():
     assert templates.footer("") == "— GuildOS. Reply STOP to opt out."
     assert templates.footer(None) == "— GuildOS. Reply STOP to opt out."
     assert _render_with_footer("JOB_APPROVED", {}).endswith(templates.footer(None))
+
+
+# ── Channel (ADR-0005) ───────────────────────────────────────────────────────
+
+
+def test_email_bodies_carry_no_opt_out_line():
+    body = _render_with_footer("JOB_APPROVED", {"title": "X"}, chapter_name="Delta", channel="email")
+    assert body.endswith("— GuildOS for Delta.")
+    assert "Reply STOP" not in body
+
+
+def test_sms_bodies_still_carry_the_opt_out_line():
+    body = _render_with_footer("JOB_APPROVED", {"title": "X"}, chapter_name="Delta")
+    assert body.endswith("— GuildOS for Delta. Reply STOP to opt out.")
+
+
+@pytest.mark.parametrize("event_type", CATALOG)
+def test_every_event_type_has_an_email_subject(event_type):
+    subject, body = templates.render_email(event_type, FULL_PAYLOADS[event_type])
+    assert subject and subject != "GuildOS"
+    assert body.strip()
+
+
+def test_a_setup_code_body_says_where_to_go_and_when_it_expires():
+    _, body = templates.render_email("SETUP_CODE", FULL_PAYLOADS["SETUP_CODE"])
+    assert "AB12CD" in body
+    assert "https://app.guildos.example" in body
+    assert "I have a setup code" in body
+    assert "2026-09-22" in body
+
+
+def test_a_code_payload_without_a_code_fails_loudly():
+    with pytest.raises(TemplateError):
+        render("SETUP_CODE", {"frontend_url": "https://x"})
