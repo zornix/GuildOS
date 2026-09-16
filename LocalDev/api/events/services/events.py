@@ -8,6 +8,7 @@ never leak into them.
 
 from __future__ import annotations
 
+from api.events.notifications import notify_event_created, notify_role_assigned
 from api.events.auth import CHAIR_ROLES, EVENT_UPDATE, OFFICER_ROLES, OFFICER_VIEW
 from api.events.core.rules import (
     DEFAULT_EVENT_TYPES,
@@ -500,6 +501,7 @@ def create_event(
         sb=sb,
     )
     event = _decorate_counts(result.data, 0)
+    notify_event_created(sb, chapter_id=chapter_id, event=result.data)
     return _decorate_supervisors(sb, event)
 
 
@@ -625,6 +627,9 @@ def add_supervisor(sb, *, actor: dict, event_id: str, member_id: str,
         },
         sb=sb,
     )
+    notify_role_assigned(
+        sb, chapter_id=chapter_id, event=event, member_id=member_id, role="supervisor"
+    )
     _decorate_counts(event, len(_organizers_for_event(sb, event_id)))
     return _decorate_supervisors(sb, event)
 
@@ -685,6 +690,15 @@ def add_organizer(sb, *, actor: dict, event_id: str, member_id: str | None = Non
         },
         sb=sb,
     )
+    if source == "assigned":
+        # A volunteer already knows; only an assignment is news.
+        notify_role_assigned(
+            sb,
+            chapter_id=chapter_id,
+            event=_get_event_row(sb, chapter_id=chapter_id, event_id=event_id),
+            member_id=target,
+            role="organizer",
+        )
     return result.data
 
 
