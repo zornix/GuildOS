@@ -3,6 +3,7 @@ import {
   DollarSign,
   CreditCard,
   AlertCircle,
+  FileText,
   Plus,
   History,
   Search,
@@ -15,8 +16,11 @@ import Modal from './ui/Modal';
 import Card from './ui/Card';
 import ConfirmDialog from './ui/ConfirmDialog';
 import AddTransactionModal from './finance/AddTransactionModal';
+import DuesRunModal from './finance/DuesRunModal';
 import { formatMoney } from '../formatters';
 import type { MemberBalance } from '../lib/balance';
+import { can } from '../lib/session';
+import { INVOICE_CREATE_KEY, DuesRunDraft } from '../lib/dues';
 import type { TransactionDraft, TransactionPreview } from '../lib/transaction';
 
 interface FinanceModuleProps {
@@ -25,8 +29,11 @@ interface FinanceModuleProps {
   payments: Payment[];
   ledger: LedgerEntry[];
   isOfficer: boolean;
+  /** The backend's own permission keys — every new control gates on one. */
+  permissions: Set<string>;
   currentMemberName: string;
   myBalance: MemberBalance | null;
+  onCreateDuesRun: (draft: DuesRunDraft) => Promise<void>;
   /** The one balance reader, from useFinance. */
   balanceCentsOf: (memberId: string) => number;
   onRecordPayment: (payment: Omit<Payment, 'id' | 'date'>) => void;
@@ -42,8 +49,10 @@ export default function FinanceModule({
   payments,
   ledger,
   isOfficer,
+  permissions,
   currentMemberName,
   myBalance,
+  onCreateDuesRun,
   balanceCentsOf,
   onRecordPayment,
   onIssueFine,
@@ -58,6 +67,9 @@ export default function FinanceModule({
 
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'fines' | 'ledger' | 'payments'>('overview');
   const [showAddTransaction, setShowAddTransaction] = useState(false);
+  const [showDuesRun, setShowDuesRun] = useState(false);
+
+  const canCreateDuesRun = can(permissions, INVOICE_CREATE_KEY);
   const [showPayModal, setShowPayModal] = useState(false);
   const [showCorrectionModal, setShowCorrectionModal] = useState<LedgerEntry | null>(null);
   const [pendingMarkPaid, setPendingMarkPaid] = useState<{ member: Member; balanceCents: number } | null>(null);
@@ -168,7 +180,7 @@ export default function FinanceModule({
           </p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {!isOfficer && (
             <button
               onClick={() => { setPayAmount(myBalance ? (myBalance.outstandingCents / 100).toFixed(2) : ''); setShowPayModal(true); }}
@@ -179,11 +191,22 @@ export default function FinanceModule({
             </button>
           )}
 
+          {canCreateDuesRun && (
+            <button
+              type="button"
+              onClick={() => setShowDuesRun(true)}
+              className="bg-gold hover:bg-[#c5a02b] text-navy font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer"
+            >
+              <FileText className="w-4 h-4" />
+              New dues run
+            </button>
+          )}
+
           {isOfficer && (
             <button
               type="button"
               onClick={() => setShowAddTransaction(true)}
-              className="bg-gold hover:bg-[#c5a02b] text-navy font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer"
+              className="border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               Add transaction
@@ -544,6 +567,14 @@ export default function FinanceModule({
           balanceCentsOf={balanceCentsOf}
           onSubmit={submitTransaction}
           onClose={() => setShowAddTransaction(false)}
+        />
+      )}
+
+      {showDuesRun && (
+        <DuesRunModal
+          candidates={safeMembers.filter(m => m.status === 'Active' || m.status === 'Pledge')}
+          onSubmit={onCreateDuesRun}
+          onClose={() => setShowDuesRun(false)}
         />
       )}
 

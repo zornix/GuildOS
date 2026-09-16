@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { Announcement, ChapterEvent, Member, SecurityAssignment } from '../types';
 import { api, AuthRequiredError, ensureLogin, logout, optionalOfficerCall, EventDto, TaskDto } from '../api';
 import { isoDay } from '../formatters';
-import { MemberBalance, adaptMemberBalance } from '../lib/balance';
 import { isOfficerView } from '../lib/session';
 import { EMPTY_CONTRIBUTION } from '../lib/contribution';
 import {
@@ -39,8 +38,9 @@ export function useAppData() {
   const [permissions, setPermissions] = useState<Set<string>>(new Set());
   const [sessionName, setSessionName] = useState<string>('');
   const [chapterId, setChapterId] = useState<string>('');
-  const [myBalance, setMyBalance] = useState<MemberBalance | null>(null);
+  const [chapterName, setChapterName] = useState<string>('');
   const [isOfficer, setIsOfficer] = useState<boolean>(false);
+  const [currentMemberId, setCurrentMemberId] = useState<string>('');
   const [currentMemberName, setCurrentMemberName] = useState<string>('');
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -59,7 +59,7 @@ export function useAppData() {
 
   const events = useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJobs });
   const initiatives = useInitiatives({ members, syncApi, showToast, refetchJobs });
-  const finance = useFinance({ members, setMembers, currentMemberName, isOfficer, syncApi, showToast, enqueueOutbox });
+  const finance = useFinance({ members, setMembers, currentMemberId, currentMemberName, isOfficer, syncApi, showToast, enqueueOutbox });
   const attendance = useAttendance({
     members,
     setEvents: events.setEvents,
@@ -127,7 +127,7 @@ export function useAppData() {
         const permissionSet = new Set(perms.permissions);
         const rosterRows = adaptMembers(memberRows, standingRows, scoreRows);
 
-        const [eventRows, excuseRows, fineRows, treasury, taskRows, annRows, recruitRows, initRows, contributionRow, myBalanceRow] =
+        const [eventRows, excuseRows, fineRows, treasury, taskRows, annRows, recruitRows, initRows, contributionRow, myTreasuryRow] =
           await Promise.all([
             api.getEvents(),
             api.getExcuses(),
@@ -143,8 +143,8 @@ export function useAppData() {
               console.error('Contribution load failed', err);
               return EMPTY_CONTRIBUTION;
             }),
-            api.getMemberTreasuryDashboard(me.id).then(adaptMemberBalance).catch(err => {
-              console.error('Member balance load failed', err);
+            api.getMemberTreasuryDashboard(me.id).catch(err => {
+              console.error('Member treasury load failed', err);
               return null;
             })
           ]);
@@ -181,8 +181,10 @@ export function useAppData() {
         setPermissions(permissionSet);
         setSessionName(me.name);
         setChapterId(me.chapter_id);
-        setMyBalance(myBalanceRow);
+        setChapterName(me.chapter_name || '');
+        finance.setMyTreasury(myTreasuryRow);
         contribution.setRecord(contributionRow);
+        setCurrentMemberId(me.id);
         setCurrentMemberName(me.name);
         setIsOfficer(isOfficerView(permissionSet));
         events.setEvents(adaptedEvents.map(e => ({
@@ -292,8 +294,10 @@ export function useAppData() {
     permissions,
     sessionName,
     chapterId,
+    chapterName,
     contribution: contribution.record,
-    myBalance,
+    myBalance: finance.myBalance,
+    currentMemberId,
     currentMemberName,
     announcements,
     loading,

@@ -1,8 +1,10 @@
 import { useState, type Dispatch, type SetStateAction } from 'react';
 import { Fine, LedgerEntry, Member, Payment } from '../types';
-import { api } from '../api';
+import { api, type MemberTreasuryDashboardDto } from '../api';
 import { adaptFines } from '../adapters';
 import { formatMoney } from '../formatters';
+import { adaptMemberBalance } from '../lib/balance';
+import { DuesRunDraft, planDuesRun } from '../lib/dues';
 import { ShowToast } from './useToast';
 import { EnqueueOutbox } from './useOutbox';
 import { SyncApi } from './useBackend';
@@ -10,6 +12,7 @@ import { SyncApi } from './useBackend';
 interface Deps {
   members: Member[];
   setMembers: Dispatch<SetStateAction<Member[]>>;
+  currentMemberId: string;
   currentMemberName: string;
   isOfficer: boolean;
   syncApi: SyncApi;
@@ -19,10 +22,29 @@ interface Deps {
 
 /** Fines, payments and the chapter ledger. Balances live on the member
  *  rows, so this hook writes into the roster state too. */
-export function useFinance({ members, setMembers, currentMemberName, isOfficer, syncApi, showToast, enqueueOutbox }: Deps) {
+export function useFinance({ members, setMembers, currentMemberId, currentMemberName, isOfficer, syncApi, showToast, enqueueOutbox }: Deps) {
   const [fines, setFines] = useState<Fine[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
+  // The signed-in member's real treasury record — the one read behind both the
+  // balance banner and, next, their invoices.
+  const [myTreasury, setMyTreasury] = useState<MemberTreasuryDashboardDto | null>(null);
+
+  const myBalance = myTreasury ? adaptMemberBalance(myTreasury) : null;
+
+  const refreshMyTreasury = async () => {
+    if (!currentMemberId) return;
+    setMyTreasury(await api.getMemberTreasuryDashboard(currentMemberId));
+  };
+
+  /** One dues run = one bulk batch of invoices, all with the same due date. */
+  const handleCreateDuesRun = async (draft: DuesRunDraft) => {
+    const plan = planDuesRun(draft);
+    if (!plan.valid) { showToast(plan.error as string); return; }
+    const result = await api.bulkCreateInvoices(plan.items);
+    await refreshMyTreasury();
+    showToast(`Created ${result.count} invoice${result.count === 1 ? '' : 's'} · ${formatMoney(plan.totalCents)} billed.`);
+  };
 
   const refetchFines = async () => setFines(adaptFines(await api.getFines(), members));
 
@@ -189,6 +211,9 @@ export function useFinance({ members, setMembers, currentMemberName, isOfficer, 
     setPayments,
     ledger,
     setLedger,
+    myBalance,
+    setMyTreasury,
+    handleCreateDuesRun,
     balanceCentsOf,
     handleRecordPayment,
     handleIssueFine,
