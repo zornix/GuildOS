@@ -23,6 +23,11 @@ as integer cents and are rendered through Money (CLAUDE.md: money is always
 integer cents; never a float path). A missing optional field degrades the
 sentence rather than raising.
 
+Channel (0159 / ADR-0005): the same template renders both channels; only the
+footer differs. `render(..., channel="sms")` keeps the STOP line the carriers
+require; `render_email` returns (subject, body) with a plain sender line.
+SETUP_CODE / RESET_CODE / EVENT_CREATED / EVENT_ROLE_ASSIGNED are email-only.
+
 ANNOUNCEMENT_SMS and EVENT_NOTIFY carry a `body` composed upstream (the
 announcement text / the event notify line); those templates pass it through
 verbatim rather than re-writing an officer's words.
@@ -188,6 +193,56 @@ def _swap_declined(p: dict) -> str:
     return "Your security swap was declined — you still hold the shift. Log in for details."
 
 
+# ── Account codes (email only) ───────────────────────────────────────────────
+
+
+def _setup_code(p: dict) -> str:
+    """SETUP_CODE / RESET_CODE: the code plus what to do with it.
+
+    `frontend_url` is inlined by the producer (api/auth/notifications.py) rather
+    than read from settings here — this module stays pure.
+    """
+    code = _text(p, "code")
+    if not code:
+        raise TemplateError("payload has no 'code'")
+    where = _text(p, "frontend_url") or "the GuildOS site"
+    expires = _text(p, "expires_at")[:10]
+    lines = [
+        f"Your GuildOS code is {code}.",
+        "",
+        f"Go to {where}, choose \"I have a setup code\", and enter it to finish "
+        "setting up your account.",
+    ]
+    if expires:
+        lines.append(f"The code expires {expires}.")
+    return "\n".join(lines)
+
+
+# ── Events (email only) ──────────────────────────────────────────────────────
+
+
+def _event_created(p: dict) -> str:
+    title = _text(p, "title") or "A new event"
+    when = " ".join(x for x in (_text(p, "date"), _text(p, "time")) if x)
+    where = _text(p, "location")
+    line = f"New event: {title}"
+    if when:
+        line += f" — {when}"
+    if where:
+        line += f" at {where}"
+    return f"{line}. {_APP_CTA}"
+
+
+def _event_role_assigned(p: dict) -> str:
+    role = _text(p, "role") or "helper"
+    title = _text(p, "title") or "an event"
+    when = _text(p, "date")
+    line = f"You were assigned as {role} for {title}"
+    if when:
+        line += f" on {when}"
+    return f"{line}. Log in for details."
+
+
 TEMPLATES: dict[str, Callable[[dict], str]] = {
     "INVOICE_ISSUED": _invoice_issued,
     "PAYMENT_APPROVED": _payment_approved,
@@ -205,24 +260,61 @@ TEMPLATES: dict[str, Callable[[dict], str]] = {
     "SECURITY_SWAP_REQUESTED": _swap_requested,
     "SECURITY_SWAP_ACCEPTED": _swap_accepted,
     "SECURITY_SWAP_DECLINED": _swap_declined,
+    "SETUP_CODE": _setup_code,
+    "RESET_CODE": _setup_code,
+    "EVENT_CREATED": _event_created,
+    "EVENT_ROLE_ASSIGNED": _event_role_assigned,
+}
+
+# Email subject lines. One static phrase per event type: the body carries the
+# specifics, and a subject that restates them just gets truncated in the client.
+SUBJECTS: dict[str, str] = {
+    "INVOICE_ISSUED": "New charge on your account",
+    "PAYMENT_APPROVED": "Payment recorded",
+    "PAYMENT_REJECTED": "Payment not approved",
+    "REFUND_ISSUED": "Refund issued",
+    "PAYMENT_REMINDER": "You have unpaid charges",
+    "ANNOUNCEMENT_PUBLISHED": "New chapter announcement",
+    "ANNOUNCEMENT_SMS": "New chapter announcement",
+    "EVENT_NOTIFY": "Chapter event update",
+    "JOB_REPORTED": "A job is waiting for your review",
+    "JOB_APPROVED": "Job approved",
+    "JOB_REJECTED": "Job sent back",
+    "SECURITY_ASSIGNED": "You have a security shift",
+    "SECURITY_REMOVED": "Security shift removed",
+    "SECURITY_SWAP_REQUESTED": "Security swap requested",
+    "SECURITY_SWAP_ACCEPTED": "Security swap accepted",
+    "SECURITY_SWAP_DECLINED": "Security swap declined",
+    "SETUP_CODE": "Your GuildOS setup code",
+    "RESET_CODE": "Your GuildOS reset code",
+    "EVENT_CREATED": "New chapter event",
+    "EVENT_ROLE_ASSIGNED": "You were assigned to an event",
 }
 
 
-def footer(chapter_name: str | None = None) -> str:
+def footer(chapter_name: str | None = None, *, channel: str = "sms") -> str:
     """The sender identification + opt-out line every outbound message carries.
 
     Twilio and the carriers require an SMS campaign to say who is texting and how
     to stop (#57). One line, appended to every body rather than written into each
     template, so no template can be added without it.
+
+    Email carries no opt-out line: STOP is a carrier mechanism, and these are
+    transactional messages to members of a chapter they belong to (ADR-0005).
     """
     who = (chapter_name or "").strip()
-    return f"— GuildOS for {who}. Reply STOP to opt out." if who else _FOOTER_NO_NAME
+    stop = " Reply STOP to opt out." if channel == "sms" else ""
+    who_part = f"— GuildOS for {who}." if who else "— GuildOS."
+    return f"{who_part}{stop}"
 
 
-_FOOTER_NO_NAME = "— GuildOS. Reply STOP to opt out."
-
-
-def render(event_type: str, payload: dict | None, *, chapter_name: str | None = None) -> str:
+def render(
+    event_type: str,
+    payload: dict | None,
+    *,
+    chapter_name: str | None = None,
+    channel: str = "sms",
+) -> str:
     """Render one outbox row's message body, footer included.
 
     Raises UnknownEventType for an unregistered event_type and TemplateError when
@@ -240,4 +332,12 @@ def render(event_type: str, payload: dict | None, *, chapter_name: str | None = 
         raise TemplateError(f"{type(exc).__name__}: {exc}") from exc
     if not body:
         raise TemplateError(f"template for {event_type!r} produced an empty body")
-    return f"{body}\n{footer(chapter_name)}"
+    return f"{body}\n{footer(chapter_name, channel=channel)}"
+
+
+def render_email(
+    event_type: str, payload: dict | None, *, chapter_name: str | None = None
+) -> tuple[str, str]:
+    """(subject, body) for an email-channel outbox row."""
+    body = render(event_type, payload, chapter_name=chapter_name, channel="email")
+    return SUBJECTS.get(event_type, "GuildOS"), body
