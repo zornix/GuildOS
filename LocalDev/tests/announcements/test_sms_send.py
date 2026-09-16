@@ -42,6 +42,35 @@ def test_preview_excludes_members_without_phone(
     assert body["no_phone_count"] == 2
 
 
+def test_twilio_preview_counts_only_consented_members(
+    president, as_member, member_factory, set_phone, announcement_factory,
+    delivery_mode, cursor
+):
+    """The confirmed count must match what will actually send (#57).
+
+    In twilio mode an unconsented member is dropped by the delivery path, so
+    counting them in the preview promised the officer a blast that never happened.
+    `no_phone_count` still means exactly that — no phone, not "no consent".
+    """
+    consented = member_factory()
+    set_phone(consented, "+15551250001")
+    cursor.execute("UPDATE members SET sms_consent_at = now() WHERE id = %s", (consented,))
+    unconsented = member_factory()
+    set_phone(unconsented, "+15551250002")
+    member_factory()  # phone NULL
+
+    ann = announcement_factory(audience="chapter")
+    client = as_member(president)
+
+    # dry_run simulates everyone, so the president (no consent) still counts.
+    assert client.get(f"/api/announcements/{ann}/sms-preview").json()["recipient_count"] == 3
+
+    delivery_mode("twilio")
+    body = client.get(f"/api/announcements/{ann}/sms-preview").json()
+    assert body["recipient_count"] == 1  # only the consented member
+    assert body["no_phone_count"] == 1
+
+
 def test_preview_officers_audience(
     president, as_member, member_factory, give_role, set_phone, announcement_factory
 ):

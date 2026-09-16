@@ -93,10 +93,14 @@ def resolve_recipients(sb, *, chapter_id: str, audience: str) -> dict:
 
     Returns {recipient_member_ids, recipient_count, no_phone_count} where
     no_phone_count is audience members excluded for lacking a phone.
+
+    In `twilio` mode an unconsented member is not reachable (#57), so the
+    confirmation count the officer approves matches what actually sends;
+    `dry_run` still simulates everyone.
     """
     members = (
         sb.table("members")
-        .select("id, phone, role")
+        .select(f"id, phone, role, {CONSENT_COLUMNS}")
         .eq("chapter_id", chapter_id)
         .eq("status", "active")
         .execute()
@@ -133,11 +137,16 @@ def resolve_recipients(sb, *, chapter_id: str, audience: str) -> dict:
         members = [m for m in members if m["id"] in owing]
     # default audience 'chapter' = every active member
 
-    reachable = [m for m in members if _has_phone(m)]
+    with_phone = [m for m in members if _has_phone(m)]
+    reachable = (
+        [m for m in with_phone if has_consent(m)]
+        if delivery_mode() == "twilio"
+        else with_phone
+    )
     return {
         "recipient_member_ids": [m["id"] for m in reachable],
         "recipient_count": len(reachable),
-        "no_phone_count": len(members) - len(reachable),
+        "no_phone_count": len(members) - len(with_phone),
     }
 
 
