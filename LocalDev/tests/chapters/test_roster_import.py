@@ -173,6 +173,15 @@ def test_another_chapters_roster_is_not_reachable(upload, csv_bytes, unique, cha
     assert res.status_code == 404
 
 
+def test_an_oversized_file_is_rejected(upload):
+    """413 before the whole upload is buffered (the read is bounded)."""
+    from api.chapters.api.chapters import MAX_ROSTER_BYTES
+
+    res = upload(b"x" * (MAX_ROSTER_BYTES + 1))
+
+    assert res.status_code == 413, res.text
+
+
 def test_plain_member_cannot_import(upload, csv_bytes, unique, member_factory):
     line, _ = _row(unique)
 
