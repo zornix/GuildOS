@@ -149,11 +149,17 @@ export async function ensureLogin(): Promise<string> {
   throw new AuthRequiredError();
 }
 
-async function request<T>(method: string, path: string, body?: unknown, retry = true): Promise<T> {
+async function request<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  retry = true,
+  headers?: Record<string, string>
+): Promise<T> {
   const token = await ensureLogin();
   const res = await fetch(path, {
     method,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...headers },
     body: body === undefined ? undefined : JSON.stringify(body)
   });
 
@@ -603,14 +609,19 @@ export const api = {
     request<MemberTreasuryDashboardDto>('GET', `/api/treasury/members/${memberId}/dashboard`),
 
   // ── The dues run → invoice → proof → verify loop ────────────────────────────
-  /** One dues run = one bulk batch. Needs `treasury:invoice:create`. */
+  /** One dues run = one bulk batch. Needs `treasury:invoice:create`.
+   *  `idempotencyKey` is one key per opened dues-run modal, so a retry after a
+   *  timeout cannot bill the chapter twice. */
   bulkCreateInvoices: (invoices: {
     member_id: string;
     kind: string;
     amount_cents: number;
     description?: string;
     due_at?: string;
-  }[]) => request<BulkInvoiceResultDto>('POST', '/api/treasury/invoices/bulk', { invoices }),
+  }[], idempotencyKey: string) =>
+    request<BulkInvoiceResultDto>('POST', '/api/treasury/invoices/bulk', { invoices }, true, {
+      'Idempotency-Key': idempotencyKey
+    }),
 
   /** The member's own claim that they paid — self only, no permission key. */
   submitPaymentProof: (body: {

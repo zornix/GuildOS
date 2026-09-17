@@ -1,4 +1,4 @@
-import React, { useId, useState } from 'react';
+import React, { useId, useRef, useState } from 'react';
 import type { Member } from '../../types';
 import Modal from '../ui/Modal';
 import { formatMoney } from '../../formatters';
@@ -7,7 +7,7 @@ import { DuesRunDraft, planDuesRun } from '../../lib/dues';
 interface DuesRunModalProps {
   /** Everyone the run can bill — active members only. */
   candidates: Member[];
-  onSubmit: (draft: DuesRunDraft) => Promise<void>;
+  onSubmit: (draft: DuesRunDraft, idempotencyKey: string) => Promise<void>;
   onClose: () => void;
 }
 
@@ -22,6 +22,9 @@ export default function DuesRunModal({ candidates, onSubmit, onClose }: DuesRunM
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [confirming, setConfirming] = useState(false);
   const [sending, setSending] = useState(false);
+  // One key per opened modal: a retry after a timeout reuses it, so the server
+  // dedupes the second attempt instead of billing the chapter twice.
+  const runKey = useRef(crypto.randomUUID());
 
   const draft: DuesRunDraft = {
     title,
@@ -44,8 +47,11 @@ export default function DuesRunModal({ candidates, onSubmit, onClose }: DuesRunM
     if (!confirming) { setConfirming(true); return; }
     setSending(true);
     try {
-      await onSubmit(draft);
+      await onSubmit(draft, runKey.current);
       onClose();
+    } catch {
+      // The handler already toasted. Stay open so the treasurer can retry —
+      // the same idempotency key means a retry cannot double-bill.
     } finally {
       setSending(false);
     }

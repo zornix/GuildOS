@@ -239,7 +239,7 @@ export default function AttendanceModule({
                         </td>
                       )}
                       <td className="py-3 px-2 sm:px-3 text-right">
-                        {!status && <span className="hidden sm:inline text-xs text-slate-400 mr-2">Unmarked</span>}
+                        {!status && <span className="sr-only sm:not-sr-only sm:inline text-xs text-slate-400 mr-2">Unmarked</span>}
                         <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 text-xs font-semibold">
                           {(['Present', 'Late', 'Excused', 'Absent'] as const).map(st => {
                             const isCur = status === st;
@@ -247,6 +247,7 @@ export default function AttendanceModule({
                               <button
                                 key={st}
                                 disabled={!isOfficer}
+                                aria-pressed={isCur}
                                 onClick={() => handleStatusChange(mem.id, st)}
                                 className={`px-1.5 sm:px-2.5 py-1 min-h-11 sm:min-h-0 rounded-md transition-all cursor-pointer ${
                                   isCur 

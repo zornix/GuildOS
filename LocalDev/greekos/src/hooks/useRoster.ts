@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { api, RosterImportResult } from '../api';
+import { api, optionalOfficerCall, RosterImportResult } from '../api';
 import { Member } from '../types';
+import { adaptMembers } from '../adapters';
 import { ShowToast } from './useToast';
 
 /** The roster. Members are read-only against the backend today: they join by
@@ -8,6 +9,17 @@ import { ShowToast } from './useToast';
  *  side, so both mutations here are local. */
 export function useRoster(showToast: ShowToast) {
   const [members, setMembers] = useState<Member[]>([]);
+
+  /** Re-read the roster the same way the initial load does: members plus the
+   *  officer-gated standing/score rows a member session simply cannot see. */
+  const refetchMembers = async () => {
+    const [memberRows, standingRows, scoreRows] = await Promise.all([
+      api.getMembers(),
+      optionalOfficerCall(api.getStandings(), []),
+      optionalOfficerCall(api.getScores(), [])
+    ]);
+    setMembers(adaptMembers(memberRows, standingRows, scoreRows));
+  };
 
   const handleAddMember = (
     newMem: Omit<Member, 'id' | 'points' | 'attendanceRate' | 'duesBalance' | 'duesBalanceCents' | 'securityHoursServed'>
@@ -33,6 +45,13 @@ export function useRoster(showToast: ShowToast) {
    *  offending rows when the file is rejected — nothing was imported. */
   const handleImportRoster = async (chapterId: string, file: File): Promise<RosterImportResult> => {
     const result = await api.importRoster(chapterId, file);
+    // The import already succeeded; a failed refresh must not read as a failed
+    // import, so it only logs and the invitees show up on the next load.
+    try {
+      await refetchMembers();
+    } catch (err) {
+      console.error('Roster refresh after import failed', err);
+    }
     showToast(
       `Invited ${result.created_count} member${result.created_count === 1 ? '' : 's'}` +
       (result.skipped_count ? `, skipped ${result.skipped_count} already on the roster.` : '.')
@@ -40,5 +59,5 @@ export function useRoster(showToast: ShowToast) {
     return result;
   };
 
-  return { members, setMembers, handleAddMember, handleUpdateStanding, handleImportRoster };
+  return { members, setMembers, refetchMembers, handleAddMember, handleUpdateStanding, handleImportRoster };
 }

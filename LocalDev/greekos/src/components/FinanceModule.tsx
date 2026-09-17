@@ -51,7 +51,7 @@ interface FinanceModuleProps {
   submissions: ProofSubmission[];
   queueLoading: boolean;
   onRefreshQueue: () => Promise<void>;
-  onCreateDuesRun: (draft: DuesRunDraft) => Promise<void>;
+  onCreateDuesRun: (draft: DuesRunDraft, idempotencyKey: string) => Promise<void>;
   onSubmitProof: (invoice: Invoice, draft: ProofDraft, evidence: File | null) => Promise<void>;
   onVerifyProof: (submission: ProofSubmission) => Promise<void>;
   onRejectProof: (submission: ProofSubmission, reason: string) => Promise<void>;

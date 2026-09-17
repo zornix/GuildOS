@@ -69,6 +69,8 @@ export default function InvoiceView({
     try {
       await onSubmitProof(invoice, draft, evidence);
       onClose();
+    } catch {
+      // The handler already toasted; stay open so the member can retry.
     } finally {
       setSending(false);
     }
