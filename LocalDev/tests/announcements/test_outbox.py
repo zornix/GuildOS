@@ -35,18 +35,25 @@ def outbox_factory(cursor):
     """Insert a message_outbox row; cleans up every row it made."""
     made: list[str] = []
 
-    def _make(chapter: str, member: str | None = None, *, status: str = "pending") -> str:
+    def _make(
+        chapter: str,
+        member: str | None = None,
+        *,
+        status: str = "pending",
+        event_type: str = "ANNOUNCEMENT_SMS",
+    ) -> str:
         cursor.execute(
             """
             INSERT INTO message_outbox
                 (chapter_id, event_type, member_id, target_table, target_id,
                  dedup_key, payload, status, last_error, attempts)
-            VALUES (%s, 'ANNOUNCEMENT_SMS', %s, 'announcements', gen_random_uuid(),
+            VALUES (%s, %s, %s, 'announcements', gen_random_uuid(),
                     %s, %s::jsonb, %s, %s, %s)
             RETURNING id
             """,
             (
                 chapter,
+                event_type,
                 member,
                 f"ob-test-{uuid.uuid4()}",
                 '{"body": "Chapter meeting at 7pm."}',
@@ -101,6 +108,38 @@ def test_list_is_chapter_scoped(
 
     ids = [r["id"] for r in as_member(officer).get("/api/announcements/outbox").json()]
     assert foreign not in ids
+
+
+def test_treasury_rows_are_hidden_without_treasury_access(
+    secretary, as_member, outbox_factory, chapter_id
+):
+    """Secretary holds announcements:send but no treasury:audit:view — a
+    payment row names a member and an amount, so it must not be listed."""
+    treasury = outbox_factory(chapter_id, secretary, event_type="PAYMENT_REJECTED")
+    ordinary = outbox_factory(chapter_id, secretary)
+
+    ids = [r["id"] for r in as_member(secretary).get("/api/announcements/outbox").json()]
+    assert treasury not in ids
+    assert ordinary in ids
+
+
+def test_treasury_rows_show_with_treasury_access(
+    officer, as_member, outbox_factory, chapter_id
+):
+    treasury = outbox_factory(chapter_id, officer, event_type="PAYMENT_REJECTED")
+    ordinary = outbox_factory(chapter_id, officer)
+
+    ids = [r["id"] for r in as_member(officer).get("/api/announcements/outbox").json()]
+    assert treasury in ids and ordinary in ids
+
+
+def test_retry_of_a_treasury_row_needs_treasury_access(
+    secretary, as_member, outbox_factory, chapter_id
+):
+    row = outbox_factory(
+        chapter_id, secretary, status="failed", event_type="PAYMENT_REJECTED"
+    )
+    assert as_member(secretary).post(f"/api/announcements/outbox/{row}/retry").status_code == 404
 
 
 def test_plain_member_gets_403(member_factory, as_member):

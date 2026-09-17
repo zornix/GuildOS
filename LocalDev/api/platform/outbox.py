@@ -28,6 +28,29 @@ def _resolve_sb(sb):
     return get_db()
 
 
+def _row(
+    *, event_type, chapter_id, member_id, target_table, target_id, dedup_key,
+    payload, channel,
+) -> dict:
+    return {
+        "chapter_id": chapter_id,
+        "event_type": event_type,
+        "member_id": member_id,
+        "target_table": target_table,
+        "target_id": target_id,
+        "dedup_key": dedup_key,
+        "channel": channel,
+        "delivery_mode": delivery_mode(),
+        "status": "pending",
+        "payload": {
+            "event_type": event_type,
+            "chapter_id": chapter_id,
+            "member_id": member_id,
+            **(payload or {}),
+        },
+    }
+
+
 def enqueue(
     sb,
     *,
@@ -53,12 +76,16 @@ def enqueue(
     """
     client = _resolve_sb(sb)
     dedup_key = dedup_key or f"{event_type}:{target_id}"
-    body_payload = {
-        "event_type": event_type,
-        "chapter_id": chapter_id,
-        "member_id": member_id,
-        **(payload or {}),
-    }
+    row = _row(
+        event_type=event_type,
+        chapter_id=chapter_id,
+        member_id=member_id,
+        target_table=target_table,
+        target_id=target_id,
+        dedup_key=dedup_key,
+        payload=payload,
+        channel=channel,
+    )
 
     existing = (
         client.table("message_outbox")
@@ -71,27 +98,80 @@ def enqueue(
         return None
 
     try:
-        result = (
-            client.table("message_outbox")
-            .insert(
-                {
-                    "chapter_id": chapter_id,
-                    "event_type": event_type,
-                    "member_id": member_id,
-                    "target_table": target_table,
-                    "target_id": target_id,
-                    "dedup_key": dedup_key,
-                    "channel": channel,
-                    "delivery_mode": delivery_mode(),
-                    "status": "pending",
-                    "payload": body_payload,
-                }
-            )
-            .execute()
-        )
+        result = client.table("message_outbox").insert(row).execute()
     except Exception:
         # Lost a race on the UNIQUE(dedup_key) backstop → another caller enqueued
         # it first. Still exactly-once.
         return None
 
     return unwrap_row(result)
+
+
+def enqueue_many(
+    sb,
+    *,
+    event_type: str,
+    chapter_id: str,
+    target_table: str,
+    target_id: str,
+    member_ids: list[str],
+    dedup_key_for,
+    payload: dict | None = None,
+    channel: str = "email",
+) -> int:
+    """Fan one notification out to many members in two queries, not 2N.
+
+    `dedup_key_for(member_id) -> str`. Same exactly-once guarantee as `enqueue`:
+    already-queued keys are dropped up front, and if the bulk insert loses a race
+    on UNIQUE(dedup_key) each remaining row falls back to `enqueue`. Returns the
+    number of rows queued.
+    """
+    if not member_ids:
+        return 0
+    client = _resolve_sb(sb)
+
+    rows = {
+        dedup_key_for(member_id): _row(
+            event_type=event_type,
+            chapter_id=chapter_id,
+            member_id=member_id,
+            target_table=target_table,
+            target_id=target_id,
+            dedup_key=dedup_key_for(member_id),
+            payload=payload,
+            channel=channel,
+        )
+        for member_id in member_ids
+    }
+    queued = (
+        client.table("message_outbox")
+        .select("dedup_key")
+        .in_("dedup_key", sorted(rows))
+        .execute()
+    ).data or []
+    for existing in queued:
+        rows.pop(existing["dedup_key"], None)
+    if not rows:
+        return 0
+
+    try:
+        client.table("message_outbox").insert(list(rows.values())).execute()
+        return len(rows)
+    except Exception:
+        pass
+
+    return sum(
+        1
+        for row in rows.values()
+        if enqueue(
+            client,
+            event_type=event_type,
+            chapter_id=chapter_id,
+            member_id=row["member_id"],
+            target_table=target_table,
+            target_id=target_id,
+            dedup_key=row["dedup_key"],
+            payload=payload,
+            channel=channel,
+        )
+    )

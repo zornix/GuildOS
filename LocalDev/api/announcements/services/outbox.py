@@ -41,6 +41,17 @@ def _mask_phone(phone: str | None) -> str | None:
 # the code itself never renders here.
 _SECRET_EVENT_TYPES = {"SETUP_CODE", "RESET_CODE"}
 
+# Money is a separate readership: a treasury row names a member and a dollar
+# amount, and announcements:send (secretary, VP) is not treasury:audit:view.
+# Source of these types: api/treasury/notifications.py.
+_TREASURY_EVENT_TYPES = {
+    "INVOICE_ISSUED",
+    "PAYMENT_APPROVED",
+    "PAYMENT_REJECTED",
+    "REFUND_ISSUED",
+    "PAYMENT_REMINDER",
+}
+
 
 def _body(row: dict) -> str:
     if row["event_type"] in _SECRET_EVENT_TYPES:
@@ -56,9 +67,18 @@ def _body(row: dict) -> str:
 
 
 def list_outbox(
-    sb, *, chapter_id: str, status: str | None = None, limit: int = LIST_LIMIT_DEFAULT
+    sb,
+    *,
+    chapter_id: str,
+    status: str | None = None,
+    limit: int = LIST_LIMIT_DEFAULT,
+    include_treasury: bool = False,
 ) -> list[dict]:
-    """Chapter outbox rows, newest first, with masked recipient details."""
+    """Chapter outbox rows, newest first, with masked recipient details.
+
+    Treasury rows are dropped unless the caller holds treasury:audit:view —
+    filtered in the query so `limit` still returns a full page.
+    """
     query = (
         sb.table("message_outbox")
         .select("*")
@@ -66,6 +86,8 @@ def list_outbox(
         .order("created_at", desc=True)
         .limit(max(1, min(limit, LIST_LIMIT_MAX)))
     )
+    if not include_treasury:
+        query = query.not_in_("event_type", sorted(_TREASURY_EVENT_TYPES))
     if status:
         query = query.eq("status", status)
     rows = query.execute().data or []
@@ -105,21 +127,26 @@ def list_outbox(
     return out
 
 
-def retry_outbox_row(sb, *, chapter_id: str, row_id: str) -> dict:
+def retry_outbox_row(
+    sb, *, chapter_id: str, row_id: str, include_treasury: bool = False
+) -> dict:
     """Put one failed row back in the queue for the next drain.
 
     attempts resets too: 0155 fails a row for good past 5 attempts, so a retry
-    that kept the count would be refused by the very next claim.
+    that kept the count would be refused by the very next claim. A treasury row
+    is invisible — and so unretryable — without treasury:audit:view.
     """
     row = (
         sb.table("message_outbox")
-        .select("id, status")
+        .select("id, status, event_type")
         .eq("id", row_id)
         .eq("chapter_id", chapter_id)
         .maybe_single()
         .execute()
     ).data
     if not row:
+        raise OutboxRowNotFound(row_id)
+    if not include_treasury and row["event_type"] in _TREASURY_EVENT_TYPES:
         raise OutboxRowNotFound(row_id)
     if row["status"] != "failed":
         raise OutboxRowNotFailed(row["status"])

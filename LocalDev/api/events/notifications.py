@@ -2,8 +2,9 @@
 
 Two events, both email:
 
-  EVENT_CREATED        every active member of the chapter, when an event is
-                       created. Payload: title, date, time, location.
+  EVENT_CREATED        every active member of the chapter, when a
+                       chapter-visible event is created. Payload: title, date,
+                       time, location.
   EVENT_ROLE_ASSIGNED  the member an officer assigned as organizer or
                        supervisor. Payload: title, date, role.
 
@@ -20,7 +21,7 @@ from __future__ import annotations
 
 import logging
 
-from api.platform.outbox import enqueue
+from api.platform.outbox import enqueue, enqueue_many
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,12 @@ def _enqueue(sb, **kwargs) -> dict | None:
 
 
 def notify_event_created(sb, *, chapter_id: str, event: dict) -> int:
-    """Fan out EVENT_CREATED to every active member. Returns rows enqueued."""
+    """Fan out EVENT_CREATED to every active member, chapter-visible events
+    only. An 'officer'/'custom'/'private' event would otherwise mail its title,
+    date and location to people who cannot even see it. Returns rows enqueued."""
+    if (event.get("visibility") or "chapter") != "chapter":
+        return 0
+
     members = (
         sb.table("members")
         .select("id")
@@ -55,19 +61,21 @@ def notify_event_created(sb, *, chapter_id: str, event: dict) -> int:
         "location": event.get("location"),
     }
     event_id = event["id"]
-    queued = 0
-    for member in members:
-        row = _enqueue(
+    try:
+        return enqueue_many(
             sb,
+            channel="email",
             event_type=EVENT_CREATED,
             chapter_id=chapter_id,
-            member_id=member["id"],
+            target_table="events",
             target_id=event_id,
-            dedup_key=f"{EVENT_CREATED}:{event_id}:{member['id']}",
+            member_ids=[m["id"] for m in members],
+            dedup_key_for=lambda member_id: f"{EVENT_CREATED}:{event_id}:{member_id}",
             payload=payload,
         )
-        queued += 1 if row else 0
-    return queued
+    except Exception:
+        logger.warning("could not enqueue %s", EVENT_CREATED, exc_info=True)
+        return 0
 
 
 def notify_role_assigned(

@@ -100,7 +100,7 @@ class QueryBuilder:
         self._parse_select(cols)
         return self
 
-    def insert(self, data: dict) -> QueryBuilder:
+    def insert(self, data: dict | list[dict]) -> QueryBuilder:
         self._op = "insert"
         self._payload = data
         return self
@@ -126,6 +126,10 @@ class QueryBuilder:
 
     def in_(self, col: str, vals: list) -> QueryBuilder:
         self._filters.append(("in", col, vals))
+        return self
+
+    def not_in_(self, col: str, vals: list) -> QueryBuilder:
+        self._filters.append(("not_in", col, vals))
         return self
 
     def lte(self, col: str, val: Any) -> QueryBuilder:
@@ -311,14 +315,21 @@ class QueryBuilder:
     # ── insert ───────────────────────────────────────────────────
 
     def _exec_insert(self, cur) -> QueryResult:
-        cols = list(self._payload.keys())
-        placeholders = ["%s"] * len(cols)
-        vals = [self._adapt_value(self._payload[c]) for c in cols]
+        # A list payload is one multi-row INSERT — every row must carry the same
+        # columns (PostgREST behaves the same way).
+        rows = self._payload if isinstance(self._payload, list) else [self._payload]
+        if not rows:
+            return QueryResult(data=[])
+        cols = list(rows[0].keys())
+        row_sql = "(" + ", ".join(["%s"] * len(cols)) + ")"
+        vals = [self._adapt_value(r[c]) for r in rows for c in cols]
         col_str = ", ".join(f'"{c}"' for c in cols)
-        sql = f'INSERT INTO "{self._table}" ({col_str}) VALUES ({", ".join(placeholders)}) RETURNING *'
+        sql = (
+            f'INSERT INTO "{self._table}" ({col_str}) '
+            f'VALUES {", ".join([row_sql] * len(rows))} RETURNING *'
+        )
         cur.execute(sql, vals)
-        row = dict(cur.fetchone())
-        return QueryResult(data=[self._serialize(row)])
+        return QueryResult(data=[self._serialize(dict(r)) for r in cur.fetchall()])
 
     # ── update ───────────────────────────────────────────────────
 
@@ -396,6 +407,11 @@ class QueryBuilder:
                     # IN (%s,...) avoids ANY(text[]) vs uuid[] mismatches (e.g. event_id filters).
                     ph = ", ".join(["%s"] * len(val))
                     parts.append(f"{qualified} IN ({ph})")
+                    params.extend(self._adapt_value(v) for v in val)
+            elif op == "not_in":
+                if val:
+                    ph = ", ".join(["%s"] * len(val))
+                    parts.append(f"{qualified} NOT IN ({ph})")
                     params.extend(self._adapt_value(v) for v in val)
             elif op == "lte":
                 if val == "now()":
