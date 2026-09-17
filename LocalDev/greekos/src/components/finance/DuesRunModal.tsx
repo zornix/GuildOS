@@ -49,6 +49,9 @@ export default function DuesRunModal({ candidates, onSubmit, onClose }: DuesRunM
     try {
       await onSubmit(draft, runKey.current);
       onClose();
+    } catch {
+      // The handler already toasted. Stay open so the treasurer can retry —
+      // the same idempotency key means a retry cannot double-bill.
     } finally {
       setSending(false);
     }

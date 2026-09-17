@@ -30,7 +30,8 @@ export default function ProofQueue({
 
   const run = async (id: string, work: () => Promise<void>) => {
     setBusyId(id);
-    try { await work(); } finally { setBusyId(''); }
+    // The handler already toasted on failure; just clear the spinner.
+    try { await work(); } catch { /* reported by the caller */ } finally { setBusyId(''); }
   };
 
   return (

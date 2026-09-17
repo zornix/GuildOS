@@ -70,7 +70,14 @@ export function useFinance({ members, setMembers, currentMemberId, currentMember
   const handleCreateDuesRun = async (draft: DuesRunDraft, idempotencyKey: string) => {
     const plan = planDuesRun(draft);
     if (!plan.valid) { showToast(plan.error as string); return; }
-    const result = await api.bulkCreateInvoices(plan.items, idempotencyKey);
+    let result;
+    try {
+      result = await api.bulkCreateInvoices(plan.items, idempotencyKey);
+    } catch (err) {
+      console.error('Dues run failed', err);
+      showToast('Could not create the dues run. Nothing was billed — try again.');
+      throw err;
+    }
     await refreshMyTreasury();
     showToast(`Created ${result.count} invoice${result.count === 1 ? '' : 's'} · ${formatMoney(plan.totalCents)} billed.`);
   };
@@ -81,7 +88,14 @@ export function useFinance({ members, setMembers, currentMemberId, currentMember
     const plan = planProof(invoice, draft);
     if (!plan.valid) { showToast(plan.error as string); return; }
 
-    const submission = await api.submitPaymentProof(plan.body);
+    let submission;
+    try {
+      submission = await api.submitPaymentProof(plan.body);
+    } catch (err) {
+      console.error('Payment proof submission failed', err);
+      showToast('Could not submit your payment. Try again.');
+      throw err;
+    }
     if (evidence) {
       try {
         const bytes = new Uint8Array(await evidence.arrayBuffer());
@@ -99,14 +113,34 @@ export function useFinance({ members, setMembers, currentMemberId, currentMember
     showToast('Payment submitted. The treasury board will verify it.');
   };
 
+  /** Best-effort refresh after a failed review, so a row someone else already
+   *  handled disappears instead of inviting another doomed click. */
+  const refreshQueueQuietly = async () => {
+    try { await refreshQueue(); } catch (err) { console.error('Queue refresh failed', err); }
+  };
+
   const handleVerifyProof = async (submission: ProofSubmission) => {
-    await api.verifyPaymentSubmission(submission.id);
+    try {
+      await api.verifyPaymentSubmission(submission.id);
+    } catch (err) {
+      console.error('Payment verify failed', err);
+      showToast('Could not verify that payment. Refresh and try again.');
+      await refreshQueueQuietly();
+      throw err;
+    }
     await Promise.all([refreshQueue(), refreshMyTreasury()]);
     showToast(`Verified ${formatMoney(submission.claimedCents)} from ${submission.memberName}.`);
   };
 
   const handleRejectProof = async (submission: ProofSubmission, reason: string) => {
-    await api.rejectPaymentSubmission(submission.id, reason);
+    try {
+      await api.rejectPaymentSubmission(submission.id, reason);
+    } catch (err) {
+      console.error('Payment reject failed', err);
+      showToast('Could not reject that payment. Refresh and try again.');
+      await refreshQueueQuietly();
+      throw err;
+    }
     await refreshQueue();
     showToast(`Rejected ${submission.memberName}'s payment.`);
   };
