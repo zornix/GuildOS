@@ -185,6 +185,20 @@ def _last_notified_at(sb, event_id: str) -> str | None:
     return rows[0]["created_at"] if rows else None
 
 
+def _resolve_end_date(
+    *, date: str, time: str, end_date: str | None, end_time: str | None
+) -> str | None:
+    """An end time at or before the start with no end date means "past midnight":
+    the event ends the next day. The UI only ever sends an end time."""
+    if end_date or not end_time:
+        return end_date
+    from datetime import date as _date, time as _time, timedelta
+
+    if _time.fromisoformat(end_time) <= _time.fromisoformat(time):
+        return (_date.fromisoformat(date) + timedelta(days=1)).isoformat()
+    return None
+
+
 def _validate_time_range(
     *, date: str, time: str, end_date: str | None, end_time: str | None
 ) -> None:
@@ -461,9 +475,14 @@ def create_event(
     idempotency_key: str | None = None,
 ) -> dict:
     chapter_id = actor["chapter_id"]
-    _validate_time_range(
+    end_date = _resolve_end_date(
         date=str(date), time=str(time),
         end_date=str(end_date) if end_date else None,
+        end_time=str(end_time) if end_time else None,
+    )
+    _validate_time_range(
+        date=str(date), time=str(time),
+        end_date=end_date,
         end_time=str(end_time) if end_time else None,
     )
     resolved_visibility = resolve_visibility(audience=audience, visibility=visibility)
@@ -541,9 +560,15 @@ def update_event(
     if any(k in updates for k in ("date", "time", "end_date", "end_time")):
         eff_date, eff_time = _eff("date"), _eff("time")
         if eff_date and eff_time:
+            # An end date the caller didn't send is recomputed, so a stored
+            # next-day date follows the event when it moves.
+            updates["end_date"] = _resolve_end_date(
+                date=eff_date, time=eff_time,
+                end_date=updates.get("end_date"), end_time=_eff("end_time"),
+            )
             _validate_time_range(
                 date=eff_date, time=eff_time,
-                end_date=_eff("end_date"), end_time=_eff("end_time"),
+                end_date=updates["end_date"], end_time=_eff("end_time"),
             )
 
     if updates:

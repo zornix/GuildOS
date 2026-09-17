@@ -158,7 +158,32 @@ def test_backfill_legacy_supervisor_row(sb_client, cursor, chapter_id, member_fa
 def test_end_before_start_rejected(sb_client, chapter_id, user_factory, create_event):
     officer = user_factory(role="officer")
     with pytest.raises(svc.InvalidTimeRange):
-        create_event(officer, date="2026-09-01", time="19:00", end_time="18:00")
+        create_event(
+            officer, date="2026-09-01", time="19:00", end_date="2026-09-01", end_time="18:00"
+        )
+
+
+def test_end_time_past_midnight_rolls_to_next_day(sb_client, chapter_id, user_factory, create_event):
+    """A 9pm-1am party sent without an end date ends the next morning, not before it starts."""
+    officer = user_factory(role="officer")
+    ev = create_event(officer, date="2026-09-18", time="21:00", end_time="01:00")
+    assert str(ev["end_date"]) == "2026-09-19"
+    assert ev["end_time"].startswith("01:00")
+
+
+def test_update_recomputes_end_date_when_event_moves(sb_client, chapter_id, user_factory, create_event):
+    officer = user_factory(role="officer")
+    ev = create_event(officer, date="2026-09-18", time="21:00", end_time="01:00")
+    moved = svc.update_event(
+        sb_client, actor=officer, event_id=ev["id"],
+        updates={"date": "2026-09-25", "time": "21:00", "end_time": "01:00"},
+    )
+    assert str(moved["end_date"]) == "2026-09-26"
+    same_day = svc.update_event(
+        sb_client, actor=officer, event_id=ev["id"],
+        updates={"date": "2026-09-25", "time": "21:00", "end_time": "23:00"},
+    )
+    assert same_day["end_date"] is None
 
 
 def test_valid_end_range_persists(sb_client, chapter_id, user_factory, create_event):
