@@ -64,6 +64,25 @@ def test_event_created_is_enqueued_once_per_member(
     assert len(outbox_for("EVENT_CREATED", str(event_row["id"]))) == 1
 
 
+def test_officer_only_event_emails_nobody(
+    sb_client, cursor, chapter_id, member_factory, outbox_for
+):
+    """An 'officer' event's title/date/location must not reach the chapter."""
+    member_factory()
+    cursor.execute(
+        """
+        INSERT INTO events (chapter_id, title, date, time, location, visibility)
+        VALUES (%s, 'Exec Retreat', '2026-10-02', '18:00', 'The House', 'officer')
+        RETURNING id, title, date, time, location, visibility
+        """,
+        (chapter_id,),
+    )
+    event = dict(cursor.fetchone())
+
+    assert notify_event_created(sb_client, chapter_id=chapter_id, event=event) == 0
+    assert outbox_for("EVENT_CREATED", str(event["id"])) == []
+
+
 def test_role_assignment_emails_the_assigned_member(
     sb_client, chapter_id, member_factory, event_row, outbox_for
 ):

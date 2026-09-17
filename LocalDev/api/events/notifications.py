@@ -2,8 +2,9 @@
 
 Two events, both email:
 
-  EVENT_CREATED        every active member of the chapter, when an event is
-                       created. Payload: title, date, time, location.
+  EVENT_CREATED        every active member of the chapter, when a
+                       chapter-visible event is created. Payload: title, date,
+                       time, location.
   EVENT_ROLE_ASSIGNED  the member an officer assigned as organizer or
                        supervisor. Payload: title, date, role.
 
@@ -39,7 +40,12 @@ def _enqueue(sb, **kwargs) -> dict | None:
 
 
 def notify_event_created(sb, *, chapter_id: str, event: dict) -> int:
-    """Fan out EVENT_CREATED to every active member. Returns rows enqueued."""
+    """Fan out EVENT_CREATED to every active member, chapter-visible events
+    only. An 'officer'/'custom'/'private' event would otherwise mail its title,
+    date and location to people who cannot even see it. Returns rows enqueued."""
+    if (event.get("visibility") or "chapter") != "chapter":
+        return 0
+
     members = (
         sb.table("members")
         .select("id")
