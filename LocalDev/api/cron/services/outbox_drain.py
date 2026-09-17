@@ -43,6 +43,7 @@ import logging
 from datetime import datetime, timezone
 
 from api.announcements.services import twilio_client
+from api.auth.notifications import RESET_CODE, SETUP_CODE
 from api.cron.core import templates
 from api.platform.delivery import delivery_mode, email_delivery_mode
 from api.platform.email import send_email
@@ -52,6 +53,9 @@ from api.sms_consent import CONSENT_COLUMNS, has_consent
 logger = logging.getLogger(__name__)
 
 DEFAULT_BATCH_LIMIT = 100
+
+# Event types whose payload is a live credential (api/auth/notifications.py).
+_SECRET_EVENT_TYPES = (SETUP_CODE, RESET_CODE)
 
 # The two real dispatch modes. `message_outbox.delivery_mode` is NOT one of these
 # knobs: it is a snapshot of the mode at enqueue time (0070 defaults it to
@@ -175,6 +179,11 @@ def _close_row(sb, row: dict, *, status: str, last_error: str | None) -> None:
     }
     if status == "sent":
         patch["delivered_at"] = _now_iso()
+    if status in ("sent", "simulated") and row["event_type"] in _SECRET_EVENT_TYPES:
+        # The payload is a live credential; once the mail is out there is no
+        # reason to keep it. A 'failed' row keeps its payload so Retry can still
+        # render it. `payload` is NOT NULL, hence {} rather than NULL.
+        patch["payload"] = {}
     sb.table("message_outbox").update(patch).eq("id", row["id"]).execute()
 
 

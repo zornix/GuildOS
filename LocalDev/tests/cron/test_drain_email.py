@@ -167,6 +167,83 @@ def test_unknown_email_delivery_mode_fails_loudly(
     assert "Unknown EMAIL_DELIVERY_MODE" in read_outbox(row["id"])["last_error"]
 
 
+# ── Code payloads are credentials ────────────────────────────────────────────
+
+
+def test_a_sent_setup_code_row_loses_its_payload(
+    drain, outbox_row, read_outbox, email_mode, member_with_email, fake_email
+):
+    """The plaintext code must not outlive the mail that carried it."""
+    email_mode("smtp")
+    row = outbox_row(
+        event_type="SETUP_CODE",
+        channel="email",
+        member_id=member_with_email(),
+        target_table="members",
+        payload={"code": "ABCD1234", "expires_at": "2026-10-01T00:00:00Z"},
+    )
+
+    assert drain()["sent"] == 1
+    after = read_outbox(row["id"])
+    assert after["status"] == "sent"
+    assert after["payload"] == {}
+    # It still went out — the wipe happens after rendering.
+    assert "ABCD1234" in fake_email[0][2]
+
+
+def test_a_simulated_reset_code_row_loses_its_payload(
+    drain, outbox_row, read_outbox, email_mode, member_with_email
+):
+    email_mode("dry_run")
+    row = outbox_row(
+        event_type="RESET_CODE",
+        channel="email",
+        member_id=member_with_email(),
+        target_table="members",
+        payload={"code": "ZZZZ9999", "expires_at": "2026-10-01T00:00:00Z"},
+    )
+
+    assert drain()["simulated"] == 1
+    assert read_outbox(row["id"])["payload"] == {}
+
+
+def test_a_non_secret_row_keeps_its_payload(
+    drain, outbox_row, read_outbox, email_mode, member_with_email, fake_email
+):
+    email_mode("smtp")
+    row = outbox_row(
+        event_type="EVENT_CREATED",
+        channel="email",
+        member_id=member_with_email(),
+        payload={"title": "Formal"},
+    )
+
+    assert drain()["sent"] == 1
+    assert read_outbox(row["id"])["payload"] == {"title": "Formal"}
+
+
+def test_a_failed_setup_code_row_keeps_its_payload(
+    drain, outbox_row, read_outbox, email_mode, member_factory, monkeypatch, fake_email
+):
+    """Retry has to be able to re-render it."""
+    email_mode("smtp")
+    monkeypatch.setattr(
+        "api.cron.services.outbox_drain._member_email", lambda sb, member_id: ""
+    )
+    row = outbox_row(
+        event_type="SETUP_CODE",
+        channel="email",
+        member_id=member_factory(),
+        target_table="members",
+        payload={"code": "KEEP0001", "expires_at": "2026-10-01T00:00:00Z"},
+    )
+
+    assert drain()["failed"] == 1
+    after = read_outbox(row["id"])
+    assert after["status"] == "failed"
+    assert after["payload"]["code"] == "KEEP0001"
+
+
 # ── The adapter itself ───────────────────────────────────────────────────────
 
 
