@@ -58,10 +58,12 @@ def test_event_created_reaches_every_active_member(
 def test_event_created_is_enqueued_once_per_member(
     sb_client, chapter_id, member_factory, event_row, outbox_for
 ):
-    member_factory()
-    notify_event_created(sb_client, chapter_id=chapter_id, event=event_row)
+    members = [member_factory() for _ in range(3)]
+    assert notify_event_created(
+        sb_client, chapter_id=chapter_id, event=event_row
+    ) == len(members)
     assert notify_event_created(sb_client, chapter_id=chapter_id, event=event_row) == 0
-    assert len(outbox_for("EVENT_CREATED", str(event_row["id"]))) == 1
+    assert len(outbox_for("EVENT_CREATED", str(event_row["id"]))) == len(members)
 
 
 def test_officer_only_event_emails_nobody(
