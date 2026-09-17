@@ -75,7 +75,7 @@ export function useFinance({ members, setMembers, currentMemberId, currentMember
       result = await api.bulkCreateInvoices(plan.items, idempotencyKey);
     } catch (err) {
       console.error('Dues run failed', err);
-      showToast('Could not create the dues run. Nothing was billed — try again.');
+      showToast('Could not create the dues run. Try again — a retry will not bill anyone twice.');
       throw err;
     }
     await refreshMyTreasury();
