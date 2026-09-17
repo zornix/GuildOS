@@ -21,7 +21,7 @@ from .schemas import CreateChapterRequest
 router = APIRouter()
 
 # A roster CSV is a few hundred rows of text; anything larger is a mistake or an
-# attack, and we read the whole body into memory.
+# attack. The body is read into memory, so the read itself stops at this limit.
 MAX_ROSTER_BYTES = 1_000_000
 
 
@@ -72,7 +72,11 @@ async def import_roster_endpoint(
         # Same 404 for "no such chapter" and "someone else's chapter".
         raise HTTPException(404, "Chapter not found")
 
-    raw = await file.read()
+    # Never buffer more than the limit: the declared size is checked first, and
+    # the bounded read is the backstop for a chunked upload (size is None then).
+    if file.size is not None and file.size > MAX_ROSTER_BYTES:
+        raise HTTPException(413, "Roster file is too large")
+    raw = await file.read(MAX_ROSTER_BYTES + 1)
     if len(raw) > MAX_ROSTER_BYTES:
         raise HTTPException(413, "Roster file is too large")
 

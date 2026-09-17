@@ -6,7 +6,10 @@ member can act without anyone reading it out loud.
 
 The code lives in the outbox payload, which is how the drain renders it. That
 makes the payload a credential: the officer-facing outbox list
-(api/announcements/services/outbox.py) refuses to render these two event types.
+(api/announcements/services/outbox.py) refuses to render these two event types,
+and the drain wipes the payload to `{}` once the mail is out
+(api/cron/services/outbox_drain.py). A row that ends 'failed' keeps its payload
+so Retry can still render it.
 
 `frontend_url` is inlined here rather than read inside the template — the
 template module is pure and settings-free.
