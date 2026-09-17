@@ -128,6 +128,10 @@ class QueryBuilder:
         self._filters.append(("in", col, vals))
         return self
 
+    def not_in_(self, col: str, vals: list) -> QueryBuilder:
+        self._filters.append(("not_in", col, vals))
+        return self
+
     def lte(self, col: str, val: Any) -> QueryBuilder:
         self._filters.append(("lte", col, val))
         return self
@@ -403,6 +407,11 @@ class QueryBuilder:
                     # IN (%s,...) avoids ANY(text[]) vs uuid[] mismatches (e.g. event_id filters).
                     ph = ", ".join(["%s"] * len(val))
                     parts.append(f"{qualified} IN ({ph})")
+                    params.extend(self._adapt_value(v) for v in val)
+            elif op == "not_in":
+                if val:
+                    ph = ", ".join(["%s"] * len(val))
+                    parts.append(f"{qualified} NOT IN ({ph})")
                     params.extend(self._adapt_value(v) for v in val)
             elif op == "lte":
                 if val == "now()":

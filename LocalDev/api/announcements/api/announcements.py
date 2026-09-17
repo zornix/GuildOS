@@ -20,6 +20,10 @@ from api.rbac.services.permissions import has_permission
 
 router = APIRouter()
 
+# Reading treasury messages in the outbox is treasury row access, same key the
+# treasury surfaces use (api/treasury/api/balances.py).
+TREASURY_AUDIT_VIEW = "treasury:audit:view"
+
 
 @router.get("/")
 async def list_announcements(status: str | None = None, user=Depends(get_current_user)):
@@ -96,7 +100,11 @@ async def list_outbox(
 ):
     """The chapter's message_outbox, newest first (issue #48)."""
     return outbox_svc.list_outbox(
-        get_db(), chapter_id=user["chapter_id"], status=status, limit=limit
+        get_db(),
+        chapter_id=user["chapter_id"],
+        status=status,
+        limit=limit,
+        include_treasury=has_permission(user, TREASURY_AUDIT_VIEW),
     )
 
 
@@ -108,7 +116,10 @@ async def retry_outbox(
     """Requeue a failed row; the next cron drain picks it up."""
     try:
         return outbox_svc.retry_outbox_row(
-            get_db(), chapter_id=user["chapter_id"], row_id=row_id
+            get_db(),
+            chapter_id=user["chapter_id"],
+            row_id=row_id,
+            include_treasury=has_permission(user, TREASURY_AUDIT_VIEW),
         )
     except outbox_svc.OutboxRowNotFound:
         raise HTTPException(404, "Outbox message not found")
