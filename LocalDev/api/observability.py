@@ -67,6 +67,8 @@ def _configure_sentry() -> None:
         environment=settings.VERCEL_ENV or "local",
         # Errors only for now; tracing is a separate cost decision.
         traces_sample_rate=0,
+        # Frame locals include the SMTP password and rendered setup-code bodies.
+        include_local_variables=False,
     )
     _sentry_configured = True
 
