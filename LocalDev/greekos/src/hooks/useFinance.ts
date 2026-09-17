@@ -67,10 +67,10 @@ export function useFinance({ members, setMembers, currentMemberId, currentMember
   };
 
   /** One dues run = one bulk batch of invoices, all with the same due date. */
-  const handleCreateDuesRun = async (draft: DuesRunDraft) => {
+  const handleCreateDuesRun = async (draft: DuesRunDraft, idempotencyKey: string) => {
     const plan = planDuesRun(draft);
     if (!plan.valid) { showToast(plan.error as string); return; }
-    const result = await api.bulkCreateInvoices(plan.items);
+    const result = await api.bulkCreateInvoices(plan.items, idempotencyKey);
     await refreshMyTreasury();
     showToast(`Created ${result.count} invoice${result.count === 1 ? '' : 's'} · ${formatMoney(plan.totalCents)} billed.`);
   };
