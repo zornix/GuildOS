@@ -161,6 +161,25 @@ def test_retry_requeues_a_failed_row(officer, as_member, outbox_factory, chapter
     assert after["attempts"] == 0  # 0155 fails a row for good past 5 attempts
 
 
+def test_retry_writes_an_audit_log(officer, as_member, outbox_factory, chapter_id, cursor):
+    """Requeueing is an officer mutation, so it leaves an attributable trail."""
+    row = outbox_factory(chapter_id, officer, status="failed")
+
+    assert as_member(officer).post(f"/api/announcements/outbox/{row}/retry").status_code == 200
+
+    cursor.execute(
+        """
+        SELECT action, actor_id, metadata FROM audit_logs
+         WHERE chapter_id = %s AND target_table = 'message_outbox' AND target_id = %s
+        """,
+        (chapter_id, row),
+    )
+    entry = cursor.fetchone()
+    assert entry["action"] == "OUTBOX_RETRIED"
+    assert str(entry["actor_id"]) == officer
+    assert entry["metadata"]["event_type"] == "ANNOUNCEMENT_SMS"
+
+
 def test_retry_rejects_a_non_failed_row(officer, as_member, outbox_factory, chapter_id):
     row = outbox_factory(chapter_id, officer)  # pending
     assert as_member(officer).post(f"/api/announcements/outbox/{row}/retry").status_code == 409

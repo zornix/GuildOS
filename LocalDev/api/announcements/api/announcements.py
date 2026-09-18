@@ -119,6 +119,7 @@ async def retry_outbox(
             get_db(),
             chapter_id=user["chapter_id"],
             row_id=row_id,
+            actor_id=user["id"],
             include_treasury=has_permission(user, TREASURY_AUDIT_VIEW),
         )
     except outbox_svc.OutboxRowNotFound:
