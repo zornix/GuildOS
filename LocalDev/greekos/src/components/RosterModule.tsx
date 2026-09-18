@@ -17,7 +17,12 @@ import { formatMoney } from '../formatters';
 
 interface RosterModuleProps {
   members: Member[];
-  isOfficer: boolean;
+  /** `members:invite` — add a brother and the CSV roster import. */
+  canInviteMembers: boolean;
+  /** `standing:update` — the per-member standing selector. */
+  canSetStanding: boolean;
+  /** `standing:view_all` — the chapter-wide attendance column. */
+  canSeeStandingDetail: boolean;
   /** `roles:assign` — gates the per-member role toggles. */
   canAssignRoles: boolean;
   /** `members:invite` — gates the per-member announcement-texts indicator (#57). */
@@ -30,7 +35,9 @@ interface RosterModuleProps {
 
 export default function RosterModule({
   members,
-  isOfficer,
+  canInviteMembers,
+  canSetStanding,
+  canSeeStandingDetail,
   canAssignRoles,
   canSeeSmsConsent,
   onAddMember,
@@ -108,7 +115,7 @@ export default function RosterModule({
           </p>
         </div>
 
-        {isOfficer && (
+        {canInviteMembers && (
           <button
             onClick={() => setShowAddModal(true)}
             className="bg-gold hover:bg-[#c5a02b] text-navy font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer"
@@ -119,7 +126,7 @@ export default function RosterModule({
         )}
       </div>
 
-      {isOfficer && onImportRoster && <RosterCsvImport onImport={onImportRoster} />}
+      {canInviteMembers && onImportRoster && <RosterCsvImport onImport={onImportRoster} />}
 
       {/* Filter and Search Bar */}
       <Card className="p-4 flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
@@ -160,7 +167,7 @@ export default function RosterModule({
                 <th className="py-3 px-4 hidden md:table-cell">Pledge Class</th>
                 <th className="py-3 px-4 hidden sm:table-cell">Academic Standing</th>
                 {/* Attendance rates are for the member themself and officers only. */}
-                {isOfficer && <th className="py-3 px-4 hidden md:table-cell">Attendance</th>}
+                {canSeeStandingDetail && <th className="py-3 px-4 hidden md:table-cell">Attendance</th>}
                 <th className="py-3 px-4">Unpaid fines</th>
                 <th className="py-3 px-4 hidden md:table-cell">Risk Shifts</th>
                 <th className="py-3 px-4 text-right">Actions</th>
@@ -206,7 +213,7 @@ export default function RosterModule({
                       </span>
                     </td>
 
-                    {isOfficer && (
+                    {canSeeStandingDetail && (
                       <td className="py-3 px-4 font-bold text-slate-800 hidden md:table-cell">
                         <span className={mem.attendanceRate >= 85 ? 'text-emerald-600' : 'text-red-600'}>
                           {mem.attendanceRate}%
@@ -235,7 +242,7 @@ export default function RosterModule({
                           Roles
                         </button>
                       )}
-                      {isOfficer && (
+                      {canSetStanding && (
                         <select
                           value={mem.standing}
                           onChange={e => setPendingStanding({ member: mem, standing: e.target.value as Member['standing'] })}

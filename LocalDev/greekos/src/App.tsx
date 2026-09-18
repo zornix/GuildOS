@@ -43,6 +43,7 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
   const canMarkAttendance = can(app.permissions, 'attendance:override');
   const canCreateEvent = can(app.permissions, 'calendar:event:create');
   const canManageJobs = can(app.permissions, 'tasks:assign');
+  const canInviteMembers = can(app.permissions, 'members:invite');
 
   return (
     <AppShell
@@ -203,9 +204,11 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
       {activeTab === 'roster' && (
         <RosterModule
           members={roster.members}
-          isOfficer={isOfficer}
+          canInviteMembers={canInviteMembers}
+          canSetStanding={can(app.permissions, 'standing:update')}
+          canSeeStandingDetail={can(app.permissions, 'standing:view_all')}
           canAssignRoles={can(app.permissions, 'roles:assign')}
-          canSeeSmsConsent={can(app.permissions, 'members:invite')}
+          canSeeSmsConsent={canInviteMembers}
           onImportRoster={file => roster.handleImportRoster(app.chapterId, file)}
           onAddMember={roster.handleAddMember}
           onUpdateStanding={roster.handleUpdateStanding}
