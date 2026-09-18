@@ -101,7 +101,7 @@ def _email_mode() -> str:
 
 
 def _global_mode() -> str:
-    """The mode every row is delivered in: the live setting, not the row's.
+    """The mode an SMS row is delivered in: the live setting, not the row's.
 
     `message_outbox.delivery_mode` records what the mode was when the row was
     enqueued; treating it as an override pinned every row queued before the
@@ -110,8 +110,10 @@ def _global_mode() -> str:
     """
     mode = delivery_mode()
     if mode not in _DISPATCH_MODES:
-        # Fail the whole run loudly: a typo in the Vercel env var must not
-        # silently simulate (or silently skip) every message (checklist 2.2).
+        # Fail the row loudly: a typo in the Vercel env var must not silently
+        # simulate (or silently skip) a message (checklist 2.2). It is read per
+        # SMS row, like _email_mode, so a bad SMS setting cannot also stop the
+        # email rows — the two channels have separate knobs.
         raise ValueError(
             f"Unknown MESSAGE_DELIVERY_MODE {mode!r}; expected 'dry_run' or 'twilio'"
         )
@@ -202,11 +204,11 @@ def _chapter_name(sb, chapter_id, cache: dict) -> str:
     return cache[key]
 
 
-def _deliver_sms(sb, row: dict, *, mode: str, chapter_name: str, payload: dict) -> str:
+def _deliver_sms(sb, row: dict, *, chapter_name: str, payload: dict) -> str:
     body = templates.render(
         row["event_type"], payload, chapter_name=chapter_name, channel="sms"
     )
-    if mode == DRY_RUN:
+    if _global_mode() == DRY_RUN:
         _close_row(sb, row, status="simulated", last_error=None)
         return "simulated"
 
@@ -247,10 +249,11 @@ def _deliver_email(sb, row: dict, *, chapter_name: str, payload: dict) -> str:
     return "sent"
 
 
-def _deliver_row(sb, row: dict, *, mode: str, names: dict) -> str:
+def _deliver_row(sb, row: dict, *, names: dict) -> str:
     """Deliver one row by its channel. Returns its terminal status; never raises.
 
-    `mode` is the SMS mode; the email mode is read per row from settings.
+    Both delivery modes are read per row from settings, so a bad setting fails
+    only the rows on that channel.
     """
     try:
         if not row.get("member_id"):
@@ -263,9 +266,7 @@ def _deliver_row(sb, row: dict, *, mode: str, names: dict) -> str:
         payload = _enrich(sb, row)
         chapter_name = _chapter_name(sb, row["chapter_id"], names)
         if (row.get("channel") or "email") == "sms":
-            return _deliver_sms(
-                sb, row, mode=mode, chapter_name=chapter_name, payload=payload
-            )
+            return _deliver_sms(sb, row, chapter_name=chapter_name, payload=payload)
         return _deliver_email(sb, row, chapter_name=chapter_name, payload=payload)
     except Exception as exc:
         logger.exception("outbox drain failed for row %s", row.get("id"))
@@ -292,7 +293,6 @@ def drain_outbox(
     Returns {"processed", "sent", "simulated", "failed"}.
     """
     client = _resolve_sb(sb)
-    mode = _global_mode()
 
     claimed = (
         call_rpc(
@@ -306,7 +306,7 @@ def drain_outbox(
     counts = {"processed": 0, "sent": 0, "simulated": 0, "failed": 0}
     names: dict = {}  # chapter_id -> name, for the message footer
     for row in claimed:
-        status = _deliver_row(client, row, mode=mode, names=names)
+        status = _deliver_row(client, row, names=names)
         counts["processed"] += 1
         counts[status] = counts.get(status, 0) + 1
 
