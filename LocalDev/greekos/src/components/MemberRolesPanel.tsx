@@ -11,12 +11,15 @@ export function toggleRoleKeys(keys: string[], key: string, on: boolean): string
 interface Props {
   memberId: string;
   memberName: string;
+  /** Called with the member whose roles changed, so a session that just
+   *  regranted its own roles can refresh its permissions (and its nav). */
+  onRolesChanged?: (memberId: string) => void;
   onClose: () => void;
 }
 
 /** Officer-only (`roles:assign`) role toggles for one member. Writes hit
  *  POST/DELETE /api/rbac/members/{id}/roles and roll back on failure. */
-export default function MemberRolesPanel({ memberId, memberName, onClose }: Props) {
+export default function MemberRolesPanel({ memberId, memberName, onRolesChanged, onClose }: Props) {
   const [catalog, setCatalog] = useState<RoleDto[] | null>(null);
   const [assigned, setAssigned] = useState<string[]>([]);
   const [pending, setPending] = useState<string | null>(null);
@@ -42,6 +45,7 @@ export default function MemberRolesPanel({ memberId, memberName, onClose }: Prop
     try {
       if (on) await api.assignMemberRole(memberId, key);
       else await api.revokeMemberRole(memberId, key);
+      onRolesChanged?.(memberId);
     } catch (err) {
       setAssigned(previous);
       setError(err instanceof Error ? err.message : String(err));

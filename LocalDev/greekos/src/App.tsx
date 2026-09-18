@@ -202,6 +202,7 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
           onImportRoster={file => roster.handleImportRoster(app.chapterId, file)}
           onAddMember={roster.handleAddMember}
           onUpdateStanding={roster.handleUpdateStanding}
+          onRolesChanged={app.refreshOwnPermissions}
         />
       )}
 

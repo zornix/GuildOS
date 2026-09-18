@@ -24,6 +24,7 @@ interface RosterModuleProps {
   canSeeSmsConsent: boolean;
   onAddMember: (member: Omit<Member, 'id' | 'points' | 'attendanceRate' | 'duesBalance' | 'duesBalanceCents' | 'securityHoursServed'>) => void;
   onUpdateStanding: (memberId: string, standing: 'Good Standing' | 'Academic Probation' | 'Social Suspension' | 'Financial Hold') => void;
+  onRolesChanged?: (memberId: string) => void;
   onImportRoster?: (file: File) => Promise<RosterImportResult>;
 }
 
@@ -34,6 +35,7 @@ export default function RosterModule({
   canSeeSmsConsent,
   onAddMember,
   onUpdateStanding,
+  onRolesChanged,
   onImportRoster
 }: RosterModuleProps) {
   const safeMembers = members || [];
@@ -363,6 +365,7 @@ export default function RosterModule({
         <MemberRolesPanel
           memberId={rolesMember.id}
           memberName={rolesMember.name}
+          onRolesChanged={onRolesChanged}
           onClose={() => setRolesMember(null)}
         />
       )}
