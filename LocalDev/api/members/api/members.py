@@ -5,11 +5,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from api.dependencies import get_current_user
 from api.rbac.auth import require_permission
 from api.rbac.core.policy import LEGACY_ROLE_COMPAT
+from api.rbac.services.permissions import has_permission
 from api.platform.db import get_db
 from api.platform.rpc import call_rpc
 from api.sms_consent import CONSENT_COLUMNS, has_consent
 
 ROLES_ASSIGN = "roles:assign"
+# Who may see another member's SMS consent — the same key that gates inviting.
+MEMBERS_INVITE = "members:invite"
 
 # Roster statuses. 'invited' (0148) is a real roster entry — a member who has
 # been invited but has not yet redeemed a setup code. Excluding it made every
@@ -25,8 +28,11 @@ async def list_members(user=Depends(get_current_user)):
 
     `sms_consent` rides along (#57) so officers can see who is textable and a
     member can see their own state — the rule itself stays in api/sms_consent.py.
+    It is officer-or-yourself data (#88): a caller without `members:invite` gets
+    the field on their own row only, never on a teammate's.
     """
     sb = get_db()
+    sees_all_consent = has_permission(user, MEMBERS_INVITE, sb=sb)
     result = (
         sb.table("members")
         .select(f"id, name, email, role, status, {CONSENT_COLUMNS}")
@@ -35,17 +41,19 @@ async def list_members(user=Depends(get_current_user)):
         .order("name")
         .execute()
     )
-    return [
-        {
+    roster = []
+    for m in result.data or []:
+        row = {
             "id": m["id"],
             "name": m["name"],
             "email": m["email"],
             "role": m["role"],
             "status": m["status"],
-            "sms_consent": has_consent(m),
         }
-        for m in (result.data or [])
-    ]
+        if sees_all_consent or str(m["id"]) == str(user["id"]):
+            row["sms_consent"] = has_consent(m)
+        roster.append(row)
+    return roster
 
 
 @router.post("/me/sms-consent")
