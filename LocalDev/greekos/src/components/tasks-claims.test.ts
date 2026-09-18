@@ -17,7 +17,7 @@ function renderJob(overrides: Partial<TaskDto>, currentMemberName = 'Ryan Cole')
     ...overrides
   };
   return renderToStaticMarkup(createElement(TasksModule, {
-    tasks: adaptTasks([task], members), members, currentMemberName, isOfficer: false,
+    tasks: adaptTasks([task], members), members, currentMemberName, canCreateTask: false,
     onAddTask() {}, onToggleTaskStatus() {}, onClaimTask() {}
   }));
 }

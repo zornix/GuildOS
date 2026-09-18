@@ -13,7 +13,8 @@ import Modal from './ui/Modal';
 interface TasksModuleProps {
   tasks: Task[];
   members: Member[];
-  isOfficer: boolean;
+  /** `tasks:create` — POST /api/tasks/. */
+  canCreateTask: boolean;
   currentMemberName: string;
   onAddTask: (task: Omit<Task, 'id' | 'status'>) => void;
   onToggleTaskStatus: (taskId: string) => void;
@@ -23,7 +24,7 @@ interface TasksModuleProps {
 export default function TasksModule({
   tasks,
   members,
-  isOfficer,
+  canCreateTask,
   currentMemberName,
   onAddTask,
   onToggleTaskStatus,
@@ -85,7 +86,7 @@ export default function TasksModule({
           </p>
         </div>
 
-        {isOfficer && (
+        {canCreateTask && (
           <button
             onClick={() => setShowAddModal(true)}
             className="bg-gold hover:bg-[#c5a02b] text-navy font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer"

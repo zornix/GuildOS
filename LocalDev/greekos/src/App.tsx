@@ -220,7 +220,7 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
         <TasksModule
           tasks={tasks.tasks}
           members={roster.members}
-          isOfficer={isOfficer}
+          canCreateTask={can(app.permissions, 'tasks:create')}
           currentMemberName={currentMemberName}
           onAddTask={tasks.handleAddTask}
           onToggleTaskStatus={tasks.handleToggleTaskStatus}
