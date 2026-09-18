@@ -6,6 +6,7 @@ is the row it writes, so the opt-out is asserted on `members`, not on a mock.
 
 from __future__ import annotations
 
+import logging
 import uuid
 
 import pytest
@@ -91,6 +92,31 @@ def test_a_missing_auth_token_fails_closed(post, texting_member, monkeypatch, co
     assert consent_state(texting_member["id"])["sms_opted_out_at"] is None
 
 
+def test_a_query_string_is_part_of_the_signed_url(inbound_client, texting_member, consent_state):
+    """Twilio signs the URL it was configured with, query string included."""
+    params = {"From": texting_member["phone"], "Body": "STOP"}
+    sig = expected_signature(f"{BASE_URL}{PATH}?x=y", params, AUTH_TOKEN)
+
+    res = inbound_client.post(
+        f"{PATH}?x=y", data=params, headers={"X-Twilio-Signature": sig}
+    )
+
+    assert res.status_code == 200
+    assert consent_state(texting_member["id"])["sms_opted_out_at"] is not None
+
+
+def test_a_non_ascii_signature_is_a_403_not_a_crash(inbound_client, texting_member):
+    """compare_digest on str raises TypeError above ASCII; Twilio would retry a 500."""
+    res = inbound_client.post(
+        PATH,
+        data={"From": texting_member["phone"], "Body": "STOP"},
+        # Headers travel as latin-1 bytes; Starlette hands us a non-ASCII str.
+        headers={"X-Twilio-Signature": "nopé".encode("latin-1")},
+    )
+
+    assert res.status_code == 403
+
+
 def test_a_valid_signature_is_accepted(post, texting_member):
     res = post({"From": texting_member["phone"], "Body": "hello there"})
 
@@ -142,3 +168,11 @@ def test_an_unrecognized_reply_is_an_empty_twiml_response(post, texting_member, 
 
 def test_an_unknown_number_is_accepted_without_writing_anything(post):
     assert post({"From": "+15550000000", "Body": "STOP"}).status_code == 200
+
+
+def test_a_stop_that_matches_no_member_is_logged(post, caplog):
+    """A legacy non-E.164 row never matches; the dropped opt-out must leave a trace."""
+    with caplog.at_level(logging.WARNING, logger="api.announcements.api.twilio_inbound"):
+        assert post({"From": "+15550000000", "Body": "STOP"}).status_code == 200
+
+    assert any("+15550000000" in r.message for r in caplog.records)

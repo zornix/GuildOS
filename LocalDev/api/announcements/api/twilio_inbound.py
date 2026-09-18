@@ -73,8 +73,15 @@ def _verify(request: Request, params: dict[str, str]) -> None:
     # The signature covers the URL Twilio was configured with, which is our public
     # origin — not whatever Host header reached the function behind Vercel's proxy.
     url = settings.BASE_URL.rstrip("/") + request.url.path
+    if request.url.query:
+        # Twilio signs the configured URL verbatim, query string included.
+        url += "?" + request.url.query
     supplied = request.headers.get("X-Twilio-Signature", "")
-    if not hmac.compare_digest(supplied, expected_signature(url, params, token)):
+    # Bytes, not str: compare_digest raises TypeError on a non-ASCII str, and a
+    # garbage header must be a 403, not a 500 Twilio keeps retrying.
+    if not hmac.compare_digest(
+        supplied.encode("utf-8"), expected_signature(url, params, token).encode("ascii")
+    ):
         raise HTTPException(403, "Bad Twilio signature")
 
 
@@ -101,7 +108,13 @@ async def twilio_inbound(request: Request):
     # Every member holding that number, across chapters: the person who texted
     # STOP means the number, not one membership row.
     if word in _STOP_WORDS:
-        sb.table("members").update({"sms_opted_out_at": now}).eq("phone", phone).execute()
+        updated = (
+            sb.table("members").update({"sms_opted_out_at": now}).eq("phone", phone).execute()
+        ).data
+        if not updated:
+            # A legacy non-E.164 row never matches, and a silently dropped
+            # opt-out is the one failure nobody can see from the product.
+            logger.warning("twilio inbound STOP matched no member for %s", phone)
     elif word in _START_WORDS:
         sb.table("members").update(
             {"sms_opted_out_at": None, "sms_consent_at": now}
