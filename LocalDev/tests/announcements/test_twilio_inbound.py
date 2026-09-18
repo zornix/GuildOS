@@ -166,8 +166,17 @@ def test_an_unrecognized_reply_is_an_empty_twiml_response(post, texting_member, 
     assert consent_state(texting_member["id"])["sms_opted_out_at"] is None
 
 
-def test_an_unknown_number_is_accepted_without_writing_anything(post):
+def test_an_unknown_number_is_accepted_without_writing_anything(post, cursor):
+    def opted_out_count() -> int:
+        cursor.execute(
+            "SELECT count(*) AS n FROM members WHERE sms_opted_out_at IS NOT NULL"
+        )
+        return cursor.fetchone()["n"]
+
+    before = opted_out_count()
+
     assert post({"From": "+15550000000", "Body": "STOP"}).status_code == 200
+    assert opted_out_count() == before
 
 
 def test_a_stop_that_matches_no_member_is_logged(post, caplog):
