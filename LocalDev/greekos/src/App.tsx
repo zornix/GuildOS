@@ -142,7 +142,8 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
         <InitiativesModule
           initiatives={initiatives.initiatives}
           members={roster.members}
-          isOfficer={isOfficer}
+          canCreateInitiative={can(app.permissions, 'calendar:initiative:create')}
+          canManageJobs={canManageJobs}
           currentMemberName={currentMemberName}
           onAddInitiative={initiatives.handleAddInitiative}
           onAddJobToInitiative={initiatives.handleAddJobToInitiative}

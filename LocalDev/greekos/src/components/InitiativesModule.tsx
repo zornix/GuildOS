@@ -14,7 +14,10 @@ import Card from './ui/Card';
 interface InitiativesModuleProps {
   initiatives: Initiative[];
   members: Member[];
-  isOfficer: boolean;
+  /** `calendar:initiative:create` — POST /api/initiatives/. */
+  canCreateInitiative: boolean;
+  /** `tasks:assign` — attach a job to an initiative you do not chair. */
+  canManageJobs: boolean;
   currentMemberName: string;
   onAddInitiative: (init: Omit<Initiative, 'id'>) => void;
   onAddJobToInitiative: (initId: string, job: Omit<EventJob, 'id' | 'claimants' | 'status'>) => void;
@@ -27,7 +30,8 @@ interface InitiativesModuleProps {
 export default function InitiativesModule({
   initiatives,
   members,
-  isOfficer,
+  canCreateInitiative,
+  canManageJobs,
   currentMemberName,
   onAddInitiative,
   onAddJobToInitiative,
@@ -120,6 +124,7 @@ export default function InitiativesModule({
           </p>
         </div>
 
+        {canCreateInitiative && (
         <button
           onClick={() => setShowCreateModal(true)}
           className="bg-gold hover:bg-[#c5a02b] text-navy font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer w-full sm:w-auto justify-center"
@@ -127,6 +132,7 @@ export default function InitiativesModule({
           <Plus className="w-4 h-4" />
           Launch New Initiative
         </button>
+        )}
       </div>
 
       {/* Grid: Left Initiatives List, Right Initiative Canvas */}
@@ -252,6 +258,7 @@ export default function InitiativesModule({
                   </p>
                 </div>
 
+                {(canManageJobs || selectedInit.leadChairs.includes(currentMemberName)) && (
                 <button
                   onClick={() => setShowAddJobModal(true)}
                   className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer"
@@ -259,6 +266,7 @@ export default function InitiativesModule({
                   <Plus className="w-3.5 h-3.5" />
                   Add job
                 </button>
+                )}
               </div>
 
               {/* Jobs List */}
@@ -266,7 +274,9 @@ export default function InitiativesModule({
                 {selectedInit.jobs.map(job => {
                   const isClaimedByMe = currentMember && job.claimants.some(c => c.memberId === currentMember.id);
                   const isFull = job.claimants.length >= job.peopleNeeded;
-                  const isLeadChair = selectedInit.leadChairs.includes(currentMemberName) || isOfficer;
+                  // Sign-off is the initiative's chairs only — the backend takes
+                  // no permission key in their place (tasks/services/approvals.py).
+                  const isLeadChair = selectedInit.leadChairs.includes(currentMemberName);
 
                   return (
                     <div key={job.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-all space-y-3">
