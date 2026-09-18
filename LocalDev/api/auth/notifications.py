@@ -17,8 +17,12 @@ template module is pure and settings-free.
 
 from __future__ import annotations
 
+import logging
+
 from api.config import settings
 from api.platform.outbox import enqueue
+
+logger = logging.getLogger(__name__)
 
 SETUP_CODE = "SETUP_CODE"
 RESET_CODE = "RESET_CODE"
@@ -53,5 +57,14 @@ def notify_code(
                 "frontend_url": settings.FRONTEND_URL,
             },
         )
-    except Exception:
+    except Exception as exc:
+        # No exc_info, and the message is scrubbed: a DB error quotes the
+        # statement it failed on, and that statement carries the code. Logs are
+        # a wider readership than the outbox, which already hides these rows.
+        logger.warning(
+            "could not enqueue %s for member %s: %s",
+            event_type,
+            member_id,
+            f"{type(exc).__name__}: {exc}".replace(code, "***"),
+        )
         return None
