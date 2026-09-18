@@ -40,6 +40,7 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
   const { isOfficer, currentMemberId, currentMemberName } = app;
   const currentMember = roster.members.find(member => member.id === currentMemberId);
   const viewedBalance = balanceForMember(app.myBalance, currentMember?.id);
+  const canMarkAttendance = can(app.permissions, 'attendance:override');
 
   return (
     <AppShell
@@ -151,9 +152,11 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
           events={events.events}
           members={roster.members}
           excuses={attendance.excuses}
-          isOfficer={isOfficer}
+          canMarkAttendance={canMarkAttendance}
+          canReviewExcuses={can(app.permissions, 'attendance:excuse:review')}
+          canSeeAttendanceRates={can(app.permissions, 'standing:view_all')}
           currentMemberName={currentMemberName}
-          initialTab={isOfficer ? 'roster_check' : 'self_pin'}
+          initialTab={canMarkAttendance ? 'roster_check' : 'self_pin'}
           onRecordAttendance={attendance.handleRecordAttendance}
           onSubmitExcuse={attendance.handleSubmitExcuse}
           onReviewExcuse={attendance.handleReviewExcuse}
