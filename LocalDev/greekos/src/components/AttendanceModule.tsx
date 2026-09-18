@@ -339,7 +339,7 @@ export default function AttendanceModule({
                     <div className="flex items-center gap-2 shrink-0">
                       <button
                         onClick={() => onReviewExcuse(excuse.id, 'Approved', currentMemberName)}
-                        className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 min-h-11 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1"
+                        className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 min-h-11 sm:min-h-0 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1"
                       >
                         <Check className="w-3.5 h-3.5" />
                         Approve
@@ -347,7 +347,7 @@ export default function AttendanceModule({
 
                       <button
                         onClick={() => onReviewExcuse(excuse.id, 'Rejected', currentMemberName)}
-                        className="text-xs bg-red-600 hover:bg-red-700 text-white font-bold px-3 py-1.5 min-h-11 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1"
+                        className="text-xs bg-red-600 hover:bg-red-700 text-white font-bold px-3 py-1.5 min-h-11 sm:min-h-0 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1"
                       >
                         <X className="w-3.5 h-3.5" />
                         Reject

@@ -218,7 +218,7 @@ export default function TasksModule({
                   onChange={e => setDescription(e.target.value)}
                   placeholder="e.g. Empty all 3 bins, wipe counter, and take bags to outer dumpster."
                   rows={2}
-                  className="w-full text-sm border border-slate-200 rounded-lg p-2.5 min-h-11 focus:outline-none focus:border-gold"
+                  className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-gold"
                 />
               </div>
 

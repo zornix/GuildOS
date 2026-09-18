@@ -625,7 +625,7 @@ export default function FinanceModule({
                   {isOfficer && f.status === 'Unpaid' && (
                     <button
                       onClick={() => setPendingFinePaid(f)}
-                      className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 min-h-11 rounded-lg transition-all cursor-pointer"
+                      className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 min-h-11 sm:min-h-0 rounded-lg transition-all cursor-pointer"
                     >
                       Mark paid
                     </button>
