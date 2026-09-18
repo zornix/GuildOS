@@ -2,8 +2,8 @@
 """Send one real SMS through the app's own Twilio adapter, to prove the wiring.
 
 Usage (from LocalDev/):
-  python3 scripts/send_test_sms.py +19256232714 "hello from GuildOS"
-  npm run sms:test -- +19256232714 "hello from GuildOS"
+  python3 scripts/send_test_sms.py +15555550123 "hello from GuildOS"
+  npm run sms:test -- +15555550123 "hello from GuildOS"
 
 Config comes from api/config.py settings (which reads LocalDev/.env), so this
 sends exactly what the outbox drain would send. Refuses to run unless
