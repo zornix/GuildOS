@@ -693,7 +693,9 @@ def add_organizer(sb, *, actor: dict, event_id: str, member_id: str | None = Non
                   idempotency_key: str | None = None) -> dict:
     """Self-volunteer (any member) or assign (calendar:event:update)."""
     chapter_id = actor["chapter_id"]
-    _get_event_row(sb, chapter_id=chapter_id, event_id=event_id)
+    # Existence + tenant check, and the row the assignment notice reads below —
+    # adding an organizer does not touch the event row, so one fetch is enough.
+    event = _get_event_row(sb, chapter_id=chapter_id, event_id=event_id)
 
     target = member_id or actor["id"]
     source = "volunteer" if target == actor["id"] else "assigned"
@@ -720,7 +722,7 @@ def add_organizer(sb, *, actor: dict, event_id: str, member_id: str | None = Non
         notify_role_assigned(
             sb,
             chapter_id=chapter_id,
-            event=_get_event_row(sb, chapter_id=chapter_id, event_id=event_id),
+            event=event,
             member_id=target,
             role="organizer",
         )

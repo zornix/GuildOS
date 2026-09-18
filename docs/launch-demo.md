@@ -65,10 +65,11 @@ Seeded members (`ryan@tke.org`, `tyler@tke.org`, …) have no password hash.
 They get a grace login and are prompted to set a password. Use those accounts
 to see the member-side UI.
 
-**Local only:** if `DEV_AUTH_BYPASS=1` is set in `LocalDev/.env`, the login
-page also offers **Local only: sign in as seeded officer**. That endpoint is
-404 on any Vercel deploy. Do not enable the bypass on a machine that is
-reachable from the network.
+**Local only:** every `vite dev` build shows **Local only: sign in as seeded
+officer** on the login page; `DEV_AUTH_BYPASS=1` in `LocalDev/.env` is what
+decides whether the button actually signs you in. The endpoint is 404 on any
+Vercel deploy. Do not enable the bypass on a machine that is reachable from
+the network.
 
 ## Optional commands
 
