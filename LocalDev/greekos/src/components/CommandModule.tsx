@@ -15,7 +15,6 @@ import { parseWhen } from '../lib/parseWhen';
 interface CommandModuleProps {
   members: Member[];
   events: ChapterEvent[];
-  isOfficer: boolean;
   currentMemberName: string;
   onExecuteCommand: (result: {
     type: 'FINE' | 'TASK' | 'EVENT' | 'BID' | 'ANNOUNCEMENT' | 'EXCUSE_APPROVE' | 'ATTENDANCE';
@@ -27,7 +26,6 @@ interface CommandModuleProps {
 export default function CommandModule({
   members,
   events,
-  isOfficer,
   currentMemberName,
   onExecuteCommand
 }: CommandModuleProps) {

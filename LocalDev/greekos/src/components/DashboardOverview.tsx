@@ -18,7 +18,10 @@ interface DashboardOverviewProps {
   tasks: Task[];
   initiatives: Initiative[];
   announcements: Announcement[];
+  /** Home's chapter-wide variant (`standing:view_all`), presentation only. */
   isOfficer: boolean;
+  /** `announcements:create` — DELETE /api/announcements/{id}. */
+  canDeleteAnnouncement: boolean;
   currentMemberId: string;
   currentMemberName: string;
   contribution: ContributionRecord;
@@ -49,7 +52,7 @@ function TileHeader({ icon, title, onAll, allLabel }: { icon: React.ReactNode; t
 
 /** Home: welcome banner over four content tiles. No chapter KPIs, no ranking. */
 export default function DashboardOverview({
-  members, events, tasks, initiatives, announcements, isOfficer, currentMemberId, currentMemberName,
+  members, events, tasks, initiatives, announcements, isOfficer, canDeleteAnnouncement, currentMemberId, currentMemberName,
   contribution, myBalance, onNavigateTab, onOpenEvent, onScheduleEvent,
   onVolunteerOrganizer, onSelfCheckIn, onDeleteAnnouncement
 }: DashboardOverviewProps) {
@@ -151,7 +154,7 @@ export default function DashboardOverview({
             <div key={a.id} className="p-3 bg-blue-50/50 rounded-xl border border-blue-100 space-y-1">
               <div className="flex justify-between items-center gap-2">
                 <span className="font-bold text-xs text-blue-950">{a.title}</span>
-                {isOfficer && (
+                {canDeleteAnnouncement && (
                   <button
                     type="button"
                     onClick={() => setPendingDelete(a)}

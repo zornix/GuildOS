@@ -66,6 +66,7 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
           initiatives={initiatives.initiatives}
           announcements={app.announcements}
           isOfficer={isOfficer}
+          canDeleteAnnouncement={can(app.permissions, 'announcements:create')}
           currentMemberId={currentMemberId}
           currentMemberName={currentMemberName}
           contribution={app.contribution}
@@ -245,7 +246,6 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
         <CommandModule
           members={roster.members}
           events={events.events}
-          isOfficer={isOfficer}
           currentMemberName={currentMemberName}
           onExecuteCommand={app.handleExecuteCommand}
         />
