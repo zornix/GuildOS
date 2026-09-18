@@ -6,6 +6,8 @@ parameterized route registered first would swallow the fixed segment.
 
 from __future__ import annotations
 
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.contribution.auth import MEMBER_RECORD_VIEW_ANY
@@ -25,13 +27,16 @@ async def my_record(user=Depends(get_current_user)):
 
 @router.get("/{member_id}")
 async def member_record(
-    member_id: str,
+    member_id: UUID,
     officer=Depends(require_permission(MEMBER_RECORD_VIEW_ANY)),
 ):
-    """Another member's record. Off-chapter reads 404 (no existence leak)."""
+    """Another member's record. Off-chapter reads 404 (no existence leak).
+
+    `UUID` so a malformed id is a 422, not a psycopg2 error out of the query.
+    """
     try:
         return svc.get_record(
-            get_db(), chapter_id=officer["chapter_id"], member_id=member_id
+            get_db(), chapter_id=officer["chapter_id"], member_id=str(member_id)
         )
     except svc.MemberNotFound:
         raise HTTPException(404, "Member not found")

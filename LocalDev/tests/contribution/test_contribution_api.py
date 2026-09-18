@@ -68,6 +68,15 @@ def test_member_record_is_officer_gated(as_member, member_factory, assign_role):
     assert as_member(officer).get(f"/api/contribution/{subject}").status_code == 200
 
 
+def test_non_uuid_member_id_is_rejected_before_the_query(
+    as_member, member_factory, assign_role
+):
+    officer = member_factory()
+    assign_role(officer, "officer")
+
+    assert as_member(officer).get("/api/contribution/not-a-uuid").status_code == 422
+
+
 def test_officer_cannot_read_a_member_of_another_chapter(
     as_member, member_factory, assign_role, cursor
 ):
