@@ -292,11 +292,37 @@ def test_provider_error_fails_the_row_with_the_error_recorded(
     assert "twilio 401 unauthorized" in after["last_error"]
 
 
-def test_unknown_delivery_mode_fails_loudly(drain, delivery_mode):
-    """One typo in a Vercel env var must not silently park every message."""
+def test_unknown_delivery_mode_fails_only_the_sms_rows(
+    drain,
+    delivery_mode,
+    email_mode,
+    outbox_row,
+    read_outbox,
+    member_with_phone,
+    member_factory,
+    fake_email,
+):
+    """A typo must not silently park a message — but MESSAGE_DELIVERY_MODE is
+    the SMS knob, so it must not take the email rows down with it either."""
     delivery_mode("twilllio")
-    with pytest.raises(ValueError, match="Unknown MESSAGE_DELIVERY_MODE"):
-        drain()
+    email_mode("smtp")
+
+    sms = outbox_row(
+        event_type="JOB_APPROVED", member_id=member_with_phone(), payload={"title": "X"}
+    )
+    email = outbox_row(
+        event_type="JOB_APPROVED",
+        channel="email",
+        member_id=member_factory(),
+        payload={"title": "X"},
+    )
+
+    drain()
+
+    assert read_outbox(sms["id"])["status"] == "failed"
+    assert "Unknown MESSAGE_DELIVERY_MODE" in read_outbox(sms["id"])["last_error"]
+    assert read_outbox(email["id"])["status"] == "sent"
+    assert len(fake_email) == 1
 
 
 # ── Payload enrichment (producers write ids, not amounts) ────────────────────

@@ -85,6 +85,33 @@ def test_the_officer_outbox_never_prints_a_code(sb_client, chapter_id, member_fa
     assert all(code not in r["body"] for r in setup)
 
 
+def test_a_failed_enqueue_is_logged_without_the_code(monkeypatch, caplog):
+    """A broken enqueue must be visible to an operator — but the payload is a
+    live credential, and a DB error quotes the statement it choked on."""
+    import logging
+
+    from api.auth import notifications
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError('INSERT INTO message_outbox ... payload {"code": "424242"}')
+
+    monkeypatch.setattr(notifications, "enqueue", _boom)
+
+    with caplog.at_level(logging.WARNING):
+        result = notifications.notify_code(
+            None,
+            event_type=notifications.SETUP_CODE,
+            chapter_id=str(uuid.uuid4()),
+            member_id=str(uuid.uuid4()),
+            code="424242",
+            expires_at="2026-01-01T00:00:00Z",
+        )
+
+    assert result is None  # the officer still keeps the invite
+    assert "SETUP_CODE" in caplog.text
+    assert "424242" not in caplog.text
+
+
 def test_roster_import_emails_every_created_member(sb_client, chapter_id, cursor):
     """The import path mints one code per member, so one email per member."""
     from api.chapters.services.onboarding import import_roster

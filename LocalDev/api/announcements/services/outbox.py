@@ -128,13 +128,16 @@ def list_outbox(
 
 
 def retry_outbox_row(
-    sb, *, chapter_id: str, row_id: str, include_treasury: bool = False
+    sb, *, chapter_id: str, row_id: str, actor_id: str, include_treasury: bool = False
 ) -> dict:
     """Put one failed row back in the queue for the next drain.
 
     attempts resets too: 0155 fails a row for good past 5 attempts, so a retry
     that kept the count would be refused by the very next claim. A treasury row
     is invisible — and so unretryable — without treasury:audit:view.
+
+    The requeue is audited (0160): it is an officer re-sending a member a
+    message, and 'who pressed Retry' is exactly what a delivery dispute asks.
     """
     row = (
         sb.table("message_outbox")
@@ -154,4 +157,14 @@ def retry_outbox_row(
     sb.table("message_outbox").update(
         {"status": "pending", "last_error": None, "attempts": 0, "claimed_at": None}
     ).eq("id", row_id).eq("chapter_id", chapter_id).execute()
+    sb.table("audit_logs").insert(
+        {
+            "chapter_id": chapter_id,
+            "action": "OUTBOX_RETRIED",
+            "actor_id": actor_id,
+            "target_table": "message_outbox",
+            "target_id": row_id,
+            "metadata": {"event_type": row["event_type"]},
+        }
+    ).execute()
     return {"id": row_id, "status": "pending"}
