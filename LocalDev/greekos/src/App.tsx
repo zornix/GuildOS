@@ -41,6 +41,8 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
   const currentMember = roster.members.find(member => member.id === currentMemberId);
   const viewedBalance = balanceForMember(app.myBalance, currentMember?.id);
   const canMarkAttendance = can(app.permissions, 'attendance:override');
+  const canCreateEvent = can(app.permissions, 'calendar:event:create');
+  const canManageJobs = can(app.permissions, 'tasks:assign');
 
   return (
     <AppShell
@@ -83,7 +85,7 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
             onViewChange={chrome.setView}
             filterType={chrome.filterType}
             onFilterChange={chrome.setFilterType}
-            isOfficer={isOfficer}
+            canCreateEvent={canCreateEvent}
             onCreate={chrome.openCreate}
           />
 
@@ -102,7 +104,10 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
             <EventsModule
               events={events.events}
               members={roster.members}
-              isOfficer={isOfficer}
+              canCreateEvent={canCreateEvent}
+              canManageEvent={can(app.permissions, 'calendar:event:update')}
+              canManageCheckInLink={can(app.permissions, 'attendance:checkin_link:manage')}
+              canManageJobs={canManageJobs}
               currentMemberName={currentMemberName}
               filterType={chrome.filterType}
               createOpen={chrome.createOpen}

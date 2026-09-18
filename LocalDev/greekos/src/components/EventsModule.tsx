@@ -26,7 +26,14 @@ import Card from './ui/Card';
 interface EventsModuleProps {
   events: ChapterEvent[];
   members: Member[];
-  isOfficer: boolean;
+  /** `calendar:event:create` — the create form's default supervisor is the creator. */
+  canCreateEvent: boolean;
+  /** `calendar:event:update` — the supervisor-level gate the backend falls back to. */
+  canManageEvent: boolean;
+  /** `attendance:checkin_link:manage` — open or close the door code. */
+  canManageCheckInLink: boolean;
+  /** `tasks:assign` — add, edit or cancel a job on this event. */
+  canManageJobs: boolean;
   currentMemberName: string;
   /** Chrome owned by useEventsChrome — the bar above this module sets them. */
   filterType: string;
@@ -58,7 +65,10 @@ interface EventsModuleProps {
 export default function EventsModule({
   events,
   members,
-  isOfficer,
+  canCreateEvent,
+  canManageEvent,
+  canManageCheckInLink,
+  canManageJobs,
   currentMemberName,
   filterType,
   createOpen,
@@ -135,7 +145,7 @@ export default function EventsModule({
       type,
       audience,
       required,
-      supervisors: [isOfficer ? currentMemberName : 'Alexander Mercer'],
+      supervisors: [canCreateEvent ? currentMemberName : 'Alexander Mercer'],
       organizers: [], // starts empty to highlight "Organizers Needed"
       jobs: [
         {
@@ -371,7 +381,7 @@ export default function EventsModule({
                     Show door code
                   </button>
 
-                  {isOfficer && (
+                  {canManageCheckInLink && (
                     <button
                       onClick={() => onToggleCheckInLink(selectedEvent.id)}
                       className={`text-xs font-semibold px-3 py-1.5 min-h-11 sm:min-h-0 rounded-lg border flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
@@ -558,7 +568,7 @@ export default function EventsModule({
                   </p>
                 </div>
 
-                {isOfficer && (
+                {canManageJobs && (
                   <button
                     onClick={() => setShowAddJobModal(true)}
                     className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-3 py-1.5 min-h-11 sm:min-h-0 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer"
@@ -592,7 +602,9 @@ export default function EventsModule({
                     const claimants = job.claimants || [];
                     const isClaimedByMe = currentMember && claimants.some(c => c.memberId === currentMember.id);
                     const isFull = claimants.length >= (job.peopleNeeded || 1);
-                    const isSupervisor = (selectedEvent.supervisors || []).includes(currentMemberName) || isOfficer;
+                    // Sign-off is the event's supervisors only — the backend
+                    // takes no permission key in their place (tasks/services/approvals.py).
+                    const isSupervisor = (selectedEvent.supervisors || []).includes(currentMemberName);
                     const lockUnclaim = unclaimLocked;
 
                     return (
@@ -702,7 +714,7 @@ export default function EventsModule({
 
                             {/* Officer job management: edit always, delete only while
                                 unclaimed and To-Do (mirrors the job_not_cancellable rule) */}
-                            {isOfficer && (
+                            {canManageJobs && (
                               <button
                                 onClick={() => openEditJob(job)}
                                 className="text-xs font-semibold px-3 py-1.5 min-h-11 sm:min-h-0 rounded-lg border bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 transition-all cursor-pointer flex items-center gap-1"
@@ -712,7 +724,7 @@ export default function EventsModule({
                               </button>
                             )}
 
-                            {isOfficer && job.status === 'To Do' && claimants.length === 0 && (
+                            {canManageJobs && job.status === 'To Do' && claimants.length === 0 && (
                               <button
                                 onClick={() => onDeleteJob(selectedEvent.id, job.id)}
                                 className="text-xs font-semibold px-3 py-1.5 min-h-11 sm:min-h-0 rounded-lg border bg-red-50 text-red-700 border-red-200 hover:bg-red-100 transition-all cursor-pointer flex items-center gap-1"
@@ -764,7 +776,7 @@ export default function EventsModule({
                   </p>
                 </div>
 
-                {isOfficer && (
+                {canManageEvent && (
                   <button
                     onClick={() => {
                       // The mount-time default is a mock id once the real roster lands.

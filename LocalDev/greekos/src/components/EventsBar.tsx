@@ -7,12 +7,13 @@ interface EventsBarProps {
   onViewChange: (view: EventsView) => void;
   filterType: string;
   onFilterChange: (type: string) => void;
-  isOfficer: boolean;
+  /** `calendar:event:create`. */
+  canCreateEvent: boolean;
   onCreate: () => void;
 }
 
-/** One horizontal bar: type chips, list/calendar toggle, officer Create. */
-export default function EventsBar({ view, onViewChange, filterType, onFilterChange, isOfficer, onCreate }: EventsBarProps) {
+/** One horizontal bar: type chips, list/calendar toggle, Create. */
+export default function EventsBar({ view, onViewChange, filterType, onFilterChange, canCreateEvent, onCreate }: EventsBarProps) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-3">
       <div role="group" aria-label="Filter events by type" className="flex flex-wrap gap-1.5 flex-1">
@@ -47,7 +48,7 @@ export default function EventsBar({ view, onViewChange, filterType, onFilterChan
         ))}
       </div>
 
-      {isOfficer && (
+      {canCreateEvent && (
         <button
           type="button"
           onClick={onCreate}
