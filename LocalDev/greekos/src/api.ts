@@ -293,6 +293,8 @@ export interface CheckInLinkDto {
 export interface NotifyPreviewDto {
   recipient_count: number;
   no_phone_count: number;
+  /** Members with a phone but no SMS consent — dropped from the blast (#89). */
+  no_consent_count: number;
   body_preview: string;
   last_notified_at: string | null;
 }

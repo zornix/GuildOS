@@ -89,6 +89,7 @@ def test_preview_no_phone_exclusion(as_member, create_event, set_phone, user_fac
     body = resp.json()
     assert body["recipient_count"] == 2  # officer + reachable
     assert body["no_phone_count"] == 2  # NULL-phone + blank-phone
+    assert body["no_consent_count"] == 0  # dry_run reaches everyone with a phone (#89)
 
 
 # ── Count mismatch (item 3) ──────────────────────────────────────────────

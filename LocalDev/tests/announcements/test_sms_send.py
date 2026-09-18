@@ -69,6 +69,8 @@ def test_twilio_preview_counts_only_consented_members(
     body = client.get(f"/api/announcements/{ann}/sms-preview").json()
     assert body["recipient_count"] == 1  # only the consented member
     assert body["no_phone_count"] == 1
+    # The dropped member is counted somewhere, not silently missing (#89).
+    assert body["no_consent_count"] == 2  # the unconsented member + the president
 
 
 def test_preview_officers_audience(
@@ -119,6 +121,7 @@ def test_preview_members_with_balance_audience(
         "audience": "members_with_balance",
         "recipient_count": 1,
         "no_phone_count": 1,
+        "no_consent_count": 0,  # dry_run reaches everyone with a phone
     }
 
 

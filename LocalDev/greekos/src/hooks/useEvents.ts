@@ -366,7 +366,14 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
         // Two-phase confirm: send back the count the preview just resolved.
         const preview = await api.notifyPreview(eventId);
         await api.notifyEvent(eventId, preview.recipient_count);
-        showToast('Notification blast sent to the chapter.');
+        // Say who was dropped, or the officer just sees a smaller blast (#89).
+        const skipped = [
+          preview.no_phone_count && `${preview.no_phone_count} without a phone`,
+          preview.no_consent_count && `${preview.no_consent_count} without SMS consent`
+        ].filter(Boolean).join(', ');
+        showToast(
+          `Notification blast sent to the chapter.${skipped ? ` Skipped ${skipped}.` : ''}`
+        );
       } catch (err) {
         showToast(errorToast(err, NOTIFY_409, 'Could not send the notification blast'));
       }

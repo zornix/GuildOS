@@ -119,6 +119,7 @@ def preview_notify(sb, *, actor: dict, event_id: str) -> dict:
         "completeness": gate,
         "recipient_count": resolved["recipient_count"],
         "no_phone_count": resolved["no_phone_count"],
+        "no_consent_count": resolved["no_consent_count"],
         "body_preview": _notify_body(event, open_job_count),
         "last_notified_at": _last_notified_at(sb, event_id),
     }
