@@ -6,7 +6,8 @@ recipient count, and every send is logged with its sender (visible to exec).
 
 Flow:
   1. preview  — resolve the announcement's audience to active members with a
-     non-empty phone; the UI shows {recipient_count, no_phone_count}.
+     non-empty phone; the UI shows
+     {recipient_count, no_phone_count, no_consent_count}.
   2. send     — the caller re-submits the count it confirmed. If the resolved
      count has drifted, RecipientCountMismatch (HTTP 409) forces the UI to
      re-show the confirmation. Otherwise the atomic `an_send_announcement_sms`
@@ -91,8 +92,9 @@ def get_announcement(sb, *, chapter_id: str, announcement_id: str) -> dict:
 def resolve_recipients(sb, *, chapter_id: str, audience: str) -> dict:
     """Resolve an audience to SMS-reachable members (active + non-empty phone).
 
-    Returns {recipient_member_ids, recipient_count, no_phone_count} where
-    no_phone_count is audience members excluded for lacking a phone.
+    Returns {recipient_member_ids, recipient_count, no_phone_count,
+    no_consent_count} where no_phone_count is audience members excluded for
+    lacking a phone and no_consent_count those dropped for lacking consent.
 
     In `twilio` mode an unconsented member is not reachable (#57), so the
     confirmation count the officer approves matches what actually sends;
@@ -147,6 +149,9 @@ def resolve_recipients(sb, *, chapter_id: str, audience: str) -> dict:
         "recipient_member_ids": [m["id"] for m in reachable],
         "recipient_count": len(reachable),
         "no_phone_count": len(members) - len(with_phone),
+        # Otherwise the dropped members are counted nowhere and the officer
+        # sees a smaller blast with no reason (#89).
+        "no_consent_count": len(with_phone) - len(reachable),
     }
 
 
@@ -159,6 +164,7 @@ def preview_sms(sb, *, chapter_id: str, announcement_id: str) -> dict:
         "audience": ann["audience"],
         "recipient_count": resolved["recipient_count"],
         "no_phone_count": resolved["no_phone_count"],
+        "no_consent_count": resolved["no_consent_count"],
     }
 
 

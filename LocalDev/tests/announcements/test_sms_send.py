@@ -69,6 +69,8 @@ def test_twilio_preview_counts_only_consented_members(
     body = client.get(f"/api/announcements/{ann}/sms-preview").json()
     assert body["recipient_count"] == 1  # only the consented member
     assert body["no_phone_count"] == 1
+    # The dropped member is counted somewhere, not silently missing (#89).
+    assert body["no_consent_count"] == 2  # the unconsented member + the president
 
 
 def test_preview_officers_audience(
@@ -119,6 +121,7 @@ def test_preview_members_with_balance_audience(
         "audience": "members_with_balance",
         "recipient_count": 1,
         "no_phone_count": 1,
+        "no_consent_count": 0,  # dry_run reaches everyone with a phone
     }
 
 
@@ -264,6 +267,55 @@ def test_sms_log_lists_send_with_sender(
     assert entry["status"] == "sent"
     assert entry["announcement_title"] == "Formal tickets"
     assert "created_at" in entry
+
+
+# ── Consent (#57) ────────────────────────────────────────────────────────────
+
+
+@pytest.fixture
+def fake_twilio(monkeypatch):
+    """Capture what would go to the provider instead of calling it."""
+    sent: list = []
+    monkeypatch.setattr(
+        "api.announcements.services.twilio_client.send_sms",
+        lambda to, body: sent.append((to, body)),
+    )
+    return sent
+
+
+def test_twilio_dispatch_refuses_a_member_without_consent(
+    cursor, chapter_id, sb_client, member_factory, set_phone, fake_twilio
+):
+    """The second enforcement path: a queued row whose member never consented (#57).
+
+    The preview already drops them, so this only fires when consent lapsed
+    between the queue and the dispatch — exactly when it must still hold.
+    """
+    from api.announcements.services import sms as sms_svc
+
+    member = member_factory()
+    set_phone(member, "+15551310001")  # phone on file, no sms_consent_at
+    cursor.execute(
+        """
+        INSERT INTO message_outbox
+            (chapter_id, event_type, member_id, target_table, target_id, dedup_key,
+             payload, status, delivery_mode, channel)
+        VALUES (%s, 'ANNOUNCEMENT_SMS', %s, 'announcement_sms_sends',
+                gen_random_uuid(), gen_random_uuid()::text,
+                '{"body": "Dues due Friday."}'::jsonb, 'pending', 'twilio', 'sms')
+        RETURNING *
+        """,
+        (chapter_id, member),
+    )
+    row = dict(cursor.fetchone())
+
+    assert sms_svc._dispatch_twilio_row(sb_client, row, chapter_name="Test") == "failed"
+
+    cursor.execute("SELECT * FROM message_outbox WHERE id = %s", (row["id"],))
+    after = cursor.fetchone()
+    assert after["status"] == "failed"
+    assert after["last_error"] == "no_consent"
+    assert fake_twilio == []
 
 
 # ── Append-only guarantees ───────────────────────────────────────────────────

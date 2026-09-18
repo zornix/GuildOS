@@ -124,6 +124,7 @@ class NotifyPreviewOut(BaseModel):
     completeness: Completeness
     recipient_count: int
     no_phone_count: int
+    no_consent_count: int
     body_preview: str
     last_notified_at: Optional[str] = None
 
