@@ -50,7 +50,7 @@ class BulkInvoiceItem(BaseModel):
     amount_cents: int = Field(gt=0)
     description: str | None = None
     # A dues run has one due date for the whole batch; the RPC reads it per item
-    # so a caller can still vary it (0157).
+    # so a caller can still vary it (0158).
     due_at: datetime | None = None
 
 
