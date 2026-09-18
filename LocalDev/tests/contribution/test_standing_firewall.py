@@ -51,6 +51,8 @@ def test_standing_computation_reads_no_contribution_source():
 
 def test_contribution_never_imports_standing():
     """…and the firewall holds in the other direction too."""
-    for path in Path("api/contribution").rglob("*.py"):
+    paths = list((Path(__file__).resolve().parents[2] / "api/contribution").rglob("*.py"))
+    assert paths, "no contribution modules found — the check would pass vacuously"
+    for path in paths:
         imported = _imported_modules(path)
         assert not any("memberadmin" in m for m in imported), f"{path} imports memberadmin"
