@@ -14,6 +14,10 @@ export const INVOICE_CREATE_KEY = 'treasury:invoice:create';
  *  GET /api/treasury/payments/submissions. Everyone holding it is the
  *  treasury board. */
 export const PAYMENT_VERIFY_KEY = 'treasury:payment:verify';
+/** POST /api/fines/issue. */
+export const FINES_ISSUE_KEY = 'treasury:fines:issue';
+/** POST /api/treasury/adjustments — the ledger correction rows. */
+export const ADJUSTMENT_CREATE_KEY = 'treasury:adjustment:create';
 
 /** The methods the backend's `method` pattern accepts, with member-facing labels. */
 export const PAYMENT_METHODS = [

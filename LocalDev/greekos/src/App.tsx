@@ -168,7 +168,6 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
             fines={finance.fines}
             payments={finance.payments}
             ledger={finance.ledger}
-            isOfficer={isOfficer}
             permissions={app.permissions}
             chapterName={app.chapterName}
             currentMemberName={currentMemberName}

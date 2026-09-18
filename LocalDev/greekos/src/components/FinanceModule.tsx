@@ -23,6 +23,8 @@ import { formatMoney } from '../formatters';
 import type { MemberBalance } from '../lib/balance';
 import { can } from '../lib/session';
 import {
+  ADJUSTMENT_CREATE_KEY,
+  FINES_ISSUE_KEY,
   INVOICE_CREATE_KEY,
   PAYMENT_VERIFY_KEY,
   DuesRunDraft,
@@ -39,7 +41,6 @@ interface FinanceModuleProps {
   fines: Fine[];
   payments: Payment[];
   ledger: LedgerEntry[];
-  isOfficer: boolean;
   /** The backend's own permission keys — every new control gates on one. */
   permissions: Set<string>;
   chapterName: string;
@@ -65,12 +66,28 @@ interface FinanceModuleProps {
   onPostLedgerCorrection: (correction: { memberId: string; amountCents: number; description: string; correctsEntryId?: string }) => void;
 }
 
+/** What the session may do in Treasury, by the keys the endpoints check (#79).
+ *  A treasurer holds these without `standing:view_all`, so the officer view is
+ *  theirs too. */
+export function treasuryAbilities(permissions: Set<string>) {
+  const canCreateDuesRun = can(permissions, INVOICE_CREATE_KEY);
+  const canVerifyPayments = can(permissions, PAYMENT_VERIFY_KEY);
+  const canIssueFines = can(permissions, FINES_ISSUE_KEY);
+  const canPostAdjustment = can(permissions, ADJUSTMENT_CREATE_KEY);
+  return {
+    canCreateDuesRun,
+    canVerifyPayments,
+    canIssueFines,
+    canPostAdjustment,
+    isTreasuryOfficer: canCreateDuesRun || canVerifyPayments || canIssueFines || canPostAdjustment
+  };
+}
+
 export default function FinanceModule({
   members,
   fines,
   payments,
   ledger,
-  isOfficer,
   permissions,
   chapterName,
   currentMemberName,
@@ -102,8 +119,8 @@ export default function FinanceModule({
   const [showDuesRun, setShowDuesRun] = useState(false);
   const [openInvoice, setOpenInvoice] = useState<Invoice | null>(null);
 
-  const canCreateDuesRun = can(permissions, INVOICE_CREATE_KEY);
-  const canVerifyPayments = can(permissions, PAYMENT_VERIFY_KEY);
+  const { canCreateDuesRun, canVerifyPayments, canIssueFines, canPostAdjustment, isTreasuryOfficer } =
+    treasuryAbilities(permissions);
 
   // The queue is only read when it is on screen — it is the one list that goes
   // stale while another officer works.
@@ -222,7 +239,7 @@ export default function FinanceModule({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {!isOfficer && (
+          {!isTreasuryOfficer && (
             <button
               onClick={() => { setPayAmount(myBalance ? (myBalance.outstandingCents / 100).toFixed(2) : ''); setShowPayModal(true); }}
               className="bg-gold hover:bg-[#c5a02b] text-navy font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer"
@@ -243,7 +260,7 @@ export default function FinanceModule({
             </button>
           )}
 
-          {isOfficer && (
+          {canIssueFines && (
             <button
               type="button"
               onClick={() => setShowAddTransaction(true)}
@@ -470,7 +487,7 @@ export default function FinanceModule({
                         </span>
                       </td>
                       <td className="py-3 px-3 text-right">
-                        {balanceCents > 0 && isOfficer && (
+                        {balanceCents > 0 && canVerifyPayments && (
                           <button
                             onClick={() => setPendingMarkPaid({ member: mem, balanceCents })}
                             className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold px-2 py-1 min-h-11 sm:min-h-0 rounded transition-all cursor-pointer"
@@ -528,7 +545,7 @@ export default function FinanceModule({
                   <th className="py-2.5 px-3">Description & Authorized By</th>
                   <th className="py-2.5 px-3 text-right">Amount</th>
                   <th className="py-2.5 px-3 text-right">Balance After</th>
-                  {isOfficer && <th className="py-2.5 px-3 text-right">Correction</th>}
+                  {canPostAdjustment && <th className="py-2.5 px-3 text-right">Correction</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-mono">
@@ -567,7 +584,7 @@ export default function FinanceModule({
                       <td className="py-3 px-3 text-right text-slate-700">
                         {formatMoney(entry.balanceAfterCents)}
                       </td>
-                      {isOfficer && (
+                      {canPostAdjustment && (
                         <td className="py-3 px-3 text-right">
                           <button
                             onClick={() => {
@@ -622,7 +639,7 @@ export default function FinanceModule({
                     {formatMoney(f.amountCents || f.amount * 100)}
                   </span>
 
-                  {isOfficer && f.status === 'Unpaid' && (
+                  {canVerifyPayments && f.status === 'Unpaid' && (
                     <button
                       onClick={() => setPendingFinePaid(f)}
                       className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 min-h-11 sm:min-h-0 rounded-lg transition-all cursor-pointer"
