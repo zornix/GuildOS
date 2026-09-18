@@ -80,6 +80,12 @@ def test_officer_cannot_read_a_member_of_another_chapter(
         (f"contrib-other-{uuid.uuid4()}",),
     )
     other_chapter = str(cursor.fetchone()["id"])
-    outsider = member_factory(chapter=other_chapter)
 
-    assert as_member(officer).get(f"/api/contribution/{outsider}").status_code == 404
+    try:
+        outsider = member_factory(chapter=other_chapter)
+
+        assert as_member(officer).get(f"/api/contribution/{outsider}").status_code == 404
+    finally:
+        # The autouse cleanup only knows this test's own chapter; its members
+        # go with it by ON DELETE CASCADE.
+        cursor.execute("DELETE FROM chapters WHERE id = %s", (other_chapter,))
