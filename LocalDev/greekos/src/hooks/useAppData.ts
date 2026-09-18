@@ -108,6 +108,21 @@ export function useAppData() {
     applyJobs(taskRows, members, eventRows);
   };
 
+  /** Re-reads the caller's own permission keys. Role edits on yourself change
+   *  what the nav may show, so the roster calls this instead of waiting for a
+   *  reload. */
+  const refreshOwnPermissions = async (memberId: string) => {
+    if (memberId !== currentMemberId) return;
+    try {
+      const perms = await api.getMyPermissions();
+      const permissionSet = new Set(perms.permissions);
+      setPermissions(permissionSet);
+      setIsOfficer(isOfficerView(permissionSet));
+    } catch (err) {
+      console.error('Permission refresh failed', err);
+    }
+  };
+
   // ----------------------------------------------------
   // BACKEND LOAD (one try/catch; failure leaves empty state + backendDown)
   // ----------------------------------------------------
@@ -312,6 +327,7 @@ export function useAppData() {
     attendance,
     tasks,
     recruitment,
+    refreshOwnPermissions,
     handleDeleteAnnouncement,
     handleExecuteCommand
   };

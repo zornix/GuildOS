@@ -17,9 +17,14 @@ interface AttendanceModuleProps {
   events: ChapterEvent[];
   members: Member[];
   excuses: Excuse[];
-  isOfficer: boolean;
+  /** `attendance:override` — the manual roll-call marks. */
+  canMarkAttendance: boolean;
+  /** `attendance:excuse:review` — approve or reject a submitted excuse. */
+  canReviewExcuses: boolean;
+  /** `standing:view_all` — the chapter-wide semester rates. */
+  canSeeAttendanceRates: boolean;
   currentMemberName: string;
-  /** Officers land on roll call; members land on the door code. */
+  /** Roll-call markers land on roll call; everyone else lands on the door code. */
   initialTab: 'roster_check' | 'excuses' | 'self_pin';
   onRecordAttendance: (eventId: string, records: { memberId: string; status: 'Present' | 'Absent' | 'Excused' | 'Late' }[]) => void;
   onSubmitExcuse: (excuse: Omit<Excuse, 'id' | 'status' | 'submittedDate'>) => void;
@@ -32,7 +37,9 @@ export default function AttendanceModule({
   events,
   members,
   excuses,
-  isOfficer,
+  canMarkAttendance,
+  canReviewExcuses,
+  canSeeAttendanceRates,
   currentMemberName,
   initialTab,
   onRecordAttendance,
@@ -180,7 +187,7 @@ export default function AttendanceModule({
               </select>
             </div>
 
-            {isOfficer && (
+            {canMarkAttendance && (
               <div className="flex flex-col sm:items-end gap-2">
                 <div className="flex flex-wrap gap-2">
                   {summary.unmarked > 0 && (
@@ -215,7 +222,7 @@ export default function AttendanceModule({
                   <th className="py-2.5 px-2 sm:px-3">Brother</th>
                   <th className="py-2.5 px-3 hidden sm:table-cell">Role</th>
                   {/* Attendance rates are for the member themself and officers only. */}
-                  {isOfficer && <th className="py-2.5 px-3 hidden sm:table-cell">Semester rate</th>}
+                  {canSeeAttendanceRates && <th className="py-2.5 px-3 hidden sm:table-cell">Semester rate</th>}
                   <th className="py-2.5 px-2 sm:px-3 text-right">Attendance Status</th>
                 </tr>
               </thead>
@@ -229,7 +236,7 @@ export default function AttendanceModule({
                         <span className="font-bold text-slate-900">{mem.name}</span>
                       </td>
                       <td className="py-3 px-3 text-slate-500 hidden sm:table-cell">{mem.role}</td>
-                      {isOfficer && (
+                      {canSeeAttendanceRates && (
                         <td className="py-3 px-3 hidden sm:table-cell">
                           <span className={`font-bold ${
                             mem.attendanceRate >= 85 ? 'text-emerald-600' : 'text-red-600'
@@ -246,7 +253,7 @@ export default function AttendanceModule({
                             return (
                               <button
                                 key={st}
-                                disabled={!isOfficer}
+                                disabled={!canMarkAttendance}
                                 aria-pressed={isCur}
                                 onClick={() => handleStatusChange(mem.id, st)}
                                 className={`px-1.5 sm:px-2.5 py-1 min-h-11 sm:min-h-0 rounded-md transition-all cursor-pointer ${
@@ -335,11 +342,11 @@ export default function AttendanceModule({
                   </div>
 
                   {/* Officer Actions */}
-                  {isOfficer && excuse.status === 'Pending' && (
+                  {canReviewExcuses && excuse.status === 'Pending' && (
                     <div className="flex items-center gap-2 shrink-0">
                       <button
                         onClick={() => onReviewExcuse(excuse.id, 'Approved', currentMemberName)}
-                        className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 min-h-11 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1"
+                        className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 min-h-11 sm:min-h-0 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1"
                       >
                         <Check className="w-3.5 h-3.5" />
                         Approve
@@ -347,7 +354,7 @@ export default function AttendanceModule({
 
                       <button
                         onClick={() => onReviewExcuse(excuse.id, 'Rejected', currentMemberName)}
-                        className="text-xs bg-red-600 hover:bg-red-700 text-white font-bold px-3 py-1.5 min-h-11 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1"
+                        className="text-xs bg-red-600 hover:bg-red-700 text-white font-bold px-3 py-1.5 min-h-11 sm:min-h-0 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1"
                       >
                         <X className="w-3.5 h-3.5" />
                         Reject

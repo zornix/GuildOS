@@ -18,8 +18,12 @@ const member: Member = {
 
 function roster(permissions: string[]) {
   return renderToStaticMarkup(createElement(RosterModule, {
-    members: [member], isOfficer: true,
+    members: [member],
+    canInviteMembers: can(permissions, 'members:invite'),
+    canSetStanding: can(permissions, 'standing:update'),
+    canSeeStandingDetail: can(permissions, 'standing:view_all'),
     canAssignRoles: can(permissions, 'roles:assign'),
+    canSeeSmsConsent: can(permissions, 'members:invite'),
     onAddMember: noop, onUpdateStanding: noop,
   }));
 }

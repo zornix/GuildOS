@@ -28,7 +28,9 @@ export function useBackend(showToast: ShowToast) {
         console.error('Mutation failed', err);
         await refetch().catch(() => { /* leave the optimistic row */ });
         if (handlers?.onError) handlers.onError(err);
-        else showToast("Couldn't save that — the server refused the change.");
+        else if ((err as { status?: number }).status === 403) {
+          showToast("You don't have permission to do that.");
+        } else showToast("Couldn't save that — the server refused the change.");
       }
     })();
   };

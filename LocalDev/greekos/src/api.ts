@@ -47,7 +47,10 @@ async function authPost(path: string, body: unknown, withToken = false): Promise
     });
   }
 
-  const data = parsed as unknown as AuthResponse;
+  const data = parsed as unknown as AuthResponse | undefined;
+  if (!data?.access_token) {
+    throw Object.assign(new Error('Malformed auth response'), { status: res.status });
+  }
   localStorage.setItem(TOKEN_KEY, data.access_token);
   return data;
 }

@@ -37,9 +37,13 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
   const chrome = useEventsChrome();
   const app = useAppData();
   const { roster, events, initiatives, finance, attendance, tasks, recruitment } = app;
-  const { isOfficer, currentMemberName } = app;
-  const currentMember = roster.members.find(member => member.name === currentMemberName);
+  const { isOfficer, currentMemberId, currentMemberName } = app;
+  const currentMember = roster.members.find(member => member.id === currentMemberId);
   const viewedBalance = balanceForMember(app.myBalance, currentMember?.id);
+  const canMarkAttendance = can(app.permissions, 'attendance:override');
+  const canCreateEvent = can(app.permissions, 'calendar:event:create');
+  const canManageJobs = can(app.permissions, 'tasks:assign');
+  const canInviteMembers = can(app.permissions, 'members:invite');
 
   return (
     <AppShell
@@ -62,6 +66,8 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
           initiatives={initiatives.initiatives}
           announcements={app.announcements}
           isOfficer={isOfficer}
+          canDeleteAnnouncement={can(app.permissions, 'announcements:create')}
+          currentMemberId={currentMemberId}
           currentMemberName={currentMemberName}
           contribution={app.contribution}
           myBalance={viewedBalance}
@@ -81,7 +87,7 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
             onViewChange={chrome.setView}
             filterType={chrome.filterType}
             onFilterChange={chrome.setFilterType}
-            isOfficer={isOfficer}
+            canCreateEvent={canCreateEvent}
             onCreate={chrome.openCreate}
           />
 
@@ -100,7 +106,10 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
             <EventsModule
               events={events.events}
               members={roster.members}
-              isOfficer={isOfficer}
+              canCreateEvent={canCreateEvent}
+              canManageEvent={can(app.permissions, 'calendar:event:update')}
+              canManageCheckInLink={can(app.permissions, 'attendance:checkin_link:manage')}
+              canManageJobs={canManageJobs}
               currentMemberName={currentMemberName}
               filterType={chrome.filterType}
               createOpen={chrome.createOpen}
@@ -134,7 +143,8 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
         <InitiativesModule
           initiatives={initiatives.initiatives}
           members={roster.members}
-          isOfficer={isOfficer}
+          canCreateInitiative={can(app.permissions, 'calendar:initiative:create')}
+          canManageJobs={canManageJobs}
           currentMemberName={currentMemberName}
           onAddInitiative={initiatives.handleAddInitiative}
           onAddJobToInitiative={initiatives.handleAddJobToInitiative}
@@ -150,9 +160,11 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
           events={events.events}
           members={roster.members}
           excuses={attendance.excuses}
-          isOfficer={isOfficer}
+          canMarkAttendance={canMarkAttendance}
+          canReviewExcuses={can(app.permissions, 'attendance:excuse:review')}
+          canSeeAttendanceRates={can(app.permissions, 'standing:view_all')}
           currentMemberName={currentMemberName}
-          initialTab={isOfficer ? 'roster_check' : 'self_pin'}
+          initialTab={canMarkAttendance ? 'roster_check' : 'self_pin'}
           onRecordAttendance={attendance.handleRecordAttendance}
           onSubmitExcuse={attendance.handleSubmitExcuse}
           onReviewExcuse={attendance.handleReviewExcuse}
@@ -167,7 +179,6 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
             fines={finance.fines}
             payments={finance.payments}
             ledger={finance.ledger}
-            isOfficer={isOfficer}
             permissions={app.permissions}
             chapterName={app.chapterName}
             currentMemberName={currentMemberName}
@@ -195,12 +206,15 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
       {activeTab === 'roster' && (
         <RosterModule
           members={roster.members}
-          isOfficer={isOfficer}
+          canInviteMembers={canInviteMembers}
+          canSetStanding={can(app.permissions, 'standing:update')}
+          canSeeStandingDetail={can(app.permissions, 'standing:view_all')}
           canAssignRoles={can(app.permissions, 'roles:assign')}
-          canSeeSmsConsent={can(app.permissions, 'members:invite')}
+          canSeeSmsConsent={canInviteMembers}
           onImportRoster={file => roster.handleImportRoster(app.chapterId, file)}
           onAddMember={roster.handleAddMember}
           onUpdateStanding={roster.handleUpdateStanding}
+          onRolesChanged={app.refreshOwnPermissions}
         />
       )}
 
@@ -208,7 +222,7 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
         <TasksModule
           tasks={tasks.tasks}
           members={roster.members}
-          isOfficer={isOfficer}
+          canCreateTask={can(app.permissions, 'tasks:create')}
           currentMemberName={currentMemberName}
           onAddTask={tasks.handleAddTask}
           onToggleTaskStatus={tasks.handleToggleTaskStatus}
@@ -232,7 +246,6 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
         <CommandModule
           members={roster.members}
           events={events.events}
-          isOfficer={isOfficer}
           currentMemberName={currentMemberName}
           onExecuteCommand={app.handleExecuteCommand}
         />
