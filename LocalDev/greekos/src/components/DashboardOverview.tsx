@@ -19,6 +19,7 @@ interface DashboardOverviewProps {
   initiatives: Initiative[];
   announcements: Announcement[];
   isOfficer: boolean;
+  currentMemberId: string;
   currentMemberName: string;
   contribution: ContributionRecord;
   myBalance: MemberBalance | null;
@@ -48,7 +49,7 @@ function TileHeader({ icon, title, onAll, allLabel }: { icon: React.ReactNode; t
 
 /** Home: welcome banner over four content tiles. No chapter KPIs, no ranking. */
 export default function DashboardOverview({
-  members, events, tasks, initiatives, announcements, isOfficer, currentMemberName,
+  members, events, tasks, initiatives, announcements, isOfficer, currentMemberId, currentMemberName,
   contribution, myBalance, onNavigateTab, onOpenEvent, onScheduleEvent,
   onVolunteerOrganizer, onSelfCheckIn, onDeleteAnnouncement
 }: DashboardOverviewProps) {
@@ -60,7 +61,7 @@ export default function DashboardOverview({
 
   const [pendingDelete, setPendingDelete] = useState<Announcement | null>(null);
 
-  const currentMember = safeMembers.find(m => m.name === currentMemberName);
+  const currentMember = safeMembers.find(m => m.id === currentMemberId);
   const today = isoDay();
   const upcomingEvents = safeEvents.filter(e => e.date >= today).sort((a, b) => a.date.localeCompare(b.date)).slice(0, TILE_LIMIT);
   const pendingJobSignOffs = safeEvents.flatMap(e => (e.jobs || []).filter(j => j.status === 'Done Reported'));

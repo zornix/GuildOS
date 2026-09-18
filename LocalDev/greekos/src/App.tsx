@@ -37,8 +37,8 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
   const chrome = useEventsChrome();
   const app = useAppData();
   const { roster, events, initiatives, finance, attendance, tasks, recruitment } = app;
-  const { isOfficer, currentMemberName } = app;
-  const currentMember = roster.members.find(member => member.name === currentMemberName);
+  const { isOfficer, currentMemberId, currentMemberName } = app;
+  const currentMember = roster.members.find(member => member.id === currentMemberId);
   const viewedBalance = balanceForMember(app.myBalance, currentMember?.id);
 
   return (
@@ -62,6 +62,7 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
           initiatives={initiatives.initiatives}
           announcements={app.announcements}
           isOfficer={isOfficer}
+          currentMemberId={currentMemberId}
           currentMemberName={currentMemberName}
           contribution={app.contribution}
           myBalance={viewedBalance}
