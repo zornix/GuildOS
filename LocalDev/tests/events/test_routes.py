@@ -6,7 +6,7 @@ from api.index import app
 
 
 def _paths() -> set[str]:
-    return {r.path for r in app.routes if hasattr(r, "path")}
+    return set(app.openapi()["paths"])
 
 
 def test_new_event_paths_registered():

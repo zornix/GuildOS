@@ -7,7 +7,7 @@ from api.index import app
 
 
 def _paths() -> set[str]:
-    return {r.path for r in app.routes if hasattr(r, "path")}
+    return set(app.openapi()["paths"])
 
 
 LEGACY_PATHS = [
