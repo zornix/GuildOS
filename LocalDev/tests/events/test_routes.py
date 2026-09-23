@@ -6,6 +6,9 @@ from api.index import app
 
 
 def _paths() -> set[str]:
+    # ponytail: OpenAPI omits include_in_schema=False routes, so a hidden
+    # route is invisible here (the "is gone" check could pass falsely).
+    # FastAPI >=0.141 nests routers in app.routes; walk those if that matters.
     return set(app.openapi()["paths"])
 
 
