@@ -15,7 +15,6 @@ from .schemas import (
 )
 from api.members.api.schemas import UserProfile
 from api.platform.db import get_db
-from api.platform.rows import unwrap_row
 from api.config import settings
 from api.auth.notifications import RESET_CODE, SETUP_CODE, notify_code
 
@@ -138,18 +137,18 @@ def _issue_setup_code(
     Only the bcrypt hash is stored; the plaintext is returned to the caller once
     and never recoverable afterwards.
 
-    Every caller (invite, chapter creation, roster import, officer reset) also
-    gets the code emailed to the member from here — this is the one place a code
-    is minted, so no producer can forget (ADR-0005). `event_type` picks the copy:
-    SETUP_CODE for a new account, RESET_CODE for a reset.
+    Every caller (chapter creation, roster import, officer reset) also gets the
+    code emailed to the member from here (ADR-0005); invite_members writes its
+    code inside the au_invite_member RPC and then calls notify_code itself.
+    `event_type` picks the copy: SETUP_CODE for a new account, RESET_CODE for a
+    reset.
     """
-    code = _generate_setup_code()
-    expires_at = datetime.now(timezone.utc) + timedelta(days=SETUP_CODE_TTL_DAYS)
+    code, code_hash, expires_at = _mint_setup_code()
     sb.table("member_setup_codes").insert({
         "chapter_id": chapter_id,
         "member_id": member_id,
-        "code_hash": _hash_secret(code),
-        "expires_at": expires_at.isoformat(),
+        "code_hash": code_hash,
+        "expires_at": expires_at,
     }).execute()
     notify_code(
         sb,
@@ -157,9 +156,9 @@ def _issue_setup_code(
         chapter_id=chapter_id,
         member_id=member_id,
         code=code,
-        expires_at=expires_at.isoformat(),
+        expires_at=expires_at,
     )
-    return code, expires_at.isoformat()
+    return code, expires_at
 
 
 def _recent_failures(sb, *, column: str, value: str) -> int:
@@ -336,6 +335,11 @@ async def invite_members(
     account" hole. Each invitee gets a single-use setup code, returned in
     plaintext exactly once for the officer to hand over out of band.
     Duplicate emails are reported in failed.
+
+    The member row and its code are written in one statement (au_invite_member,
+    0161): the db client autocommits every statement, so two inserts could
+    leave an 'invited' row with no redeemable code — and a retry then failed on
+    the duplicate email.
     """
     sb = get_db()
     invited: list[str] = []
@@ -348,26 +352,32 @@ async def invite_members(
         local = email.split("@", 1)[0]
         name = local.replace(".", " ").replace("_", " ").strip().title() or "Member"
         try:
-            result = sb.table("members").insert({
-                "chapter_id": chapter_id,
-                "name": name,
-                "email": email,
-                "role": "member",
-                "status": "invited",
+            code, code_hash, expires_at = _mint_setup_code()
+            result = sb.rpc("au_invite_member", {
+                "p_chapter_id": chapter_id,
+                "p_name": name,
+                "p_email": email,
+                "p_code_hash": code_hash,
+                "p_expires_at": expires_at,
                 # NULL unless the officer affirmed a signed opt-in (#57).
-                "sms_consent_at": (
+                "p_sms_consent_at": (
                     datetime.now(timezone.utc).isoformat() if body.sms_consent else None
                 ),
             }).execute()
-            if result.data:
-                row = unwrap_row(result)
-                code, _expires_at = _issue_setup_code(
-                    sb, chapter_id=chapter_id, member_id=row["id"]
-                )
-                invited.append(email)
-                setup_codes.append({"email": email, "setup_code": code})
-            else:
+            member_id = (result.data or {}).get("member_id")
+            if not member_id:
                 failed.append({"email": email, "error": "Insert failed"})
+                continue
+            notify_code(
+                sb,
+                event_type=SETUP_CODE,
+                chapter_id=chapter_id,
+                member_id=member_id,
+                code=code,
+                expires_at=expires_at,
+            )
+            invited.append(email)
+            setup_codes.append({"email": email, "setup_code": code, "expires_at": expires_at})
         except Exception as exc:
             failed.append({"email": email, "error": str(exc)})
 

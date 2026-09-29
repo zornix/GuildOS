@@ -29,6 +29,8 @@ def test_invite_creates_invited_members_with_codes(as_member, member_factory, cu
     # invited[] stays a plain string list (fratos InviteResult); codes ride alongside.
     assert sorted(c["email"] for c in body["setup_codes"]) == sorted(emails)
     assert all(len(c["setup_code"]) == 8 for c in body["setup_codes"])
+    # Each code carries its expiry so the officer can relay the deadline.
+    assert all(c["expires_at"] for c in body["setup_codes"])
 
     cursor.execute("SELECT status FROM members WHERE email = ANY(%s)", (emails,))
     assert {r["status"] for r in cursor.fetchall()} == {"invited"}
@@ -206,3 +208,51 @@ def test_reset_code_requires_officer(as_member, member_factory):
     res = as_member(plain).post(f"/api/auth/reset-code/{target}")
 
     assert res.status_code == 403
+
+
+def test_invite_duplicate_email_fails_that_email_only(
+    as_member, member_factory, member_email, cursor
+):
+    """Per-invitee isolation (0155 D2): a duplicate email lands only itself in
+    failed and writes no setup-code row; the other invitees still succeed."""
+    officer = member_factory(role="officer")
+    existing = member_factory(role="member")
+    existing_email = member_email(existing)
+    fresh1, fresh2 = _emails(2)
+
+    res = as_member(officer).post(
+        "/api/auth/invite", json={"emails": [fresh1, existing_email, fresh2]}
+    )
+
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["invited"] == [fresh1, fresh2]  # order preserved
+    assert [f["email"] for f in body["failed"]] == [existing_email]
+    assert sorted(c["email"] for c in body["setup_codes"]) == sorted([fresh1, fresh2])
+    # The duplicate never wrote a second member_setup_codes row.
+    cursor.execute(
+        "SELECT count(*) AS n FROM member_setup_codes WHERE member_id = %s", (existing,)
+    )
+    assert cursor.fetchone()["n"] == 0
+
+
+def test_failed_code_issue_leaves_no_member_row(as_member, member_factory, cursor):
+    """0155 atomicity: if the setup-code insert cannot run, the aborted RPC rolls
+    back the members insert too — no orphan 'invited' row, and retry succeeds."""
+    officer = member_factory(role="officer")
+    email = _emails()[0]
+    cursor.execute("ALTER TABLE member_setup_codes RENAME TO member_setup_codes_bak")
+    try:
+        res = as_member(officer).post("/api/auth/invite", json={"emails": [email]})
+    finally:
+        cursor.execute("ALTER TABLE member_setup_codes_bak RENAME TO member_setup_codes")
+    body = res.json()
+    assert body["invited"] == [] and body["setup_codes"] == []
+    assert [f["email"] for f in body["failed"]] == [email]
+    # The whole point: the aborted RPC rolled back the members insert too.
+    cursor.execute("SELECT count(*) AS n FROM members WHERE email = %s", (email,))
+    assert cursor.fetchone()["n"] == 0
+    # And the officer can retry successfully once the fault clears.
+    retry = as_member(officer).post("/api/auth/invite", json={"emails": [email]})
+    assert retry.json()["invited"] == [email]
+
