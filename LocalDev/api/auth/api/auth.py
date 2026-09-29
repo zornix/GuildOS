@@ -97,15 +97,37 @@ def _parse_ts(value) -> datetime:
     return datetime.min.replace(tzinfo=timezone.utc)
 
 
+def _ip_from_forwarded(forwarded: str, trusted_hops: int) -> str | None:
+    """Rightmost-trusted X-Forwarded-For entry.
+
+    Proxies append the peer address at the RIGHT; the leftmost entries are
+    client-controlled, so keying the per-IP rate limit on them let a caller open
+    a fresh bucket per request. With N trusted hops the real client is the Nth
+    entry from the right.
+    """
+    entries = [e.strip() for e in forwarded.split(",") if e.strip()]
+    if not entries:
+        return None
+    hops = max(1, trusted_hops)
+    return entries[-min(hops, len(entries))][:64]
+
+
 def _client_ip(request: Request | None) -> str | None:
     if request is None:
         return None
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
-        first = forwarded.split(",")[0].strip()
-        if first:
-            return first
+        ip = _ip_from_forwarded(forwarded, settings.TRUSTED_PROXY_HOPS)
+        if ip:
+            return ip
     return request.client.host if request.client else None
+
+
+def _mint_setup_code() -> tuple[str, str, str]:
+    """(plaintext_code, bcrypt_hash, expires_at_iso) for a fresh setup code."""
+    code = _generate_setup_code()
+    expires_at = datetime.now(timezone.utc) + timedelta(days=SETUP_CODE_TTL_DAYS)
+    return code, _hash_secret(code), expires_at.isoformat()
 
 
 def _issue_setup_code(

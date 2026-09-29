@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     # Outbound message delivery: "dry_run" (rows marked simulated, no network) or
     # "twilio" (real sends; requires the TWILIO_* settings below).
     MESSAGE_DELIVERY_MODE: str = "dry_run"
+    # Trusted reverse-proxy hops appending to X-Forwarded-For. Proxies append the
+    # peer at the RIGHT, so the real client is the Nth entry from the right; the
+    # leftmost entry is whatever the client sent. 1 = Vercel's edge. Raise only
+    # if a proxy is added in front of it.
+    TRUSTED_PROXY_HOPS: int = 1
     TWILIO_ACCOUNT_SID: str = ""
     TWILIO_AUTH_TOKEN: str = ""
     # Preferred sender: a Messaging Service ("MG..."), which is what carries the

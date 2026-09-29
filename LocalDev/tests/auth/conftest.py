@@ -216,3 +216,17 @@ def burn_attempts(cursor):
             )
 
     return _burn
+
+
+@pytest.fixture
+def burn_ip_attempts(cursor):
+    """Pre-load failed attempts for one source IP, across distinct emails."""
+
+    def _burn(ip: str, count: int) -> None:
+        for _ in range(count):
+            cursor.execute(
+                "INSERT INTO login_attempts (email, ip, success) VALUES (%s, %s, FALSE)",
+                (f"spray-{uuid.uuid4().hex}@example.com", ip),
+            )
+
+    return _burn

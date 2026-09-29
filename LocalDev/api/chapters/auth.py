@@ -18,6 +18,7 @@ import time
 
 from fastapi import HTTPException, Request
 
+from api.auth.api.auth import _client_ip as _trusted_client_ip
 from api.config import settings
 
 _UNAUTHORIZED = "Unauthorized"
@@ -32,12 +33,8 @@ _recent: list[tuple[float, str]] = []
 
 
 def _client_ip(request: Request | None) -> str:
-    if request is None:
-        return "unknown"
-    forwarded = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
-    if forwarded:
-        return forwarded
-    return request.client.host if request.client else "unknown"
+    # Rightmost-trusted X-Forwarded-For, same as the login limiter.
+    return _trusted_client_ip(request) or "unknown"
 
 
 def _rate_limit(ip: str) -> None:
