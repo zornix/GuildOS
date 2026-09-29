@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 import jwt as pyjwt
 import pytest
 
+PASSWORD = "an-initial-password"
 NEW_PASSWORD = "a-brand-new-password"
 
 
@@ -29,11 +30,12 @@ def _login(client, email: str, password: str | None = None) -> dict:
 
 
 def test_set_password_bumps_epoch_and_returns_working_token(
-    client, member_factory, member_email, token_version
+    client, member_factory, member_email, set_password_hash, token_version
 ):
     """role='member' sets their own password — no officer check any more."""
     member = member_factory(role="member")
-    old_token = _login(client, member_email(member))["access_token"]
+    set_password_hash(member, PASSWORD)
+    old_token = _login(client, member_email(member), PASSWORD)["access_token"]
     assert client.get("/api/auth/me", headers=_auth(old_token)).status_code == 200
 
     before = token_version(member)
@@ -51,21 +53,27 @@ def test_set_password_bumps_epoch_and_returns_working_token(
     assert client.get("/api/auth/me", headers=_auth(body["access_token"])).status_code == 200
 
 
-def test_password_is_enforced_after_being_set(client, member_factory, member_email):
+def test_password_is_enforced_after_being_set(
+    client, member_factory, member_email, set_password_hash
+):
     member = member_factory(role="member")
     email = member_email(member)
-    token = _login(client, email)["access_token"]
+    set_password_hash(member, PASSWORD)
+    token = _login(client, email, PASSWORD)["access_token"]
     client.post("/api/auth/set-password", json={"password": NEW_PASSWORD}, headers=_auth(token))
 
     assert client.post("/api/auth/login", json={"email": email}).status_code == 403
     assert _login(client, email, NEW_PASSWORD)["access_token"]
 
 
-def test_login_token_carries_hardened_claims(client, member_factory, member_email):
+def test_login_token_carries_hardened_claims(
+    client, member_factory, member_email, set_password_hash
+):
     from api.config import settings
 
     member = member_factory(role="member")
-    token = _login(client, member_email(member))["access_token"]
+    set_password_hash(member, PASSWORD)
+    token = _login(client, member_email(member), PASSWORD)["access_token"]
 
     claims = pyjwt.decode(
         token, settings.JWT_SECRET, algorithms=["HS256"],
@@ -103,10 +111,13 @@ def test_malformed_tokens_are_rejected(client, claims):
     assert client.get("/api/auth/me", headers=_auth(token)).status_code == 401
 
 
-def test_stale_epoch_token_is_rejected(client, member_factory, member_email, cursor):
+def test_stale_epoch_token_is_rejected(
+    client, member_factory, member_email, set_password_hash, cursor
+):
     """A token whose ver predates a token_version bump is dead on arrival."""
     member = member_factory(role="member")
-    token = _login(client, member_email(member))["access_token"]
+    set_password_hash(member, PASSWORD)
+    token = _login(client, member_email(member), PASSWORD)["access_token"]
     assert client.get("/api/auth/me", headers=_auth(token)).status_code == 200
 
     cursor.execute("UPDATE members SET token_version = token_version + 1 WHERE id = %s", (member,))

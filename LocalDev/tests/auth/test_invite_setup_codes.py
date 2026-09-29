@@ -79,8 +79,20 @@ def test_invited_member_cannot_login_but_can_redeem(
     cursor.execute("SELECT status FROM members WHERE email = %s", (email,))
     assert cursor.fetchone()["status"] == "active"
 
-    # And now the ordinary email login works.
-    assert client.post("/api/auth/login", json={"email": email}).status_code == 200
+    # A redeemed member is active but still passwordless, so email-only login is
+    # 403 now, not 200. The real activation is setting a password via the
+    # redeemed session; login with that password then works.
+    assert client.post("/api/auth/login", json={"email": email}).status_code == 403
+    new_pw = "redeemed-member-password"
+    sp = client.post(
+        "/api/auth/set-password",
+        json={"password": new_pw},
+        headers={"Authorization": f"Bearer {body['access_token']}"},
+    )
+    assert sp.status_code == 200, sp.text
+    assert client.post(
+        "/api/auth/login", json={"email": email, "password": new_pw}
+    ).status_code == 200
 
 
 def test_redeemed_token_authenticates(as_member, client, member_factory):
@@ -158,12 +170,15 @@ def test_redeem_is_rate_limited(client, member_factory, member_email, burn_attem
 
 
 def test_reset_code_issues_code_and_revokes_sessions(
-    as_member, client, member_factory, member_email, token_version
+    as_member, client, member_factory, member_email, set_password_hash, token_version
 ):
     officer = member_factory(role="officer")
     member = member_factory(role="member")
     email = member_email(member)
-    old_token = client.post("/api/auth/login", json={"email": email}).json()["access_token"]
+    set_password_hash(member, "before-reset-password")
+    old_token = client.post(
+        "/api/auth/login", json={"email": email, "password": "before-reset-password"}
+    ).json()["access_token"]
     before = token_version(member)
 
     res = as_member(officer).post(f"/api/auth/reset-code/{member}")
@@ -256,3 +271,39 @@ def test_failed_code_issue_leaves_no_member_row(as_member, member_factory, curso
     retry = as_member(officer).post("/api/auth/invite", json={"emails": [email]})
     assert retry.json()["invited"] == [email]
 
+
+def test_pre0148_passwordless_active_recovers_via_reset_code(
+    as_member, client, member_factory, member_email
+):
+    """The complete imp-fix-grace-login-takeover.md D2 recovery path: a pre-0148
+    passwordless active member is locked out of /login but recovers end to end
+    through the officer-assisted reset-code flow."""
+    officer = member_factory(role="officer")
+    member = member_factory(role="member")  # status='active', password_hash NULL
+    email = member_email(member)
+
+    # Email-only login is dead: 403 with no token — the takeover is impossible.
+    login = client.post("/api/auth/login", json={"email": email})
+    assert login.status_code == 403
+    assert "access_token" not in login.json()
+
+    # Officer issues a reset code; the member redeems it.
+    code = as_member(officer).post(f"/api/auth/reset-code/{member}").json()["setup_code"]
+    redeemed = client.post(
+        "/api/auth/redeem-setup-code", json={"email": email, "code": code}
+    )
+    assert redeemed.status_code == 200, redeemed.text
+    body = redeemed.json()
+    assert body["password_setup_required"] is True
+
+    # Set a password via the redeemed session, then log in with it.
+    new_pw = "recovered-password"
+    sp = client.post(
+        "/api/auth/set-password",
+        json={"password": new_pw},
+        headers={"Authorization": f"Bearer {body['access_token']}"},
+    )
+    assert sp.status_code == 200, sp.text
+    assert client.post(
+        "/api/auth/login", json={"email": email, "password": new_pw}
+    ).status_code == 200

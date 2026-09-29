@@ -16,8 +16,8 @@ export function logout(): void {
   localStorage.removeItem(TOKEN_KEY);
 }
 
-/** Every auth endpoint answers with a session; `password_setup_required` means the
- *  member holds a grace token and must set a password before anything else. */
+/** Every auth endpoint answers with a session; `password_setup_required` (redeem
+ *  only) means the member must set a password before anything else. */
 export interface AuthResponse { access_token: string; password_setup_required?: boolean }
 
 /** POSTs to an auth endpoint and stores the returned session token.

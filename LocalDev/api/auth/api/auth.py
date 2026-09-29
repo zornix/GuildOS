@@ -204,8 +204,9 @@ async def login(body: LoginRequest, request: Request):
     Authenticate a member. Role plays no part in this flow (imp-one-gate.md D2).
 
     - Any member with a password_hash must supply the password.
-    - Any member without one gets a grace token plus password_setup_required and
-      is expected to call set-password immediately.
+    - A member without one never gets a token from here: email alone would let
+      whoever knows the address set a password and revoke the real member's
+      sessions. They recover through the officer-issued reset code.
     - Only active members can log in; invitees must redeem their setup code
       first, so an unclaimed invite cannot be taken over by email alone.
 
@@ -247,15 +248,25 @@ async def login(body: LoginRequest, request: Request):
         if not _check_secret(body.password, member["password_hash"]):
             _record_attempt(sb, email=normalized_email, ip=ip, success=False)
             raise HTTPException(401, INVALID_CREDENTIALS)
+    else:
+        # Passwordless active member (pre-0148 rows). Byte-identical to the
+        # hashed branch so the response does not reveal which accounts have no
+        # password: email only → the same 403, email + password → the same 401
+        # after the same bcrypt cost.
+        if not body.password:
+            _record_attempt(sb, email=normalized_email, ip=ip, success=False)
+            raise HTTPException(403, detail={
+                "message": "Password required for officer login",
+                "code": "PASSWORD_REQUIRED",
+            })
+        _check_secret(body.password, _DUMMY_HASH)
+        _record_attempt(sb, email=normalized_email, ip=ip, success=False)
+        raise HTTPException(401, INVALID_CREDENTIALS)
 
     token = _issue_member_token(member["id"], member.get("token_version"))
     _record_attempt(sb, email=normalized_email, ip=ip, success=True)
 
-    response = {"access_token": token, "token_type": "bearer"}
-    if not member.get("password_hash"):
-        response["password_setup_required"] = True
-
-    return response
+    return {"access_token": token, "token_type": "bearer"}
 
 
 @router.post("/dev-login")

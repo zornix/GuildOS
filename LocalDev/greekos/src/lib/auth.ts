@@ -14,7 +14,7 @@ export function normalizeSetupCode(raw: string): string {
   return raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
-/** A member with no password hash gets a grace token and must set one now. */
+/** A redeemed setup code yields a session that must set a password before anything else. */
 export function stepAfterAuth(result: { password_setup_required?: boolean }): AuthStep | 'app' {
   return result.password_setup_required ? 'password' : 'app';
 }

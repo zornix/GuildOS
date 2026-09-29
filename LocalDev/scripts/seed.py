@@ -28,10 +28,10 @@ MEMBER_AUTH_IDS = [f"aaaaaaaa-0000-0000-0000-0000000001{i:02d}" for i in range(1
 
 EVENT_IDS = [f"00000000-0000-0000-0000-000000000e{i:02d}" for i in range(1, 6)]
 
-# Known demo password for seeded officers. Mirrored in the e2e login fixture at
-# fratos/e2e/fixtures/auth.ts — keep the two in sync. Satisfies the min-8
-# validator in api/auth/api/schemas.py.
-OFFICER_DEMO_PASSWORD = "demo-officer-pw"
+# Known demo password for every seeded member: /login issues no token without
+# a verified password, so passwordless demo rows would be unreachable.
+# Satisfies the min-8 validator in api/auth/api/schemas.py.
+DEMO_PASSWORD = "demo-officer-pw"
 
 # Treasury authority is catalog permissions on roles since 0147 (treasury_grants
 # is gone); the demo officer holds them through the 'officer' + 'treasurer' roles
@@ -219,11 +219,9 @@ def seed():
     all_auth_ids = [OFFICER_AUTH_ID] + MEMBER_AUTH_IDS
 
     for i, m in enumerate(MEMBERS_DATA):
-        password_hash = None
-        if m["role"] == "officer":
-            password_hash = bcrypt.hashpw(
-                OFFICER_DEMO_PASSWORD.encode("utf-8"), bcrypt.gensalt()
-            ).decode("utf-8")
+        password_hash = bcrypt.hashpw(
+            DEMO_PASSWORD.encode("utf-8"), bcrypt.gensalt()
+        ).decode("utf-8")
         cur.execute(
             'INSERT INTO members (id, auth_id, chapter_id, name, email, phone, role, status, password_hash) '
             'VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)',

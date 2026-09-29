@@ -61,9 +61,8 @@ The demo chapter is **Delta Mu / TKE**. Use the seeded officer:
 That officer has `admin`, `president`, and `treasurer` roles, so the
 permission-gated screens (events, treasury, roster, …) are usable.
 
-Seeded members (`ryan@tke.org`, `tyler@tke.org`, …) have no password hash.
-They get a grace login and are prompted to set a password. Use those accounts
-to see the member-side UI.
+Seeded members (`ryan@tke.org`, `tyler@tke.org`, …) use the same password.
+Use those accounts to see the member-side UI.
 
 **Local only:** every `vite dev` build shows **Local only: sign in as seeded
 officer** on the login page; `DEV_AUTH_BYPASS=1` in `LocalDev/.env` is what
