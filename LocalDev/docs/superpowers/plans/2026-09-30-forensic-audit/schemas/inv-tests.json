@@ -1,0 +1,15 @@
+{"type":"object","properties":{
+ "files":{"type":"array","items":{"type":"object","properties":{
+   "file":{"type":"string"},"test_count":{"type":"integer"},"subsystem":{"type":"string"},
+   "database":{"type":"string","enum":["real","mocked","none"]},
+   "http":{"type":"string","enum":["testclient","none"]},
+   "auth":{"type":"string","enum":["real_jwt","dependency_override","superuser_sql","none"]},
+   "mocks":{"type":"array","items":{"type":"string"}},
+   "assertion_strength":{"type":"string","enum":["strong","medium","weak"]},
+   "covers":{"type":"array","items":{"type":"string","enum":["happy_path","negative","tenant_isolation","permission_denied","concurrency","idempotency","rollback","migration","trigger","money_math","state_transition"]}},
+   "notes":{"type":"string"}},
+   "required":["file","test_count","subsystem","database","http","auth","mocks","assertion_strength","covers","notes"],"additionalProperties":false}},
+ "fixtures":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"file":{"type":"string"},"what":{"type":"string"}},"required":["name","file","what"],"additionalProperties":false}},
+ "monkeypatch_targets":{"type":"array","items":{"type":"string"},"description":"production symbols patched by tests, path:symbol"},
+ "coverage_notes":{"type":"string"}},
+ "required":["files","fixtures","monkeypatch_targets","coverage_notes"],"additionalProperties":false}

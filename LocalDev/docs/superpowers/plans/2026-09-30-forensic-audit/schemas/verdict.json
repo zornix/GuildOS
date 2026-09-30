@@ -1,0 +1,11 @@
+{"type":"object","properties":{
+ "verdict":{"type":"string","enum":["confirmed","refuted","downgraded","upgraded"]},
+ "severity":{"type":"string","enum":["P0","P1","P2","P3","P4"]},
+ "confidence":{"type":"string","enum":["confirmed","likely","speculative"]},
+ "guard_found":{"type":"string","description":"the exact code that prevents the issue, path:line, or 'none'"},
+ "evidence":{"type":"array","items":{"type":"string"},"description":"path:line quotes you read end to end"},
+ "repro_steps":{"type":"string","description":"exact request/RPC sequence that triggers it, or why it cannot be triggered"},
+ "test_run":{"type":"object","properties":{"command":{"type":"string"},"outcome":{"type":"string"}},"required":["command","outcome"],"additionalProperties":false},
+ "corrections":{"type":"string","description":"wrong file/line/claims in the original finding, or 'none'"},
+ "reasoning":{"type":"string"}},
+ "required":["verdict","severity","confidence","guard_found","evidence","repro_steps","test_run","corrections","reasoning"],"additionalProperties":false}

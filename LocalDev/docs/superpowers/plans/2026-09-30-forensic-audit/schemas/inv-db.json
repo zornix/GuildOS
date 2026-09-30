@@ -1,0 +1,18 @@
+{"type":"object","properties":{
+ "tables":{"type":"array","items":{"type":"object","properties":{
+   "name":{"type":"string"},"created_in":{"type":"string"},"has_chapter_id":{"type":"boolean"},"rls_enabled":{"type":"boolean"},"force_rls":{"type":"boolean"},
+   "foreign_keys":{"type":"array","items":{"type":"string"}},"uniques":{"type":"array","items":{"type":"string"}},"checks":{"type":"array","items":{"type":"string"}},
+   "triggers":{"type":"array","items":{"type":"string"}},"indexes":{"type":"array","items":{"type":"string"}},
+   "money_columns":{"type":"array","items":{"type":"string"},"description":"column:type for every amount/price/cents column"},
+   "notes":{"type":"string"}},
+   "required":["name","created_in","has_chapter_id","rls_enabled","force_rls","foreign_keys","uniques","checks","triggers","indexes","money_columns","notes"],"additionalProperties":false}},
+ "functions":{"type":"array","items":{"type":"object","properties":{
+   "name":{"type":"string"},"defined_in":{"type":"string","description":"migration file of the LIVE definition (last CREATE OR REPLACE)"},
+   "security_definer":{"type":"boolean"},"tenant_guard":{"type":"string","enum":["yes","partial","no","not_applicable"]},
+   "idempotency_key":{"type":"boolean"},"writes_audit_logs":{"type":"boolean"},"writes_big_ledger":{"type":"boolean"},
+   "row_locking":{"type":"string"},"python_callers":{"type":"array","items":{"type":"string"}},"notes":{"type":"string"}},
+   "required":["name","defined_in","security_definer","tenant_guard","idempotency_key","writes_audit_logs","writes_big_ledger","row_locking","python_callers","notes"],"additionalProperties":false}},
+ "grants_and_revokes":{"type":"string"},
+ "migrations_edited_after_commit":{"type":"array","items":{"type":"string"}},
+ "coverage_notes":{"type":"string"}},
+ "required":["tables","functions","grants_and_revokes","migrations_edited_after_commit","coverage_notes"],"additionalProperties":false}
