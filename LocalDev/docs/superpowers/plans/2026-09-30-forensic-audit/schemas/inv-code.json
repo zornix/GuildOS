@@ -1,0 +1,9 @@
+{"type":"object","properties":{
+ "import_graph":{"type":"array","items":{"type":"object","properties":{"from_domain":{"type":"string"},"to_domain":{"type":"string"},"import_lines":{"type":"array","items":{"type":"string"}}},"required":["from_domain","to_domain","import_lines"],"additionalProperties":false}},
+ "cycles":{"type":"array","items":{"type":"string"}},
+ "big_files":{"type":"array","items":{"type":"object","properties":{"file":{"type":"string"},"lines":{"type":"integer"}},"required":["file","lines"],"additionalProperties":false},"description":"every file over 300 lines"},
+ "duplicates":{"type":"array","items":{"type":"object","properties":{"concern":{"type":"string"},"locations":{"type":"array","items":{"type":"string"}},"detail":{"type":"string"}},"required":["concern","locations","detail"],"additionalProperties":false}},
+ "markers":{"type":"array","items":{"type":"object","properties":{"file":{"type":"string"},"line":{"type":"integer"},"kind":{"type":"string"},"text":{"type":"string"}},"required":["file","line","kind","text"],"additionalProperties":false},"description":"TODO/FIXME/HACK/XXX/ponytail:/temporary/for now"},
+ "uncalled":{"type":"array","items":{"type":"object","properties":{"symbol":{"type":"string"},"file":{"type":"string"},"line":{"type":"integer"},"how_checked":{"type":"string"}},"required":["symbol","file","line","how_checked"],"additionalProperties":false}},
+ "coverage_notes":{"type":"string"}},
+ "required":["import_graph","cycles","big_files","duplicates","markers","uncalled","coverage_notes"],"additionalProperties":false}

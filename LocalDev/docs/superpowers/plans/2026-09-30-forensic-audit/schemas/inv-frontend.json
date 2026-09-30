@@ -1,0 +1,9 @@
+{"type":"object","properties":{
+ "files":{"type":"array","items":{"type":"object","properties":{"file":{"type":"string"},"lines":{"type":"integer"},"kind":{"type":"string","enum":["module","component","hook","lib","api","adapter","types","config","test","other"]},"api_calls":{"type":"array","items":{"type":"string"}},"use_effect_count":{"type":"integer"}},"required":["file","lines","kind","api_calls","use_effect_count"],"additionalProperties":false}},
+ "fetch_wrappers":{"type":"array","items":{"type":"string"},"description":"name path:line"},
+ "clusters":{"type":"array","items":{"type":"object","properties":{"concern":{"type":"string","description":"fetching | mutations | forms | validation | modals | toasts | auth_state | errors | loading | caching | dates | api_types | permissions | tables | pagination"},"approaches":{"type":"array","items":{"type":"object","properties":{"approach":{"type":"string"},"locations":{"type":"array","items":{"type":"string"}}},"required":["approach","locations"],"additionalProperties":false}}},"required":["concern","approaches"],"additionalProperties":false}},
+ "role_checks":{"type":"array","items":{"type":"string"},"description":"path:line text of isOfficer / role string checks"},
+ "unsafe_casts":{"type":"array","items":{"type":"string"},"description":"path:line of 'as T' at API/module boundaries"},
+ "dto_drift":{"type":"array","items":{"type":"object","properties":{"ts_type":{"type":"string"},"backend_schema":{"type":"string"},"difference":{"type":"string"}},"required":["ts_type","backend_schema","difference"],"additionalProperties":false}},
+ "coverage_notes":{"type":"string"}},
+ "required":["files","fetch_wrappers","clusters","role_checks","unsafe_casts","dto_drift","coverage_notes"],"additionalProperties":false}

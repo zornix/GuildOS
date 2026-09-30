@@ -1,0 +1,13 @@
+{"type":"object","properties":{
+ "routes":{"type":"array","items":{"type":"object","properties":{
+   "method":{"type":"string"},"path":{"type":"string"},"file":{"type":"string"},"line":{"type":"integer"},"handler":{"type":"string"},
+   "auth":{"type":"string","enum":["jwt","cron_secret","platform_secret","twilio_signature","none"]},
+   "permission_keys":{"type":"array","items":{"type":"string"}},
+   "permission_style":{"type":"string","enum":["dependency","inline","legacy_role","none"]},
+   "chapter_scope":{"type":"string","enum":["python_filter","rpc_guard","both","none","not_applicable"]},
+   "writes":{"type":"string","enum":["none","direct_sql","rpc","both"]},
+   "notes":{"type":"string"}},
+   "required":["method","path","file","line","handler","auth","permission_keys","permission_style","chapter_scope","writes","notes"],"additionalProperties":false}},
+ "total_handlers_found":{"type":"integer"},
+ "coverage_notes":{"type":"string"}},
+ "required":["routes","total_handlers_found","coverage_notes"],"additionalProperties":false}

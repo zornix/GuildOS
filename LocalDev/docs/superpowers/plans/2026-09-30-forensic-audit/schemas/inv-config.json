@@ -1,0 +1,9 @@
+{"type":"object","properties":{
+ "env_vars":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"in_settings":{"type":"boolean"},"in_env_example":{"type":"boolean"},"in_local_env":{"type":"boolean"},"used_at":{"type":"array","items":{"type":"string"}},"default":{"type":"string"},"risky_default":{"type":"boolean"}},"required":["name","in_settings","in_env_example","in_local_env","used_at","default","risky_default"],"additionalProperties":false}},
+ "python_deps":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"localdev_pin":{"type":"string"},"prod_pin":{"type":"string"},"imported_at":{"type":"array","items":{"type":"string"}}},"required":["name","localdev_pin","prod_pin","imported_at"],"additionalProperties":false}},
+ "npm_deps":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"section":{"type":"string"},"imported_at":{"type":"array","items":{"type":"string"}}},"required":["name","section","imported_at"],"additionalProperties":false}},
+ "deploy":{"type":"array","items":{"type":"string"},"description":"one line per fact from vercel.json (both), ci.yml, migrate-prod.yml, requirements"},
+ "scripts":{"type":"array","items":{"type":"object","properties":{"file":{"type":"string"},"guard":{"type":"string"},"danger":{"type":"string"}},"required":["file","guard","danger"],"additionalProperties":false}},
+ "sensitive_logging":{"type":"array","items":{"type":"string"},"description":"path:line where a token, secret, password, phone or email may be logged or returned in an error"},
+ "coverage_notes":{"type":"string"}},
+ "required":["env_vars","python_deps","npm_deps","deploy","scripts","sensitive_logging","coverage_notes"],"additionalProperties":false}
