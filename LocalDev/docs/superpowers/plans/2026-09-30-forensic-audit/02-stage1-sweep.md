@@ -52,10 +52,15 @@ O=/home/mshik/GuildOS/archive/audit-2026-09-30/stage1
 M="Gemini 3.6 Flash (High)"
 for t in S1-routes S2-db S3-code S4-tests S5-frontend S6-config; do
   s=$(echo $t | sed 's/S[0-9]-//')            # routes, db, code, tests, frontend, config
-  SCHEMA=$P/schemas/inv-$s.json TIMEOUT=1800 $P/run-task.sh agy $O/$t/task.md $O/$t "$M" &
+  RUN_TESTS=1 SCHEMA=$P/schemas/inv-$s.json TIMEOUT=1800 $P/run-task.sh agy $O/$t/task.md $O/$t "$M" &
 done; wait
 ```
 (In the lead session: six separate `Bash` calls with `run_in_background: true` instead of `&`.)
+
+`RUN_TESTS=1` is required for agy even here: without `--dangerously-skip-permissions` its
+sandbox auto-denies every shell command (grep, git log) and the run returns empty with exit 0
+(learned 2026-09-30, all six first attempts failed that way). The runner's git-status check
+still catches edits.
 
 If a Flash run returns an empty `result.json` or fewer rows than expected (S1 < 110
 routes, S2 < 50 tables, S4 < 80 files), rerun once on `"Gemini 3.1 Pro (High)"`. If it

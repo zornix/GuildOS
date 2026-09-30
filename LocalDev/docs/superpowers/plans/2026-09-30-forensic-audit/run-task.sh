@@ -53,8 +53,10 @@ python3 - "$cli" "$out" <<'PY'
 import json, re, sys, pathlib
 cli, out = sys.argv[1], pathlib.Path(sys.argv[2])
 def fence(t):
-    m = re.findall(r"```json\s*(.*?)```", t, re.S)
-    if m: return m[-1]
+    i = t.rfind("```json")
+    if i >= 0:
+        k = t.rfind("```")
+        if k > i + 7: return t[i + 7:k]   # LAST opener to LAST closer: a retried run may emit two blocks
     i, j = t.find("{"), t.rfind("}")
     return t[i:j+1] if i >= 0 and j > i else t
 try:
