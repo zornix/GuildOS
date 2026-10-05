@@ -20,6 +20,7 @@ with results nested under the relation key, matching PostgREST output.
 from __future__ import annotations
 
 import re
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -55,6 +56,21 @@ JOIN_STAR_COLUMNS: dict[str, list[str]] = {
     ],
     "members": ["id", "chapter_id", "name", "email", "phone", "role", "status", "created_at"],
 }
+
+
+class _TxPool:
+    """Stands in for the pool inside a transaction: always the same connection."""
+
+    in_tx = True
+
+    def __init__(self, conn):
+        self._conn = conn
+
+    def getconn(self):
+        return self._conn
+
+    def putconn(self, conn):
+        pass
 
 
 @dataclass
@@ -169,7 +185,8 @@ class QueryBuilder:
     def execute(self) -> QueryResult:
         conn = self._pool.getconn()
         try:
-            conn.autocommit = True
+            if not getattr(self._pool, "in_tx", False):
+                conn.autocommit = True
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 if self._op == "select":
                     return self._exec_select(cur)
@@ -535,7 +552,8 @@ class _RpcBuilder:
 
         conn = self._pool.getconn()
         try:
-            conn.autocommit = True
+            if not getattr(self._pool, "in_tx", False):
+                conn.autocommit = True
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(sql, vals)
                 row = cur.fetchone()
@@ -600,6 +618,35 @@ class PostgresClient:
 
     def rpc(self, name: str, params: dict | None = None) -> _RpcBuilder:
         return _RpcBuilder(self._pool, name, params or {})
+
+    @contextmanager
+    def transaction(self):
+        """One connection, one transaction. Commit on exit, roll back on any error.
+
+        Yields a client bound to that connection; pass it as `sb` to every helper.
+        A helper that calls get_db() itself writes outside the transaction. Never
+        catch a database error inside the block and carry on: exit then raises.
+        """
+        conn = self._pool.getconn()
+        try:
+            conn.autocommit = False
+            tx = PostgresClient.__new__(PostgresClient)
+            tx._pool = _TxPool(conn)
+            tx.auth = self.auth
+            try:
+                yield tx
+                if conn.get_transaction_status() == psycopg2.extensions.TRANSACTION_STATUS_INERROR:
+                    # A statement failed and the caller swallowed the error. COMMIT would
+                    # silently turn into ROLLBACK; fail loudly instead.
+                    raise RuntimeError("transaction aborted by an earlier database error that was swallowed")
+                conn.commit()
+            except BaseException:
+                conn.rollback()
+                raise
+        finally:
+            if not conn.closed:
+                conn.autocommit = True
+            self._pool.putconn(conn)
 
     def close(self) -> None:
         self._pool.closeall()
