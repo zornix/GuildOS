@@ -34,7 +34,7 @@ import {
   formatDueDate,
   invoiceTitle
 } from '../lib/dues';
-import type { TransactionDraft, TransactionPreview } from '../lib/transaction';
+import type { TransactionForm, TransactionPreview } from '../lib/transaction';
 
 interface FinanceModuleProps {
   members: Member[];
@@ -153,7 +153,7 @@ export default function FinanceModule({
   const currentMember = safeMembers.find(m => m.name === currentMemberName);
 
   /** One dispatcher for the four kinds; each lands on an existing handler. */
-  const submitTransaction = (draft: TransactionDraft, preview: TransactionPreview) => {
+  const submitTransaction = (draft: TransactionForm, preview: TransactionPreview) => {
     switch (draft.kind) {
       case 'Payment':
         onRecordPayment({

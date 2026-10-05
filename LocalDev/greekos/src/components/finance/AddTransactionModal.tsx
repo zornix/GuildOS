@@ -2,7 +2,7 @@ import React, { useId, useState } from 'react';
 import type { Member } from '../../types';
 import Modal from '../ui/Modal';
 import { formatMoney } from '../../formatters';
-import { TransactionDraft, TransactionKind, TransactionPreview, previewTransaction } from '../../lib/transaction';
+import { TransactionForm, TransactionKind, TransactionPreview, previewTransaction } from '../../lib/transaction';
 
 const KINDS: { kind: TransactionKind; help: string }[] = [
   { kind: 'Payment', help: 'Money received from the member' },
@@ -14,14 +14,14 @@ const KINDS: { kind: TransactionKind; help: string }[] = [
 interface AddTransactionModalProps {
   members: Member[];
   balanceCentsOf: (memberId: string) => number;
-  onSubmit: (draft: TransactionDraft, preview: TransactionPreview) => void;
+  onSubmit: (draft: TransactionForm, preview: TransactionPreview) => void;
   onClose: () => void;
 }
 
 /** Two steps: fill the form, read the preview sentence, confirm. */
 export default function AddTransactionModal({ members, balanceCentsOf, onSubmit, onClose }: AddTransactionModalProps) {
   const ids = { member: useId(), kind: useId(), amount: useId(), memo: useId() };
-  const [draft, setDraft] = useState<TransactionDraft>({
+  const [draft, setDraft] = useState<TransactionForm>({
     kind: 'Payment', memberId: members[0]?.id || '', memberName: members[0]?.name || '', amountDollars: '', memo: ''
   });
   const [confirming, setConfirming] = useState(false);

@@ -432,6 +432,27 @@ export interface MemberTreasuryDashboardDto {
   recent_activity: unknown[];
 }
 
+/** POST /api/treasury/invoices — one invoice in the V1 shape. */
+export interface InvoiceDto {
+  id: string;
+  member_id: string;
+  kind: string;
+  amount_cents: number;
+  description: string | null;
+  status: string;
+}
+
+/** POST /api/treasury/adjustments. `pending` means the amount is at or over
+ *  the second-sign-off threshold and has not applied yet. */
+export interface AdjustmentDto {
+  id: string;
+  member_id: string | null;
+  kind: string;
+  delta_cents: number;
+  reason: string;
+  status: string;
+}
+
 export interface TaskDto {
   id: string;
   title: string;
@@ -660,6 +681,44 @@ export const api = {
     request<unknown>('POST', `/api/treasury/payments/submissions/${submissionId}/verify-v1`),
   rejectPaymentSubmission: (submissionId: string, reason: string) =>
     request<unknown>('POST', `/api/treasury/payments/submissions/${submissionId}/reject-v1`, { reason }),
+
+  // ── Officer-recorded transactions. Every one carries an Idempotency-Key the
+  // form regenerates when its values change, so a retry never doubles up. ──────
+  /** Record and verify a payment the officer received, in one step (D1).
+   *  Needs `treasury:payment:verify`. */
+  recordPayment: (body: {
+    member_id: string;
+    amount_cents: number;
+    method: string;
+    invoice_id: string | null;
+    reference: string | null;
+  }, idempotencyKey: string) =>
+    request<unknown>('POST', '/api/treasury/payments/record', body, true, {
+      'Idempotency-Key': idempotencyKey
+    }),
+
+  /** One invoice — a free-form fine or a manual charge. Needs `treasury:invoice:create`. */
+  createInvoice: (body: {
+    member_id: string;
+    source: 'fine' | 'manual';
+    amount_cents: number;
+    description: string;
+  }, idempotencyKey: string) =>
+    request<InvoiceDto>('POST', '/api/treasury/invoices', body, true, {
+      'Idempotency-Key': idempotencyKey
+    }),
+
+  /** A signed correction. Needs `treasury:adjustment:create`; the response's
+   *  `status` is `pending` when a second officer has to approve it. */
+  createAdjustment: (body: {
+    member_id: string;
+    kind: 'manual_correction';
+    delta_cents: number;
+    reason: string;
+  }, idempotencyKey: string) =>
+    request<AdjustmentDto>('POST', '/api/treasury/adjustments', body, true, {
+      'Idempotency-Key': idempotencyKey
+    }),
 
   getTasks: () => request<TaskDto[]>('GET', '/api/tasks/'),
   createTask: (body: Record<string, unknown>) => request<TaskDto>('POST', '/api/tasks/', body),
