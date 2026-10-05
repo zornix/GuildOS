@@ -336,3 +336,20 @@ def test_list_status_filter_open_excludes_committed(
     open_ids = {t["id"] for t in client.get("/api/tasks/?status=open").json()}
     assert open_task in open_ids
     assert committed_task not in open_ids
+
+
+# ── F-026: an explicit string id equal to the caller is a self-commit ────────
+
+
+def test_member_can_commit_self_with_explicit_string_id(
+    harness, sb_client, chapter_id, member_id, task_factory
+):
+    """The user dict comes from the same select get_current_user runs, so its `id`
+    has the production type; the body carries the id as a JSON string."""
+    task_id = task_factory()
+    user = sb_client.table("members").select("*, chapters(*)").eq("id", member_id).single().execute().data
+    client = harness.login(user["id"], user["chapter_id"], role=user["role"])
+
+    resp = client.post(f"/api/tasks/{task_id}/commit", json={"member_id": str(member_id)})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["commitment"]["member_id"] == member_id
