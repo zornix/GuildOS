@@ -468,17 +468,14 @@ class QueryBuilder:
 
     @staticmethod
     def _serialize(row: dict) -> dict:
-        """Convert non-JSON-serializable types to strings."""
+        """Convert UUID and date/time values to strings."""
         import datetime
-        from decimal import Decimal
         from uuid import UUID
 
         out = {}
         for k, v in row.items():
             if isinstance(v, UUID):
                 out[k] = str(v)
-            elif isinstance(v, Decimal):
-                out[k] = float(v)
             elif isinstance(v, (datetime.date, datetime.time)):
                 out[k] = v.isoformat()
             elif isinstance(v, datetime.datetime):
