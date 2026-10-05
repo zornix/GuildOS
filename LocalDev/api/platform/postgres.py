@@ -215,7 +215,10 @@ class QueryBuilder:
         fk_info = FK_MAP.get(self._table, {})
         for tbl, cols_str in joins_found:
             if tbl not in fk_info:
-                continue
+                raise ValueError(
+                    f'platform.postgres: "{self._table}" has no registered join to "{tbl}". '
+                    "Add it to FK_MAP or read the related rows with a second query."
+                )
             fk_local, fk_remote = fk_info[tbl]
             raw = cols_str.strip()
             if raw == "*":
