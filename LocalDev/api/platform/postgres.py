@@ -57,6 +57,14 @@ JOIN_STAR_COLUMNS: dict[str, list[str]] = {
     "members": ["id", "chapter_id", "name", "email", "phone", "role", "status", "created_at"],
 }
 
+_IDENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
+def _ident(name: str) -> str:
+    if not isinstance(name, str) or not _IDENT.fullmatch(name):
+        raise ValueError(f"platform.postgres: invalid identifier {name!r}")
+    return name
+
 
 class _TxPool:
     """Stands in for the pool inside a transaction: always the same connection."""
@@ -209,11 +217,15 @@ class QueryBuilder:
         joins_found = join_pattern.findall(raw)
         remainder = join_pattern.sub("", raw)
         tokens = [p.strip() for p in remainder.split(",") if p.strip()]
+        for tok in tokens:
+            if tok != "*":
+                _ident(tok)
         # After stripping join clauses, commas often leave "", which must not become empty SELECT columns.
         self._select_cols = "*" if not tokens or tokens == ["*"] else ",".join(tokens)
 
         fk_info = FK_MAP.get(self._table, {})
         for tbl, cols_str in joins_found:
+            _ident(tbl)
             if tbl not in fk_info:
                 raise ValueError(
                     f'platform.postgres: "{self._table}" has no registered join to "{tbl}". '
@@ -229,7 +241,7 @@ class QueryBuilder:
                         "or use explicit columns, e.g. chapters(name)."
                     )
             else:
-                cols = [c.strip() for c in cols_str.split(",") if c.strip()]
+                cols = [_ident(c.strip()) for c in cols_str.split(",") if c.strip()]
                 if not cols:
                     continue
             self._joins.append(_Join(table=tbl, cols=cols, fk_local=fk_local, fk_remote=fk_remote))
@@ -266,7 +278,7 @@ class QueryBuilder:
             sql += f" WHERE {' AND '.join(where_parts)}"
         if self._order_col:
             direction = "DESC" if self._order_desc else "ASC"
-            sql += f' ORDER BY "{t}"."{self._order_col}" {direction}'
+            sql += f' ORDER BY "{t}"."{_ident(self._order_col)}" {direction}'
 
         # LIMIT/OFFSET as validated integer literals (count query intentionally omits them).
         if self._limit_n is not None:
@@ -340,7 +352,7 @@ class QueryBuilder:
         rows = self._payload if isinstance(self._payload, list) else [self._payload]
         if not rows:
             return QueryResult(data=[])
-        cols = list(rows[0].keys())
+        cols = [_ident(c) for c in rows[0].keys()]
         row_sql = "(" + ", ".join(["%s"] * len(cols)) + ")"
         vals = [self._adapt_value(r[c]) for r in rows for c in cols]
         col_str = ", ".join(f'"{c}"' for c in cols)
@@ -357,7 +369,7 @@ class QueryBuilder:
         set_parts = []
         vals = []
         for k, v in self._payload.items():
-            set_parts.append(f'"{k}" = %s')
+            set_parts.append(f'"{_ident(k)}" = %s')
             vals.append(self._adapt_value(v))
 
         where_parts, where_vals = self._build_where(self._table)
@@ -387,13 +399,14 @@ class QueryBuilder:
     # ── upsert ───────────────────────────────────────────────────
 
     def _exec_upsert(self, cur) -> QueryResult:
-        cols = list(self._payload.keys())
+        cols = [_ident(c) for c in self._payload.keys()]
         placeholders = ["%s"] * len(cols)
         vals = [self._adapt_value(self._payload[c]) for c in cols]
         col_str = ", ".join(f'"{c}"' for c in cols)
 
-        conflict_cols = self._on_conflict or "id"
-        update_cols = [c for c in cols if c not in conflict_cols.split(",")]
+        conflict = [_ident(c.strip()) for c in (self._on_conflict or "id").split(",")]
+        conflict_cols = ", ".join(conflict)
+        update_cols = [c for c in cols if c not in conflict]
         update_str = ", ".join(f'"{c}" = EXCLUDED."{c}"' for c in update_cols)
 
         sql = (
@@ -413,9 +426,9 @@ class QueryBuilder:
         for op, col, val in self._filters:
             if "." in col:
                 tbl, c = col.split(".", 1)
-                qualified = f'"_j_{tbl}"."{c}"'
+                qualified = f'"_j_{_ident(tbl)}"."{_ident(c)}"'
             else:
-                qualified = f'"{table}"."{col}"'
+                qualified = f'"{table}"."{_ident(col)}"'
 
             if op == "eq":
                 parts.append(f"{qualified} = %s")
@@ -540,10 +553,10 @@ class _RpcBuilder:
         return QueryBuilder._adapt_value(v)
 
     def execute(self) -> QueryResult:
-        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", self._function_name):
+        if not _IDENT.fullmatch(self._function_name):
             raise ValueError(f"Invalid RPC function name: {self._function_name!r}")
         for key in self._params:
-            if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
+            if not _IDENT.fullmatch(key):
                 raise ValueError(f"Invalid RPC parameter name: {key!r}")
 
         arg_sql = ", ".join(f"{key} => %s" for key in self._params)
@@ -617,7 +630,7 @@ class PostgresClient:
         self.auth = _LocalAuth(jwt_secret)
 
     def table(self, name: str) -> _TableAccessor:
-        return _TableAccessor(self._pool, name)
+        return _TableAccessor(self._pool, _ident(name))
 
     def rpc(self, name: str, params: dict | None = None) -> _RpcBuilder:
         return _RpcBuilder(self._pool, name, params or {})
