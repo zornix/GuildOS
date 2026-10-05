@@ -3,7 +3,7 @@
 > **For agentic workers:** you were given this file plus ONE numbered plan. Read "Rules for every agent" and "What to hand back" here, then execute your plan task by task. Everything else in this file is background you may consult. Steps use checkbox (`- [ ]`) syntax.
 
 **Spec:** `LocalDev/docs/audit/2026-09-30-forensic-audit.md` (68 findings `F-…`, 8 residuals `R-…` in Appendix C.4). Each plan names the cards it implements; read those cards before you start.
-**Status (2026-10-05):** plans written and self-reviewed; nothing dispatched. Next step: commit this folder, the merged audit report and `LocalDev/tests/__init__.py` to `main`, then dispatch wave 1 (see "Orchestrator runbook").
+**Status (2026-10-05):** plans written, self-reviewed and committed to `main` (merge `238d796`). Nothing dispatched yet. Next step: dispatch wave 1 (see "Orchestrator runbook").
 **Written:** 2026-10-05 by the orchestrating session (Claude Fable 5.1). Product decisions were made by the user that day and are recorded under "Decisions". They are not open for re-litigation; if one turns out to be impossible, stop and report.
 
 ## Streams
