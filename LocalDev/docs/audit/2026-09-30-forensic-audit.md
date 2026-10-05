@@ -1434,7 +1434,7 @@ F-001 honest copy for the command console and drop `@google/genai`; F-045 toast 
 
 | Stage | What | Who | Output |
 |---|---|---|---|
-| 0 | Baseline checks: 1030 backend tests, frontend lint/tests/build, npm audit | lead | `Analysis.md` |
+| 0 | Baseline checks: 1030 backend tests, frontend lint/tests/build, npm audit | lead | Appendix C.1 |
 | 1 | Six mechanical inventories (routes, DB, code shape, tests, frontend, config), spot-checked 3 rows each | Gemini 3.6 Flash via Antigravity | JSON tables |
 | 2 | Eight deep audits, one area each, starting from the inventories | see below | findings JSON |
 | 3 | 59 adversarial refutes on a different vendor than the finder; lead eye-check of every kept P1 | Codex ↔ Gemini Pro ↔ Grok | verdict JSON |
@@ -1467,3 +1467,162 @@ F-001 honest copy for the command console and drop `@google/genai`; F-045 toast 
 Rule violations by the auditors: several refuters wrote throwaway probe tests and scratch scripts into `LocalDev/` and two edited a `conftest.py` to prove a finding. The lead saved the diffs as evidence (`stage3/violations.md` in the run archive) and reverted every change; the repository was clean before the report was written. One Gemini refute hit a quota limit and was rerun on Cursor.
 
 Known limits: no test was run against a non-owner database role, so nothing here proves or disproves the RLS policies; the production database was never queried; `Prod/` was compared to `LocalDev/` by diff, not by deploying it; the frontend was audited by reading, not by running it in a browser.
+
+## Appendix C · Lead-session baseline and reference (merged from `Analysis.md`, 2026-10-05)
+
+**In short:** the lead session's pre-audit notes, folded in so there is one document. C.1–C.3 are reference material for anyone fixing findings (paste C.2 into agent prompts so they do not re-derive it). C.4 lists the eight things the notes found that never became a finding card; they carry `R-` IDs. C.5 maps every item of the old notes to where it lives now. Where the notes and the report disagree on a count (handlers 125 vs 140, `isOfficer` 29 vs 57, tables without RLS 13 vs 12, fetch wrappers 4 vs 5), the report's number is the later, inventory-backed one.
+
+### C.1 Baseline checks (run 2026-09-29/30, commit `c89c716`)
+
+| Check | Command | Result |
+|---|---|---|
+| Backend tests | `python3 -m pytest` from `LocalDev/` against the Supabase demo DB | **1030 passed, 0 failed**, 647 s. 2 warnings: Starlette TestClient/httpx deprecation; duplicate OpenAPI operation id for `cron_drain_outbox` (GET+POST on one handler, `api/cron/api/cron.py:38`). Slowest: `tests/cron/test_drain_outbox.py::test_drain_route_returns_counts` 7.4 s. |
+| Frontend typecheck | `npm run lint` (tsc --noEmit) in `greekos/` | pass |
+| Frontend unit tests | `npm test` (node:test) | 86 passed |
+| Frontend build | `npm run build` | pass, 482 kB JS / 44 kB CSS |
+| Frontend audit | `npm audit --omit=dev` | 0 vulnerabilities |
+| Python env | installed fastapi **0.133.1** | `LocalDev/requirements.txt` pins **0.141.1** (dependabot bump not installed locally); `Prod/requirements.txt` pins 0.133.1 |
+| Linters | none configured | no ruff/mypy/black/pyproject anywhere; CI has no Python lint step |
+
+Sizes: `api/` 15,295 lines Python (125 route handlers), `migrations/` 65 files / 10,124 lines,
+`tests/` 87 files / 17,943 lines (844 `def test_`, 1030 collected), `greekos/src` 12,618 lines
+TS/TSX, 10 TODO/FIXME markers in code.
+
+### C.2 Established runtime facts (verified in code)
+
+Paths are relative to `LocalDev/`.
+
+1. **One DB path, autocommit per statement.** `api/platform/postgres.py:170-187` and `:536-545`
+   set `conn.autocommit = True` on every execute; only plpgsql RPCs are atomic. Any Python
+   sequence of `.insert/.update/.delete` is non-atomic.
+2. **RLS is not enforced at runtime.** App connects as `postgres.<ref>` (table owner). Policy
+   helpers (`treasury_request_member_id`, `rbac_request_chapter_id`, `treasury_claim_sub_uuid`)
+   read `request.jwt.claims`, which nothing sets. ADR-0002 admits this. Tenant isolation =
+   Python `.eq("chapter_id", …)` filters + RPC-body guards.
+3. **Correction 2026-10-05:** the uuid part of this fact is wrong. A live SELECT returns id columns as `str` (psycopg2 2.9.11, no `register_uuid` anywhere in the repo), so `user["id"]` is a string and F-026's str-vs-UUID mechanism does not occur at runtime. SELECT rows do still differ from RETURNING rows for `Decimal` and date/time values. Original text follows.
+   **Type inconsistency of ids.** `_exec_select` returns raw psycopg2 types (uuid.UUID,
+   Decimal, datetime) — it never calls `_serialize` (`postgres.py:218-276`); INSERT/UPDATE/UPSERT
+   RETURNING rows go through `_serialize` (`:437-455`: UUID→str, **Decimal→float**,
+   date/time→isoformat). RPC results are jsonb (string ids). `a == b` between ids from different
+   sources can be silently False; much code wraps `str()` inconsistently.
+4. **Identifier interpolation.** Column names in `.eq/.in_/.order/.select` and `on_conflict`
+   are interpolated unescaped into SQL (`postgres.py:222-256, 337-351, 370-387, 391-429`);
+   values are parameterised; RPC names/params regex-validated (`:523-528`). No user-controlled
+   column name was found yet (not fully swept).
+5. **Auth.** HS256 JWT `sub`=member id, `iss/aud=guildos`, 7-day exp, `ver` claim vs
+   `members.token_version` (`api/auth/api/auth.py:52-65`, `postgres.py:548-584`,
+   `api/dependencies.py:6-39`). No refresh; logout is client-side only. `authorization.replace("Bearer ", "")`.
+   Login/redeem rate limits count `login_attempts` failures per email (10/15 min) and per
+   rightmost-trusted `X-Forwarded-For` (20/15 min) (`auth.py:164-198`); the attempt insert is
+   swallowed on error. `dev-login` 404s when deployed or when `DEV_AUTH_BYPASS` is false.
+6. **Authorization.** `require_permission(*keys)` is ANY-of; `get_member_permissions` = 2
+   queries (`member_roles`, then `role_permissions`) unioned with legacy `members.role` via
+   `LEGACY_ROLE_COMPAT` (`api/rbac/services/permissions.py`). Ownership scoping only for
+   `tasks:complete → tasks:review` (`api/rbac/core/policy.py:21-44`). Several routes use inline
+   `has_permission` instead (balances, dashboards, evidence, fines list, excuses list).
+7. **Money.** `Money` rejects floats (`api/treasury/core/money.py`); BIGINT cents tables; legacy
+   NUMERIC(10,2) columns remain: `events.fine_amount`, `fines.amount`,
+   `event_types.default_fine_amount` (0003), `ev_create_event.p_fine_amount NUMERIC`
+   (0101/0141). `FineToInvoice(fine_amount=event["fine_amount"])` converts once in
+   `fine_processor.py:79`.
+8. **Balances** (`api/treasury/core/balance.py`) are computed from operational tables only
+   (`unpaid_invoices` status != cancelled, `verified_payments`, active `finance_adjustments`,
+   active `refunds`), never from `big_ledger`; `member_finance_accounts` is a cache that
+   `get_member_balance` recomputes before every read (`services/balance.py:8-33`). `big_ledger`
+   is a shadow whose drift is only reported by `core/rebuild.py`.
+9. **Seed credentials.** `scripts/seed.py:34` sets `DEMO_PASSWORD = "demo-officer-pw"` for every
+   seeded member (documented in `greekos/README.md`); seed is guarded by `require_demo`.
+   `scripts/set_officer_password.py` has no demo/prod guard.
+10. **Config.** `Settings` fields not documented in `.env.example`: `PLATFORM_SECRET`,
+    `TRUSTED_PROXY_HOPS`. Local `.env` carries 9 names `Settings` ignores (`extra="ignore"`):
+    `ESCALATION_DELAY_MINUTES`, `FEATURE_SECRETARY_COMMS`, `FEATURE_VP_OPERATIONS`,
+    `MESSAGE_WEBHOOK_SECRET`, `SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL`, `SUPABASE_ANON_KEY`,
+    `SUPABASE_DB_URL`(used by tests), `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_URL`.
+11. **Async handlers, sync I/O.** All routes are `async def` and call psycopg2 directly;
+    only `/api/health` and the cron drain use `asyncio.to_thread`. 14 `async def` service
+    functions await nothing.
+
+### C.3 Key RPC and trigger behaviour, read in full
+
+- `tr_create_invoice` (0080 version) and `tr_create_invoice_v2` (0120): idempotency by
+  `(chapter_id, operation, key)` with no payload hash; member∈chapter guard; ledger + audit
+  rows; `p_actor_id` may be NULL.
+- `tr_bulk_create_invoices` (0158 is live): per-item member guard, `due_at`, idempotent by key.
+- `tr_submit_payment` (0080): invoice must belong to the member; rejects cancelled/paid.
+- `tr_verify_payment` (0031) and `tr_verify_payment_v2` (0124): `FOR UPDATE` on the submission,
+  idempotent replay returns `_created:false`; rejected → raises; v2 allocates oldest-first via
+  `payment_allocations` (append-only, reversal rows), `tr_refresh_invoice_status` recomputes
+  unpaid/partially_paid/paid; `UNIQUE(submission_id)` backstop. Service then recomputes the
+  balance cache and enqueues a notification in Python (not in the transaction).
+- `tr_reject_payment` (0031): approved → raises; rejected → idempotent.
+- `tr_void_invoice` (0122): reason required; allowed on unpaid/partially_paid; writes
+  `CANCEL_INVOICE` ledger row; status vocabulary is `cancelled` (no `void` value exists).
+- `tr_reallocate_payment` (0124): reversal rows + new set, total ≤ verified amount, member match.
+- `at_set_attendance` (0146): validates event/member/actor in chapter; excused path deletes and
+  re-inserts the excuse as approved; present/absent upsert; audit row; idempotency key is always
+  NULL from the route (`api/attendance/api/attendance.py:197-205`).
+- `at_review_excuse` (0146): approve voids one matching **unpaid** fine invoice via
+  `tr_void_invoice`; no state-transition guard (re-review allowed).
+- `outbox_claim_batch` (0155): `FOR UPDATE SKIP LOCKED` claim → `sending`, requeues claims older
+  than 15 min, fails rows with `attempts >= 5`; `attempts` increments on **claim**, not on
+  delivery.
+- `ch_create_chapter` / `ch_import_roster` (0156): SECURITY DEFINER, `search_path=public`;
+  chapter+officer(+member_roles) atomic; roster rows atomic; **setup codes are issued afterwards
+  in Python** (`api/chapters/services/onboarding.py:74-84, 175-182`).
+- `au_invite_member` (0161) writes member + setup code atomically (the fix the onboarding paths
+  did not get).
+- Triggers: `big_ledger_no_delete`, `big_ledger_limited_update` (active→invalidated only),
+  `audit_logs_immutable`, append-only guards on receipts/allocations/evidence/line items,
+  `fines_frozen`, `at_derive_chapter_id` on attendance/excuses/checkin_links (0146),
+  `outbox_pin_sms_channel`.
+
+### C.4 Residual items (in the notes, no finding card)
+
+| ID | Sev | Item | Where | Fix with |
+|---|---|---|---|---|
+| R-01 | 🔵 P3 | No Python linter or type-checker anywhere; CI has no Python lint step | no `ruff`/`mypy`/`pyproject` in the repo; `.github/workflows/ci.yml` | F-040 (CI and bootstrap) |
+| R-02 | 🔵 P3 | Duplicate OpenAPI operation id: `cron_drain_outbox` serves GET and POST from one handler | `api/cron/api/cron.py:38` | F-051 (cron) |
+| R-03 | 🔵 P3 latent | `_serialize` converts `Decimal` to `float` on every RETURNING row, against the "no float money" rule. Only the legacy NUMERIC fine columns can hit it today | `api/platform/postgres.py:447-448` | F-026 (same function family) |
+| R-04 | 🔵 P3 latent | Column names in `.eq/.in_/.order/.select` and `on_conflict` are interpolated into SQL unescaped. §5 confirmed no request-controlled identifier reaches the builder today | `api/platform/postgres.py:222-256, 337-351, 370-387, 391-429` | F-039 (query builder); validate with the regex RPC names already use (`:523-528`) |
+| R-05 | 🟡 P2 likely, unverified | The outbox is one global FIFO with no per-chapter fairness; a burst from the unauthenticated signup can delay every chapter's mail | `migrations/0155_outbox_claim.sql:84-125`, `api/cron/services/outbox_drain.py:55, 284-315` | F-018, F-065 |
+| R-06 | 🔵 P3 | Tenant-guard rejections surface as opaque 500s; cross-chapter responses are inconsistent (404 / 403 / zeros) | `api/initiatives/services/initiatives.py:317-325`, `api/initiatives/api/initiatives.py:24-35` | F-064 (one error mapper) |
+| R-07 | 🔵 P3 | `.env.example` lacks `PLATFORM_SECRET` and `TRUSTED_PROXY_HOPS`; the local `.env` carries nine names `Settings` ignores (`ESCALATION_DELAY_MINUTES`, `FEATURE_SECRETARY_COMMS`, `FEATURE_VP_OPERATIONS`, `MESSAGE_WEBHOOK_SECRET`, `SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_URL`) | `api/config.py`, `.env.example` | F-007 (config) |
+| R-08 | ⚪ P4 | Untracked local residue contradicting "no `db/` per domain": `api/*/db/__pycache__`, `api/standing/api/__pycache__`, `LocalDev/fratos/{.next,node_modules}` | working tree only, not in git | F-071 (dead code sweep) |
+
+Also noted, no action of its own: all routes are `async def` over sync psycopg2 and 14 `async def` service functions await nothing (part of F-044); `authorization.replace("Bearer ", "")` and client-side-only logout (`token_version` is the real revocation); the seed sets one documented demo password for every member, behind `require_demo` (the unguarded script is F-020).
+
+### C.5 Where each item of the old notes went
+
+| `Analysis.md` item | Now |
+|---|---|
+| §1 baseline checks | C.1 |
+| §2 architecture map | §2 |
+| §3 runtime facts | C.2 |
+| §4 RPC behaviour | C.3 |
+| §5.1 Finance actions never persist | F-014 |
+| §5.2 Prod not reproducible | F-010, F-016 |
+| §5.3 Drain vs serverless timeout | F-018 |
+| §5.4 Onboarding half-applies | F-011 |
+| §5.5 Naive event times as UTC | F-060 |
+| §5.6 Legacy process-event fines | F-059 |
+| §5.7 Unauthenticated phone check-in | F-036 |
+| §5.8 Signup enumeration and spam | F-065 |
+| §5.9 Raw exception text | F-064 |
+| §5.10 Decimal→float | R-03 |
+| §5.11 Idempotency keys | F-070 |
+| §5.12 Balance cache recomputed per read | F-056 |
+| §5.13 Docs vs reality | F-041 |
+| §5.14 Import cycle | F-063 |
+| §5.15 Optimistic UI | F-045 |
+| §5.16 Untracked residue | R-08 |
+| §6 anon/authenticated DML | F-008 |
+| §6 no grant ceiling | F-023, F-006 |
+| §6 self-verify, self-credit | F-027 |
+| §6 members can read the live check-in code | F-036 |
+| §6 task-status ownership fails open | F-025, F-026 |
+| §6 outbox has no tenant fairness | R-05 |
+| §6 cross-tenant email disclosure | F-065, F-064 |
+| §6 Twilio START across chapters | F-068 |
+| §6 tenant-guard 500s | R-06 |
+| §7 patterns worth preserving | §9 |
+| §8 not yet covered | done by stages 1–3 (Appendix B) |
