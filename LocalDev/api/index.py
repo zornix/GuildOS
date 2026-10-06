@@ -136,7 +136,6 @@ from api.announcements.api.twilio_inbound import router as twilio_inbound_router
 from api.bylaws.api.documents import router as bylaws_router
 from api.nl_controller.api.commands import router as nl_controller_router
 from api.rbac.api.roles import router as rbac_router
-from api.recruitment.api.pipeline import router as recruitment_router
 from api.calendar.api.calendar import router as calendar_router
 from api.instrumentation.api.usage import router as usage_router
 from api.initiatives.api.initiatives import router as initiatives_router
@@ -202,7 +201,6 @@ app.include_router(rbac_router, prefix="/api/rbac", tags=["RBAC"])
 app.include_router(tasks_router, prefix="/api/tasks", tags=["Tasks"])
 app.include_router(announcements_router, prefix="/api/announcements", tags=["Announcements"])
 app.include_router(twilio_inbound_router, prefix="/api/twilio", tags=["Twilio"])
-app.include_router(recruitment_router, prefix="/api/recruitment", tags=["Recruitment"])
 app.include_router(bylaws_router, prefix="/api/bylaws", tags=["Bylaws"])
 app.include_router(nl_controller_router, prefix="/api/nl-controller", tags=["NL Controller"])
 app.include_router(calendar_router, prefix="/api/calendar", tags=["Calendar"])

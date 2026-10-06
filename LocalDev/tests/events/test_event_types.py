@@ -6,7 +6,7 @@ import pytest
 
 from api.events.services import events as svc
 
-DEFAULTS = {"Chapter Meeting", "Philanthropy", "Brotherhood", "Social", "Recruitment"}
+DEFAULTS = {"Chapter Meeting", "Philanthropy", "Brotherhood", "Social"}
 
 
 def test_defaults_seeded_on_first_list(sb_client, chapter_id):

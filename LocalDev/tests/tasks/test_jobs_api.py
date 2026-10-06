@@ -186,7 +186,7 @@ def test_create_event_job_without_supervisor_organizer_or_tasks_assign_is_403(
 ):
     event_id = event_factory(hours_from_now=72)
     actor = member_factory()
-    assign_role(actor, "recruitment_chair")  # holds tasks:create, lacks tasks:assign
+    assign_role(actor, "brotherhood_chair")  # holds tasks:create, lacks tasks:assign
 
     client = harness.login(actor, chapter_id, role="member")
     resp = client.post("/api/tasks/", json={"title": "Order decorations", "event_id": event_id})

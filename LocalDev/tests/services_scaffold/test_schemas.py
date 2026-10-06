@@ -10,7 +10,6 @@ from api.attendance.api.schemas import SessionCreate
 from api.bylaws.api.schemas import BylawsQuery
 from api.events.api.schemas import EventCreate
 from api.nl_controller.api.schemas import CommandReview
-from api.recruitment.api.schemas import RecruitStageUpdate
 from api.tasks.api.schemas import TaskCreate, TaskStatusUpdate
 
 
@@ -36,12 +35,6 @@ def test_session_mode_constrained():
     assert SessionCreate(event_id="e1").mode == "short_link"
     with pytest.raises(ValidationError):
         SessionCreate(event_id="e1", mode="telepathy")
-
-
-def test_recruit_stage_constrained():
-    assert RecruitStageUpdate(stage="bid_extended").stage == "bid_extended"
-    with pytest.raises(ValidationError):
-        RecruitStageUpdate(stage="ghosted")
 
 
 def test_command_review_decision_constrained():

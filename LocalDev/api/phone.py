@@ -1,7 +1,7 @@
 """Phone-number normalization — the ONE sanctioned conversion point.
 
-Decision: phone numbers are stored in **E.164** everywhere (`members.phone`,
-`recruits.phone`), and every write path converts through `to_e164` here. There
+Decision: phone numbers are stored in **E.164** everywhere (`members.phone`),
+and every write path converts through `to_e164` here. There
 is no second normalizer: SQL-side conversion exists only inside the one-time
 backfill in `migrations/0149_phone_e164.sql`, which reproduces these exact
 rules so the stored data and this function can never disagree.
