@@ -9,9 +9,7 @@ OWNERSHIP_ESCALATIONS. Routes opt in by passing a `resource` dict with an
 
 from __future__ import annotations
 
-# Legacy members.role → role catalog key. The resolver unions the mapped role's
-# permissions with the member's granular member_roles, so require_officer-era
-# accounts keep their access with zero data migration.
+# The legal values of the display-only members.role column. Not an input to permissions.
 LEGACY_ROLE_COMPAT: dict[str, str] = {
     "officer": "officer",
     "member": "member",

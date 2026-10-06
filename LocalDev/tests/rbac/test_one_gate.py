@@ -6,9 +6,6 @@ authority that used to come from `members.role == "officer"` or a
 `member_roles`. The bug class this pins: a member whose legacy `members.role` is
 'member' but who holds 'officer' in `member_roles` was refused by the old
 `require_officer` check and is admitted by `require_permission`.
-
-No database: the supabase client is the system boundary and a minimal fake
-stands in for it (same shape as test_permissions_service.py).
 """
 
 from __future__ import annotations
@@ -48,104 +45,55 @@ MIGRATION = (
 )
 
 
-class _Result:
-    def __init__(self, data):
-        self.data = data
-
-
-class _Query:
-    def __init__(self, rows):
-        self._rows = rows
-
-    def select(self, *_a, **_k):
-        return self
-
-    def eq(self, *_a, **_k):
-        return self
-
-    def in_(self, *_a, **_k):
-        return self
-
-    def execute(self):
-        return _Result(self._rows)
-
-
-class FakeSb:
-    def __init__(self, member_roles, role_permissions):
-        self._tables = {
-            "member_roles": member_roles,
-            "role_permissions": role_permissions,
-        }
-
-    def table(self, name):
-        return _Query(self._tables[name])
-
-
-def _officer_catalog():
-    """The 0147 officer grant, as the resolver would read it back."""
-    return FakeSb(
-        member_roles=[{"role_key": "officer"}],
-        role_permissions=[
-            {"role_key": "officer", "permission_key": key} for key in SWAPPED_KEYS
-        ],
-    )
-
-
 @pytest.fixture
-def rbac_on_fake(monkeypatch):
-    def _use(sb):
-        monkeypatch.setattr(permissions_service, "get_db", lambda: sb)
-        return sb
+def rbac_db(sb_client, monkeypatch):
+    monkeypatch.setattr(permissions_service, "get_db", lambda: sb_client)
+    return sb_client
 
-    return _use
+
+def _load(sb, member_id):
+    return sb.table("members").select("*").eq("id", member_id).single().execute().data
 
 
 # ── the bug class ────────────────────────────────────────────────────────────
 
 
 @pytest.mark.parametrize("permission", SWAPPED_KEYS)
-async def test_member_holding_officer_via_member_roles_passes(rbac_on_fake, permission):
+async def test_member_holding_officer_via_member_roles_passes(
+    rbac_db, chapter_id, member_factory, cursor, permission
+):
     """members.role == 'member', member_roles == ['officer'] → admitted.
 
     This is exactly the account the deleted `require_officer` refused.
     """
-    rbac_on_fake(_officer_catalog())
-    user = {"id": "m-1", "chapter_id": "c-1", "role": "member"}
+    member_id = member_factory()
+    cursor.execute(
+        "INSERT INTO member_roles (chapter_id, member_id, role_key) VALUES (%s, %s, 'officer')",
+        (chapter_id, member_id),
+    )
+    user = _load(rbac_db, member_id)
 
     assert await require_permission(permission)(user=user) is user
 
 
 @pytest.mark.parametrize("permission", SWAPPED_KEYS)
-async def test_plain_member_still_refused(rbac_on_fake, permission):
-    rbac_on_fake(
-        FakeSb(
-            member_roles=[{"role_key": "member"}],
-            role_permissions=[
-                {"role_key": "member", "permission_key": "bylaws:query"},
-                {"role_key": "member", "permission_key": "tasks:complete"},
-            ],
-        )
-    )
-    user = {"id": "m-2", "chapter_id": "c-1", "role": "member"}
+async def test_plain_member_still_refused(rbac_db, member_factory, permission):
+    user = _load(rbac_db, member_factory())
 
     with pytest.raises(HTTPException) as exc:
         await require_permission(permission)(user=user)
     assert exc.value.status_code == 403
 
 
-async def test_legacy_officer_column_still_resolves(rbac_on_fake):
-    """D6: LEGACY_ROLE_COMPAT stays, so an un-backfilled officer keeps access."""
-    rbac_on_fake(
-        FakeSb(
-            member_roles=[],  # no granular assignment yet
-            role_permissions=[
-                {"role_key": "officer", "permission_key": "members:invite"}
-            ],
-        )
-    )
-    user = {"id": "m-3", "chapter_id": "c-1", "role": "officer"}
+async def test_legacy_officer_column_does_not_resolve(rbac_db, cursor, member_factory):
+    """The legacy column is display-only (F-022)."""
+    target = member_factory()
+    cursor.execute("UPDATE members SET role = 'officer' WHERE id = %s", (target,))
+    user = _load(rbac_db, target)
 
-    assert await require_permission("members:invite")(user=user) is user
+    with pytest.raises(HTTPException) as exc:
+        await require_permission("members:invite")(user=user)
+    assert exc.value.status_code == 403
 
 
 # ── the deleted gates ────────────────────────────────────────────────────────

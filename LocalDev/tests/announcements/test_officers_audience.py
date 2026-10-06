@@ -29,7 +29,7 @@ def _officers(sb_client, chapter_id) -> set[str]:
 def test_legacy_officer_is_on_the_officers_blast(
     sb_client, chapter_id, member_factory, set_phone
 ):
-    """members.role='officer', no member_roles row — the account 0147 never saw."""
+    """The column alone grants nothing (F-022); the member_roles row does."""
     legacy = member_factory(role="officer")
     set_phone(legacy, "+15550000101")
 
