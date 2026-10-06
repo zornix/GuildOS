@@ -109,9 +109,8 @@ def resolve_recipients(sb, *, chapter_id: str, audience: str) -> dict:
     ).data or []
 
     if audience == "officers":
-        # rbac.is_officer, the same union authorization resolves from: an officer
-        # who holds only the legacy members.role is still on the blast. One
-        # chapter-wide fetch, then the shared rule per member.
+        # members.role is display-only; permissions come from member_roles via
+        # api.rbac. One chapter-wide fetch, then the shared rule per member.
         role_rows = (
             sb.table("member_roles")
             .select("member_id, role_key")

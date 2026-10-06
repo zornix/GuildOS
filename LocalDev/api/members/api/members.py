@@ -91,9 +91,9 @@ async def update_role(
     hold comes back as a 400 rather than a database error; stackable roles are
     assigned through the rbac_assign_role RPC, not here.
 
-    The write itself is the `mem_set_legacy_role` RPC (0154): permissions resolve
-    from member_roles unioned with the legacy column, so writing only one of the
-    two made demotion revoke nothing. One RPC keeps both sides atomic.
+    The write itself is the `mem_set_legacy_role` RPC (0154): members.role is
+    display-only; permissions come from member_roles via api.rbac. One RPC
+    keeps the display column and authoritative role rows atomic.
     """
     sb = get_db()
 

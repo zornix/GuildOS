@@ -24,7 +24,8 @@ same typed confirmation `scripts/migrate_db.py --prod` demands:
 What it creates, in one transaction:
   chapters      one row
   members       the first officer (role='officer', status='active')
-  member_roles  ('officer') when the RBAC catalog is present
+  member_roles  ('officer', 'admin') when the RBAC catalog is present
+                the officer can administer the chapter and hand off admin access
 
 The password is prompted for (never argv, never env). The script refuses to
 run if a chapter with the same name, or a member with the same email, already
@@ -269,7 +270,7 @@ def _insert_officer(
 
 
 def _grant_officer_role(cur, *, chapter_id: str, member_id: str) -> bool:
-    """Mirror the legacy role into RBAC. No-op when the catalog isn't there yet.
+    """Grant officer and admin authority. No-op when the catalog isn't there yet.
 
     member_roles.role_key is an FK onto roles(key), whose rows are seeded by
     migration 0083 — on a database that predates it the insert would fail, so
@@ -279,17 +280,20 @@ def _grant_officer_role(cur, *, chapter_id: str, member_id: str) -> bool:
         print("warning: member_roles/roles not present — skipping RBAC role grant")
         return False
 
-    cur.execute("SELECT 1 FROM roles WHERE key = 'officer'")
-    if not cur.fetchone():
-        print("warning: roles catalog has no 'officer' row (migration 0083) — skipping role grant")
-        return False
+    granted = True
+    for role_key in ("officer", "admin"):
+        cur.execute("SELECT 1 FROM roles WHERE key = %s", (role_key,))
+        if not cur.fetchone():
+            print(f"warning: roles catalog has no '{role_key}' row (migration 0083) — skipping role grant")
+            granted = False
+            continue
 
-    cur.execute(
-        "INSERT INTO member_roles (chapter_id, member_id, role_key) VALUES (%s, %s, %s) "
-        "ON CONFLICT (member_id, role_key, chapter_id) DO NOTHING",
-        (chapter_id, member_id, "officer"),
-    )
-    return True
+        cur.execute(
+            "INSERT INTO member_roles (chapter_id, member_id, role_key) VALUES (%s, %s, %s) "
+            "ON CONFLICT (member_id, role_key, chapter_id) DO NOTHING",
+            (chapter_id, member_id, role_key),
+        )
+    return granted
 
 
 def main() -> None:
@@ -339,7 +343,7 @@ def main() -> None:
     print("provisioned:")
     print(f"  chapter_id   {chapter_id}  ({args.name} — {args.organization} @ {args.school})")
     print(f"  member_id    {member_id}  ({args.officer_name} <{email}>, role=officer, status=active)")
-    print(f"  member_roles {'officer granted' if role_granted else 'skipped (RBAC catalog absent)'}")
+    print(f"  member_roles {'officer and admin granted' if role_granted else 'incomplete (RBAC catalog absent or missing role)'}")
     print(f"  target       {redact(url)}")
     print("The officer can now sign in with the password you just set.")
 
