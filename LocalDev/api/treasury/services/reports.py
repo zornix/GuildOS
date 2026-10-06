@@ -179,6 +179,20 @@ def dashboard_summary(sb, *, chapter_id: str, recent_limit: int = 10) -> dict:
         .limit(recent_limit)
         .execute()
     ).data or []
+    submission_ids = [r["submission_id"] for r in recent_payments if r.get("submission_id")]
+    submissions = []
+    if submission_ids:
+        submissions = (
+            sb.table("payment_submissions")
+            .select("id, method")
+            .eq("chapter_id", chapter_id)
+            .in_("id", submission_ids)
+            .execute()
+        ).data or []
+    methods = {r["id"]: r["method"] for r in submissions}
+    recent_payments = [
+        {**r, "method": methods.get(r.get("submission_id"))} for r in recent_payments
+    ]
     recent_expenses = (
         sb.table("chapter_expenses")
         .select("*")
