@@ -293,16 +293,40 @@ def test_list_fines_reports_remaining_cents_after_a_partial_payment(
     assert remaining == {part["id"]: 1500, untouched["id"]: 2500}
 
 
-def test_issue_is_all_or_nothing(cursor, chapter_id, member_factory):
+def test_issue_is_all_or_nothing(api, sb_client, cursor, chapter_id, member_factory, monkeypatch):
     import uuid
-    import psycopg2
+    import api.treasury.api.fines_legacy as route
+    from api.platform.postgres import _RpcBuilder
+
+    actor = member_factory(role="officer")
     members = [member_factory(), member_factory(), str(uuid.uuid4())]
     event = _make_event(cursor, chapter_id, hours_ago=30)
-    with pytest.raises(psycopg2.errors.RaiseException, match="not in chapter"):
-        cursor.execute('SELECT tr_issue_event_fines(%s,%s,%s::jsonb,2500,%s,%s)',
-                       (chapter_id, event, json.dumps(members), 'Missed', members[0]))
+    # Inject a stale absence list so the invalid final member reaches the RPC.
+    monkeypatch.setattr(route, "list_unexcused_absences",
+                        lambda *args, **kwargs: [{"member_id": member} for member in members])
+    calls = []
+    execute = _RpcBuilder.execute
+
+    def tracked_rpc(query):
+        if query._function_name == "tr_issue_event_fines":
+            calls.append(query._params["p_member_ids"])
+        return execute(query)
+
+    monkeypatch.setattr(_RpcBuilder, "execute", tracked_rpc)
+    response = api(make_user(actor, chapter_id, role="officer")).post(
+        "/api/fines/issue", json={"event_id": event, "member_ids": members},
+    )
+    assert response.status_code == 500
+    assert calls == [members]
     cursor.execute('SELECT count(*) AS n FROM unpaid_invoices WHERE chapter_id=%s AND source_event_id=%s',
-                   (chapter_id,event))
+                   (chapter_id, event))
+    assert cursor.fetchone()['n'] == 0
+    cursor.execute("SELECT count(*) AS n FROM audit_logs WHERE chapter_id=%s AND action='CREATE_INVOICE'",
+                   (chapter_id,))
+    assert cursor.fetchone()['n'] == 0
+    cursor.execute("SELECT count(*) AS n FROM big_ledger WHERE chapter_id=%s AND entry_type='INVOICE_CREATED'", (chapter_id,))
+    assert cursor.fetchone()['n'] == 0
+    cursor.execute("SELECT count(*) AS n FROM message_outbox WHERE chapter_id=%s", (chapter_id,))
     assert cursor.fetchone()['n'] == 0
 
 

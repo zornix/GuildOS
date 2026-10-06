@@ -143,8 +143,8 @@ def _is_closed(session: dict, now: datetime) -> bool:
     return closes_at is not None and now > closes_at
 
 
-def _bind_open_sessions(sb, event_id: str, link_id: str, now: datetime) -> None:
-    """Bind the link only when exactly one open unbound session exists.
+def _bind_open_sessions(sb, event_id: str, link_id: str, now: datetime, replaced_link_ids: set[str] | None = None) -> None:
+    """Keep a rotated link in its open session, or adopt one unbound window.
 
     Without this, a link made through POST /events/{id}/checkin-link records no
     session at all and _session_for_link has to guess which window governs it.
@@ -157,11 +157,16 @@ def _bind_open_sessions(sb, event_id: str, link_id: str, now: datetime) -> None:
         .eq("event_id", event_id)
         .execute()
     ).data or []
+    bound = [row for row in rows
+             if str(row.get("checkin_link_id")) in (replaced_link_ids or set()) and not _is_closed(row, now)]
     unbound = [row for row in rows if not row.get("checkin_link_id") and not _is_closed(row, now)]
-    if len(unbound) == 1:
+    candidates = bound or unbound
+    if len(bound) > 1:
+        raise AmbiguousSession
+    if len(candidates) == 1:
         sb.table("attendance_sessions") \
             .update({"checkin_link_id": link_id}) \
-            .eq("id", unbound[0]["id"]) \
+            .eq("id", candidates[0]["id"]) \
             .execute()
 
 
@@ -170,6 +175,8 @@ async def create_checkin_link(event_id: str, created_by: str, *, sb=None, bind_s
     def create(tx):
         now = datetime.now(timezone.utc)
         expires_at = now + timedelta(minutes=settings.CHECKIN_LINK_TTL_MINUTES)
+        previous = (tx.table("checkin_links").select("id")
+                    .eq("event_id", event_id).eq("active", True).execute()).data or []
         tx.table("checkin_links") \
             .update({"active": False}) \
             .eq("event_id", event_id) \
@@ -184,7 +191,7 @@ async def create_checkin_link(event_id: str, created_by: str, *, sb=None, bind_s
             "active": True,
         }).execute()) or {}
         if bind_sessions and inserted.get("id"):
-            _bind_open_sessions(tx, event_id, inserted["id"], now)
+            _bind_open_sessions(tx, event_id, inserted["id"], now, {str(row["id"]) for row in previous})
         return {
             "id": inserted.get("id"),
             "short_code": code,
@@ -210,7 +217,7 @@ async def create_checkin_link(event_id: str, created_by: str, *, sb=None, bind_s
                     not constraint and "checkin_links_short_code_key" in str(exc)
                 ):
                     continue
-            logger.error("check-in link creation failed for event %s", event_id)
+            logger.exception("check-in link creation failed for event %s", event_id)
             raise HTTPException(500, "Could not generate check-in code") from exc
 
     logger.error("check-in code generation exhausted 5 attempts for event %s", event_id)
@@ -264,7 +271,7 @@ async def get_active_link_for_event(event_id: str) -> dict | None:
     now = datetime.now(timezone.utc)
     result = (
         sb.table("checkin_links")
-        .select("event_id, short_code, expires_at, active")
+        .select("id, event_id, short_code, expires_at, active")
         .eq("event_id", event_id)
         .eq("active", True)
         .gte("expires_at", now.isoformat())
@@ -273,6 +280,12 @@ async def get_active_link_for_event(event_id: str) -> dict | None:
     if not result.data:
         return None
     row = result.data[0]
+    try:
+        session = _session_for_link(sb, row)
+    except AmbiguousSession:
+        return None
+    if session and _is_closed(session, now):
+        return None
     return {
         "short_code": row["short_code"],
         "url": f"{settings.BASE_URL}/c/{row['short_code']}",
@@ -292,7 +305,7 @@ async def list_active_links_for_chapter(chapter_id: str) -> list[dict]:
     now = datetime.now(timezone.utc)
     result = (
         sb.table("checkin_links")
-        .select("event_id, short_code, expires_at, events(title, date, chapter_id)")
+        .select("id, event_id, short_code, expires_at, events(title, date, chapter_id)")
         .eq("chapter_id", chapter_id)
         .eq("active", True)
         .gte("expires_at", now.isoformat())
@@ -300,6 +313,12 @@ async def list_active_links_for_chapter(chapter_id: str) -> list[dict]:
     )
     rows = []
     for row in result.data or []:
+        try:
+            session = _session_for_link(sb, row)
+        except AmbiguousSession:
+            continue
+        if session and _is_closed(session, now):
+            continue
         ev = row.get("events") or {}
         if not ev:
             continue
