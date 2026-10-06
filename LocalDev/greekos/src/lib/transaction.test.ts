@@ -211,3 +211,10 @@ test('a saved transaction whose refetch fails says it saved but the lists did no
   await submitTransaction({ ...deps, refetch: async () => false }, { kind: 'Invoice', memberId: 'm1', amountCents: 5000, description: 'Dues' }, 'k');
   assert.deepEqual(toasts, ['Invoiced $50.00 to Jake Martinez. Saved, but the lists could not be reloaded. Refresh the page.']);
 });
+
+test('an event fine the server skips (e.g. a retry after it already landed) is not an error', async () => {
+  const { deps, api, toasts } = fakeDeps();
+  api.issueFines = async () => ({ event_id: 'e1', flat_fine_cents: 2500, issued_member_ids: [], skipped_member_ids: ['m1'] });
+  await submitTransaction(deps, { kind: 'Fine', memberId: 'm1', amountCents: 2500, reason: '', eventId: 'e1' }, 'k');
+  assert.deepEqual(toasts, ['No new fine for Jake Martinez: already fined, present, or excused for that event.']);
+});

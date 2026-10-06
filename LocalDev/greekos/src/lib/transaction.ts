@@ -204,10 +204,12 @@ export async function submitTransaction(deps: TransactionDeps, draft: Transactio
       break;
     case 'issueEventFine': {
       const result = await api.issueFines(call.eventId, call.memberIds) as IssueFinesResultDto;
-      if (!result.issued_member_ids.includes(draft.memberId)) {
-        throw new Error(`No fine for ${name}: they were present, excused, or already fined for that event.`);
-      }
-      message = `Assessed ${formatMoney(result.flat_fine_cents)} fine to ${name}.`;
+      // A skip is not a failure: on a retry the first request already fined
+      // them. ponytail: the response does not say why a member was skipped, so
+      // one neutral line; split it when /issue returns the reason.
+      message = result.issued_member_ids.includes(draft.memberId)
+        ? `Assessed ${formatMoney(result.flat_fine_cents)} fine to ${name}.`
+        : `No new fine for ${name}: already fined, present, or excused for that event.`;
       break;
     }
     case 'createInvoice':
