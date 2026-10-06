@@ -30,6 +30,24 @@ stand and what a new session does first. The model rules below override the READ
 - `tr_issue_event_fines` skips a member who has any fine for the event, voided or waived
   included (0201), as the issue route did before.
 
+## Golden dataset (brainstorm paused until wave 4 is merged — user, 2026-10-06)
+
+Resume with `superpowers:brainstorming` (architectural path) at "present design sections".
+Decisions so far (user):
+- Both: every audit issue linked to the test that proves it fixed, AND a known-answer chapter.
+- The chapter is built fresh each run from a data file, with enough data that **every user
+  workflow** can be tested automatically.
+- Workflows are tested **through the API** for now. Browser E2E later: issue #107.
+- Expected answers are **written by hand from the rules (D1–D25), money and standing first**;
+  not recorded from today's app.
+- Gate: one command (`npm run golden`, a few minutes) that every agent and every merge to
+  `main` must pass; also its own CI step.
+- Proposed, awaiting approval: approach A — `@pytest.mark.golden("F-0xx")` markers on
+  regression tests plus an exemptions file (decision/human/docs/not reproduced) and a self-check
+  that every finding in `docs/audit/2026-09-30-findings.json` is covered; `tests/golden/
+  chapter.yaml` + API builder + hand-written `expected.yaml`; one workflow test file per area,
+  each building its own chapter; ~35–40 workflows over 138 API operations.
+
 ## Start wave 4 (needs the user's go-ahead)
 
 Wave 4 = **16 (sweep)** and **17 (docs)**. Both are Antigravity · Gemini 3.8 Flash in the README;
