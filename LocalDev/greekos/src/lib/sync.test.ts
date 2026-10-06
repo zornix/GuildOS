@@ -2,11 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { FORBIDDEN_MESSAGE, REFUSED_MESSAGE, UNREACHABLE_MESSAGE, describeError, serverMessage, syncOutcome } from './sync';
 
-test('backend down: the user is told nothing was saved and the optimistic row is rolled back', () => {
+test('backend down: a successful write is saved without rollback', () => {
   const out = syncOutcome({ backendDown: true, outcome: 'ok', successMessage: 'Created event' });
-  assert.equal(out.toast, 'Not saved: the server is unreachable.');
-  assert.equal(out.toast, UNREACHABLE_MESSAGE);
-  assert.equal(out.rollback, true);
+  assert.equal(out.toast, 'Created event');
+  assert.equal(out.rollback, false);
+  assert.equal(out.backendDown, false);
 });
 
 test('an API error shows the error message and rolls back', () => {
@@ -36,4 +36,11 @@ test("serverMessage shows the server's detail from an api.ts error, or the fallb
   assert.equal(serverMessage(conflict, 'x'), 'The chapter must keep at least one admin. Make someone else an admin first.');
   assert.equal(serverMessage(new TypeError('Failed to fetch'), 'Could not change that role.'), 'Could not change that role.');
   assert.equal(serverMessage(undefined, 'fallback'), 'fallback');
+});
+
+test('a rejected fetch is unreachable while an HTTP rejection is refused', async () => {
+  const err = await fetch('http://[invalid').catch(error => error);
+  assert.ok(err instanceof TypeError);
+  assert.equal(describeError(err), UNREACHABLE_MESSAGE);
+  assert.equal(describeError(Object.assign(new Error('Rejected'), { status: 422 })), REFUSED_MESSAGE);
 });
