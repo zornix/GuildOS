@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from datetime import datetime, timezone
 from typing import Any, Callable
 
 from api.platform.postgres import PostgresClient
@@ -37,7 +38,8 @@ def build_health_payload(
     """
     Return JSON-serializable health body.
 
-    - ``status``: ``ok`` if DB ping succeeds after retries, else ``error``.
+    - ``status``: ``error`` if DB ping fails; otherwise ``degraded`` for a stale cron.
+    - ``checks.outbox_drain``: ``ok``, ``stale`` (older than 15 minutes), or ``unknown``.
     - ``checks.database``: ``ok`` or ``error`` (no raw exception text).
     """
     err = retry_with_backoff(client.ping, max_attempts=max_attempts, base_delay_sec=base_delay_sec)
@@ -49,4 +51,21 @@ def build_health_payload(
     }
     if err is not None:
         payload["detail"] = "database_unreachable"
+    else:
+        outbox = "unknown"
+        try:
+            heartbeat = (
+                client.table("cron_heartbeats").select("last_finished_at")
+                .eq("job", "drain-outbox").maybe_single().execute()
+            ).data
+            if heartbeat:
+                finished = heartbeat["last_finished_at"]
+                if isinstance(finished, str):
+                    finished = datetime.fromisoformat(finished.replace("Z", "+00:00"))
+                outbox = "stale" if (datetime.now(timezone.utc) - finished).total_seconds() > 900 else "ok"
+        except Exception:
+            pass  # Heartbeat availability is not database readiness.
+        checks["outbox_drain"] = outbox
+        if outbox == "stale":
+            payload["status"] = "degraded"
     return payload
