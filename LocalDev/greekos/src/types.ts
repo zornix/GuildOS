@@ -160,20 +160,6 @@ export interface Payment {
   reference?: string;
 }
 
-export interface LedgerEntry {
-  id: string;
-  sequence: number;
-  timestamp: string;
-  memberId: string;
-  memberName: string;
-  type: 'DUES_CHARGE' | 'FINE_CHARGE' | 'PAYMENT_CREDIT' | 'ADJUSTMENT_CORRECTION' | 'MERCH_CHARGE';
-  amountCents: number;
-  balanceAfterCents: number;
-  description: string;
-  authorizedBy: string;
-  correctsEntryId?: string; // If this adjustment row offsets an earlier entry
-}
-
 export interface Excuse {
   id: string;
   memberId: string;
