@@ -216,7 +216,7 @@ def test_template_failure_fails_one_row_without_killing_the_batch(
 def test_row_without_a_member_is_failed_with_a_reason(
     drain, delivery_mode, outbox_row, read_outbox
 ):
-    """ANNOUNCEMENT_PUBLISHED is chapter-wide: no SMS recipient, so no delivery."""
+    """Legacy recipient-less rows still fail safely with a clear reason."""
     row = outbox_row(
         event_type="ANNOUNCEMENT_PUBLISHED",
         member_id=None,
@@ -227,7 +227,7 @@ def test_row_without_a_member_is_failed_with_a_reason(
 
     after = read_outbox(row["id"])
     assert after["status"] == "failed"
-    assert "no member_id" in after["last_error"]
+    assert after["last_error"] == "no recipient"
 
 
 # ── twilio mode ──────────────────────────────────────────────────────────────
@@ -618,3 +618,113 @@ def test_dry_run_still_simulates_a_member_without_consent(
 
     assert read_outbox(row["id"])["status"] == "simulated"
     assert fake_twilio == []
+
+
+def test_provider_call_is_stamped_first(drain, delivery_mode, outbox_row, read_outbox, member_with_phone, monkeypatch):
+    delivery_mode("twilio")
+    row = outbox_row(event_type="JOB_APPROVED", member_id=member_with_phone(), payload={"title": "Job"})
+    stamps = []
+
+    def provider(*args):
+        stamps.append(read_outbox(row["id"]).get("provider_attempted_at"))
+        return "SM123"
+
+    monkeypatch.setattr("api.announcements.services.twilio_client.send_sms", provider)
+    drain()
+    assert len(stamps) == 1 and stamps[0] is not None
+
+
+def test_unknown_outcome_is_parked_not_resent(drain, delivery_mode, outbox_row, read_outbox, member_with_phone, monkeypatch, cursor):
+    from api.cron.services import outbox_drain as worker
+
+    delivery_mode("twilio")
+    row = outbox_row(event_type="JOB_APPROVED", member_id=member_with_phone(), payload={"title": "Job"})
+    calls = []
+    monkeypatch.setattr(worker.twilio_client, "send_sms", lambda *args: calls.append(args))
+
+    def failed_close(*args, **kwargs):
+        raise RuntimeError("bookkeeping unavailable")
+
+    with monkeypatch.context() as failure:
+        failure.setattr(worker, "_close_row", failed_close)
+        drain()
+    assert read_outbox(row["id"])["status"] == "sending"
+    cursor.execute("UPDATE message_outbox SET claimed_at=now()-interval '20 minutes' WHERE id=%s", (row["id"],))
+    drain()
+    assert len(calls) == 1
+    after = read_outbox(row["id"])
+    assert after["status"] == "failed"
+    assert after["last_error"].startswith("delivery outcome unknown")
+
+
+def test_claimed_but_never_attempted_is_requeued_with_its_attempt_back(claim, cursor, outbox_row, read_outbox):
+    row = outbox_row(status="sending")
+    cursor.execute("UPDATE message_outbox SET claimed_at=now()-interval '20 minutes', attempts=1 WHERE id=%s", (row["id"],))
+    claim(limit=0)
+    after = read_outbox(row["id"])
+    assert after["status"] == "pending"
+    assert after["attempts"] == 0
+
+
+def test_twilio_sid_is_recorded(drain, delivery_mode, outbox_row, read_outbox, member_with_phone, monkeypatch):
+    delivery_mode("twilio")
+    row = outbox_row(event_type="JOB_APPROVED", member_id=member_with_phone(), payload={"title": "Job"})
+    monkeypatch.setattr("api.announcements.services.twilio_client.send_sms", lambda *args: "SM123")
+    drain()
+    assert read_outbox(row["id"]).get("provider_message_id") == "SM123"
+
+
+def test_dry_run_never_stamps(drain, delivery_mode, outbox_row, read_outbox, member_with_phone):
+    row = outbox_row(event_type="JOB_APPROVED", member_id=member_with_phone(), payload={"title": "Job"})
+    drain()
+    after = read_outbox(row["id"])
+    assert "provider_attempted_at" in after
+    assert after["provider_attempted_at"] is None
+    assert after["status"] == "simulated"
+
+
+def test_drain_stops_when_the_budget_is_spent(drain, outbox_row, read_outbox, monkeypatch):
+    from api.cron.services import outbox_drain as worker
+
+    row = outbox_row()
+    monkeypatch.setattr(worker, "DRAIN_BUDGET_SECONDS", 0, raising=False)
+    assert drain()["processed"] == 0
+    after = read_outbox(row["id"])
+    assert after["status"] == "pending"
+    assert after["attempts"] == 0
+
+
+def test_budget_expiring_mid_batch_leaves_unused_claims_refundable(
+    drain, claim, outbox_row, read_outbox, member_with_phone, cursor, monkeypatch
+):
+    from types import SimpleNamespace
+    from api.cron.services import outbox_drain as worker
+
+    member = member_with_phone()
+    rows = [outbox_row(event_type="JOB_APPROVED", member_id=member, payload={"title": "Job"}) for _ in range(26)]
+    clock = [0]
+    monkeypatch.setattr(worker, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    deliver = worker._deliver_row
+
+    def slow_delivery(*args, **kwargs):
+        status = deliver(*args, **kwargs)
+        clock[0] = worker.DRAIN_BUDGET_SECONDS + 1
+        return status
+
+    monkeypatch.setattr(worker, "_deliver_row", slow_delivery)
+    assert drain()["processed"] == 1
+    assert read_outbox(rows[0]["id"])["status"] == "simulated"
+    unclaimed = read_outbox(rows[-1]["id"])
+    assert unclaimed["status"] == "pending"
+    assert unclaimed["attempts"] == 0
+    unused = read_outbox(rows[1]["id"])
+    assert unused["status"] == "sending"
+    assert unused["provider_attempted_at"] is None
+    cursor.execute(
+        "UPDATE message_outbox SET claimed_at=now()-interval '20 minutes' WHERE chapter_id=%s AND status='sending'",
+        (unused["chapter_id"],),
+    )
+    claim(limit=0)
+    unused = read_outbox(rows[1]["id"])
+    assert unused["status"] == "pending"
+    assert unused["attempts"] == 0

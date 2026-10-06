@@ -334,3 +334,77 @@ def test_sms_send_rows_are_append_only(
         )
     with pytest.raises(psycopg2.DatabaseError, match="forbidden"):
         cursor.execute("DELETE FROM announcement_sms_sends WHERE id = %s", (send_id,))
+
+
+@pytest.fixture
+def queued_send(president, as_member, announcement_factory, monkeypatch, cursor, member_factory, set_phone):
+    from api.announcements.services import sms
+
+    other = member_factory()
+    set_phone(other, "+15551230002")
+    cursor.execute("UPDATE members SET sms_consent_at = now() WHERE id IN (%s, %s)", (president, other))
+    ann = announcement_factory()
+    with monkeypatch.context() as creation:
+        creation.setattr(sms, "dispatch_send", lambda sb, row: row)
+        response = _send(as_member(president), ann, count=2)
+        assert response.status_code == 200, response.text
+        send = response.json()
+    send["delivery_mode"] = "twilio"
+    return send
+
+
+def test_inline_dispatch_skips_rows_the_cron_already_claimed(queued_send, sb_client, cursor, monkeypatch):
+    from api.announcements.services import sms
+    dispatch = sms.dispatch_send
+    cursor.execute("UPDATE message_outbox SET status='sending', claimed_at=now() WHERE target_id=%s", (queued_send["id"],))
+    calls = []
+    monkeypatch.setattr(sms.twilio_client, "send_sms", lambda *args: calls.append(args))
+    result = dispatch(sb_client, queued_send)
+    assert calls == []
+    assert result["status"] == "queued"
+
+
+def test_inline_dispatch_marks_rows_sending_before_the_provider_call(queued_send, sb_client, cursor, monkeypatch):
+    from api.announcements.services import sms
+    dispatch = sms.dispatch_send
+    calls = []
+
+    def provider(*args):
+        cursor.execute("SELECT o.* FROM message_outbox o JOIN members m ON m.id=o.member_id WHERE o.target_id=%s AND m.phone=%s", (queued_send["id"], args[0]))
+        row = cursor.fetchone()
+        assert row["provider_attempted_at"] is not None
+        calls.append(row["status"])
+        return "SM123"
+
+    monkeypatch.setattr(sms.twilio_client, "send_sms", provider)
+    dispatch(sb_client, queued_send)
+    assert calls == ["sending", "sending"]
+    cursor.execute("SELECT provider_message_id FROM message_outbox WHERE target_id=%s", (queued_send["id"],))
+    assert [row["provider_message_id"] for row in cursor.fetchall()] == ["SM123", "SM123"]
+
+
+def test_inline_dispatch_claim_excludes_a_row_taken_after_selection(queued_send, sb_client, cursor, monkeypatch):
+    from api.announcements.services import sms
+    from api.platform.postgres import QueryBuilder
+
+    execute = QueryBuilder.execute
+    stolen = []
+
+    def cron_after_selection(query):
+        result = execute(query)
+        if query._table == "message_outbox" and query._op == "select" and not stolen:
+            row_id = result.data[0]["id"]
+            cursor.execute("UPDATE message_outbox SET status='sending', claimed_at=now() WHERE id=%s RETURNING member_id", (row_id,))
+            member = cursor.fetchone()["member_id"]
+            cursor.execute("SELECT phone FROM members WHERE id=%s", (member,))
+            stolen.append(cursor.fetchone()["phone"])
+        return result
+
+    calls = []
+    monkeypatch.setattr(QueryBuilder, "execute", cron_after_selection)
+    monkeypatch.setattr(sms.twilio_client, "send_sms", lambda phone, body: calls.append(phone))
+    sms.dispatch_send(sb_client, queued_send)
+    assert len(calls) == 1
+    assert stolen[0] not in calls
+    cursor.execute("SELECT status FROM message_outbox WHERE target_id=%s", (queued_send["id"],))
+    assert sorted(row["status"] for row in cursor.fetchall()) == ["sending", "sent"]

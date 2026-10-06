@@ -12,7 +12,7 @@ the surface that exists to explain failures hides the worst of them.
 
 from __future__ import annotations
 
-from api.cron.core import templates
+from api.platform import message_templates as templates
 
 LIST_LIMIT_DEFAULT = 50
 LIST_LIMIT_MAX = 200

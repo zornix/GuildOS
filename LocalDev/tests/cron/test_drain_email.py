@@ -341,3 +341,21 @@ def test_the_new_event_types_are_accepted_by_the_check(cursor, chapter_id):
             (chapter_id, event_type, str(uuid.uuid4()), f"0159:{uuid.uuid4()}"),
         )
         assert cursor.fetchone()["channel"] == "email"
+
+
+def test_email_provider_call_is_stamped_first(
+    drain, outbox_row, read_outbox, email_mode, member_with_email, monkeypatch
+):
+    email_mode("smtp")
+    row = outbox_row(
+        event_type="JOB_APPROVED", channel="email", member_id=member_with_email(),
+        payload={"title": "Job"},
+    )
+    stamps = []
+
+    def provider(*args):
+        stamps.append(read_outbox(row["id"])["provider_attempted_at"])
+
+    monkeypatch.setattr("api.cron.services.outbox_drain.send_email", provider)
+    assert drain()["sent"] == 1
+    assert len(stamps) == 1 and stamps[0] is not None

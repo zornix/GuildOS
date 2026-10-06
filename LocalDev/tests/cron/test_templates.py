@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import pytest
 
-from api.cron.core import templates
-from api.cron.core.templates import TemplateError, UnknownEventType
-from api.cron.core.templates import render as _render_with_footer
+from api.platform import message_templates as templates
+from api.platform.message_templates import TemplateError, UnknownEventType
+from api.platform.message_templates import render as _render_with_footer
 
 
 def render(event_type, payload=None, **kwargs) -> str:
@@ -247,3 +247,17 @@ def test_a_setup_code_body_says_where_to_go_and_when_it_expires():
 def test_a_code_payload_without_a_code_fails_loudly():
     with pytest.raises(TemplateError):
         render("SETUP_CODE", {"frontend_url": "https://x"})
+
+
+def test_announcements_do_not_import_cron():
+    """Shared rendering must not create an announcements/cron package cycle."""
+    import ast
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2] / "api" / "announcements"
+    for path in root.rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text())):
+            if isinstance(node, ast.ImportFrom):
+                assert not (node.module or "").startswith("api.cron"), str(path)
+            elif isinstance(node, ast.Import):
+                assert all(not name.name.startswith("api.cron") for name in node.names), str(path)

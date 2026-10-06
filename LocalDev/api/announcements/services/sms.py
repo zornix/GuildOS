@@ -37,7 +37,7 @@ from datetime import datetime, timezone
 
 from api.platform.rpc import call_rpc
 from api.announcements.services import twilio_client
-from api.cron.core import templates
+from api.platform import message_templates as templates
 from api.platform.delivery import delivery_mode
 from api.rbac.services.permissions import is_officer
 from api.sms_consent import CONSENT_COLUMNS, has_consent
@@ -224,14 +224,30 @@ def dispatch_send(sb, send_row: dict, *, send_table: str = "announcement_sms_sen
     event_notification_sends) reuse this dispatcher by passing their table.
     """
     mode = send_row.get("delivery_mode") or delivery_mode()
-    pending = (
+    candidates = (
         sb.table("message_outbox")
-        .select("*")
+        .select("id")
         .eq("target_table", send_table)
         .eq("target_id", send_row["id"])
         .eq("status", "pending")
         .execute()
     ).data or []
+    pending = []
+    if candidates:
+        # Only rows still pending are returned: the cron may have claimed others.
+        pending = (
+            sb.table("message_outbox")
+            .update({"status": "sending", "claimed_at": _now_iso()})
+            .in_("id", [c["id"] for c in candidates])
+            .eq("status", "pending")
+            .execute()
+        ).data or []
+    if not pending:
+        refreshed = (
+            sb.table(send_table).select("*").eq("id", send_row["id"])
+            .maybe_single().execute()
+        ).data
+        return refreshed or send_row
 
     if mode == "dry_run":
         for row in pending:
@@ -295,7 +311,10 @@ def _dispatch_twilio_row(sb, row: dict, *, chapter_name: str = "") -> str:
     try:
         if not phone:
             raise RuntimeError(f"member {row['member_id']} has no phone")
-        twilio_client.send_sms(phone, f"{body}\n{templates.footer(chapter_name)}")
+        sb.table("message_outbox").update(
+            {"provider_attempted_at": _now_iso()}
+        ).eq("id", row["id"]).execute()
+        sid = twilio_client.send_sms(phone, f"{body}\n{templates.footer(chapter_name)}")
         status = "sent"
     except Exception as exc:
         # A swallowed, unlogged failure is how "flip to twilio" turns into
@@ -308,6 +327,8 @@ def _dispatch_twilio_row(sb, row: dict, *, chapter_name: str = "") -> str:
     patch = {"status": status, "last_error": last_error}
     if status == "sent":
         patch["delivered_at"] = _now_iso()  # only a real send has a delivery time
+        if sid is not None:
+            patch["provider_message_id"] = sid
     sb.table("message_outbox").update(patch).eq("id", row["id"]).execute()
     return status
 
