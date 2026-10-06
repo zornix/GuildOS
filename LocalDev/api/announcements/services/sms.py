@@ -1,6 +1,6 @@
 """Announcement SMS — recipient resolution, two-phase confirm, delivery dispatch.
 
-SPEC §6: SMS send permission is limited to President and Secretary
+SMS send permission is limited to President and Secretary
 (`announcements:send:sms`), every send shows a confirmation step with the
 recipient count, and every send is logged with its sender (visible to exec).
 
@@ -177,7 +177,7 @@ def send_announcement_sms(
 ) -> dict:
     ann = get_announcement(sb, chapter_id=chapter_id, announcement_id=announcement_id)
     if ann["status"] != "sent":
-        # The in-app feed post comes first; SMS only amplifies it (SPEC §6).
+        # The in-app feed post comes first; SMS only amplifies it.
         raise AnnouncementNotSent(announcement_id)
 
     resolved = resolve_recipients(sb, chapter_id=chapter_id, audience=ann["audience"])
@@ -251,7 +251,7 @@ def dispatch_send(sb, send_row: dict, *, send_table: str = "announcement_sms_sen
 
     if mode == "dry_run":
         for row in pending:
-            # 'simulated', not 'sent': no network call was made (checklist 2.2).
+            # 'simulated', not 'sent': no network call was made.
             # delivered_at stays NULL — nothing was delivered to time-stamp.
             sb.table("message_outbox").update(
                 {"status": "simulated", "last_error": None}
@@ -318,7 +318,7 @@ def _dispatch_twilio_row(sb, row: dict, *, chapter_name: str = "") -> str:
         status = "sent"
     except Exception as exc:
         # A swallowed, unlogged failure is how "flip to twilio" turns into
-        # "every row failed and nobody was told" (checklist 2.3).
+        # "every row failed and nobody was told".
         logger.exception(
             "twilio dispatch failed for message_outbox row %s", row.get("id")
         )
@@ -337,7 +337,7 @@ def _dispatch_twilio_row(sb, row: dict, *, chapter_name: str = "") -> str:
 
 
 def list_sms_log(sb, *, chapter_id: str, limit: int = 50) -> list[dict]:
-    """Every SMS send, newest first, with sender attribution (SPEC §6)."""
+    """Every SMS send, newest first, with sender attribution."""
     sends = (
         sb.table("announcement_sms_sends")
         .select("*")

@@ -149,8 +149,8 @@ _OPEN_JOB_STATUSES = {"open", "in_progress"}
 def _job_counts_for_event(sb, event_id: str) -> tuple[int, int]:
     """(job_count, open_job_count) for an event's non-cancelled jobs (tasks).
 
-    job_count feeds the notify-gate completeness check (spec §2.7); jobs are
-    the tasks domain, extended (decision D1) — never a separate checklist.
+    job_count feeds the notify-gate completeness check; jobs are
+    part of the tasks domain — never a separate checklist.
     """
     rows = (
         sb.table("tasks")
@@ -158,7 +158,7 @@ def _job_counts_for_event(sb, event_id: str) -> tuple[int, int]:
         .eq("event_id", event_id)
         .execute()
     ).data or []
-    # Security jobs (kind='security', D12) are pre-assigned and not claimable —
+    # Security jobs (kind='security') are pre-assigned and not claimable —
     # they must not count toward the notify gate or the job decorations.
     non_cancelled = [
         r for r in rows
@@ -172,7 +172,7 @@ def _last_notified_at(sb, event_id: str) -> str | None:
     """Most recent notify blast timestamp, or None if never notified.
 
     Derived from the append-only event_notification_sends log rather than a
-    mutable column (docs/imp-ev-ph2.md §3.2).
+    mutable column.
     """
     rows = (
         sb.table("event_notification_sends")
@@ -359,7 +359,7 @@ def list_events(sb, *, user: dict, upcoming: bool = True) -> list[dict]:
             if r.get("status") == "cancelled" or r.get("kind") == "security":
                 continue
             job_counts[r["event_id"]] = job_counts.get(r["event_id"], 0) + 1
-            # The "N open jobs" claim lure (spec Screen 1) — same filter as
+            # The "N open jobs" claim lure — same filter as
             # job_count, narrowed to the claimable statuses.
             if r.get("status") in _OPEN_JOB_STATUSES:
                 open_job_counts[r["event_id"]] = open_job_counts.get(r["event_id"], 0) + 1
@@ -796,7 +796,7 @@ def _require_supervisor_manage(sb, *, actor: dict, event_id: str) -> None:
 
 def add_supervisor(sb, *, actor: dict, event_id: str, member_id: str,
                    idempotency_key: str | None = None) -> dict:
-    """Add a co-supervisor. Target must hold an officer role (spec §2.1)."""
+    """Add a co-supervisor. Target must hold an officer role."""
     chapter_id = actor["chapter_id"]
     event = _get_event_row(sb, chapter_id=chapter_id, event_id=event_id)
     _require_supervisor_manage(sb, actor=actor, event_id=event_id)

@@ -1,4 +1,4 @@
-"""Member treasury dashboard read (V1, decision #3).
+"""Member treasury dashboard read.
 
 One aggregate read: computed balance (BalanceEngine), pending submissions
 ("pending balance"), open invoices with remaining/overdue, recent activity.

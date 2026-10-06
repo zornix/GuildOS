@@ -3,10 +3,10 @@
 All amounts cross the wire in cents. Mounted on the Treasury router under
 `/api/treasury` by `router.py`.
 
-V1 (SPEC §5): create accepts due_at + line_items + source ('dues'|'fine'|'manual'
+create accepts due_at + line_items + source ('dues'|'fine'|'manual'
 → kind), issued_by is populated from the actor, and responses map raw statuses to
-the V1 vocabulary (open/void + raw_status + overdue). Void is Treasurer-only
-(rbac `treasury:invoice:void`, decision #5) and requires a reason.
+the vocabulary (open/void + raw_status + overdue). Void is Treasurer-only
+(rbac `treasury:invoice:void`) and requires a reason.
 """
 
 from __future__ import annotations
@@ -17,13 +17,20 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 
 from api.dependencies import get_current_user
 from api.rbac.auth import require_permission
-from api.treasury.api.schemas import TreasuryMessage  # noqa: F401  (contract anchor)
 from api.platform.db import get_db
+from api.platform.errors import public_message
 from api.treasury.services import invoices as svc
 from pydantic import BaseModel, Field
 
 # Catalog permission keys gating this surface (ADR-0001; 0147).
 INVOICE_CREATE = "treasury:invoice:create"
+
+# tr_void_invoice's RAISE EXCEPTION texts, as regexes (\S+ = an id).
+VOID_KNOWN_ERRORS = {
+    r"a reason is required to void an invoice": "A reason is required to void an invoice",
+    r"only unpaid or partially_paid invoices may be voided": "Only unpaid or partially paid invoices may be voided",
+    r"invoice \S+ not found in chapter": "Invoice not found",
+}
 
 router = APIRouter()
 
@@ -102,7 +109,7 @@ async def void_invoice(
     user=Depends(require_permission("treasury:invoice:void")),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
-    """Void/waive an invoice — Treasurer only, reason required, logged (decision #5)."""
+    """Void/waive an invoice — Treasurer only, reason required, logged."""
     if not body.reason.strip():
         raise HTTPException(422, "a non-empty reason is required to void an invoice")
     sb = get_db()
@@ -116,7 +123,10 @@ async def void_invoice(
             idempotency_key=idempotency_key,
         )
     except Exception as exc:
-        raise HTTPException(409, f"Invoice cannot be voided: {exc}")
+        raise HTTPException(
+            409,
+            public_message(exc, VOID_KNOWN_ERRORS, "Invoice cannot be voided"),
+        )
     return svc.present_invoice_v1(invoice)
 
 

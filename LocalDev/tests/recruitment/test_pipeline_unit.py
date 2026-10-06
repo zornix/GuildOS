@@ -163,6 +163,22 @@ def test_domain_errors_map_to_http_statuses():
     assert _http_error(svc.RecruitmentError("x")).status_code == 400
 
 
+def test_http_errors_never_echo_database_text():
+    from api.recruitment.api.pipeline import _http_error
+
+    raw = 'duplicate key value violates unique constraint "recruits_pkey"'
+    err = _http_error(svc.RecruitmentError(raw))
+    assert err.status_code == 400
+    assert err.detail == "That change could not be saved"
+
+    forbidden = _http_error(svc.NotPermitted("actor abc is not an active member of chapter def"))
+    assert forbidden.detail == "You are not an active member of this chapter"
+    bad_stage = _http_error(svc.InvalidStage("invalid recruit stage initiated"))
+    assert bad_stage.detail == "That is not a valid recruitment stage"
+    # Our own validation text is already safe and stays as written.
+    assert _http_error(svc.InvalidPhone("Enter a valid phone number")).detail == "Enter a valid phone number"
+
+
 def test_service_stage_list_matches_the_request_schema():
     """STAGES, the RPC's list, and the RecruitStageUpdate pattern are one set."""
     from api.recruitment.api.schemas import RecruitStageUpdate

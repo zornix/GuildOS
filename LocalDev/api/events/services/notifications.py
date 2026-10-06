@@ -1,12 +1,11 @@
 """Events notify gate — completeness-gated "Notify members" SMS blast.
 
-Spec §2.1/§2.7/§5, docs/imp-ev-ph2.md. Sends to all chapter members (spec:
-"Notify: ... Sends to all members"); reuses the announcements SMS dispatch
+Sends to all chapter members; reuses the announcements SMS dispatch
 path (api/announcements/services/sms.py) — `resolve_recipients` for audience
 resolution and `dispatch_send` (send_table="event_notification_sends") for
 delivery — rather than a second Twilio integration.
 
-Storage/RPC: `ev_notify_event` (migration 0143). Authorization (decision D5):
+Storage/RPC: `ev_notify_event` (migration 0143). Authorization:
 a supervisor or organizer of the event, or a holder of calendar:event:update.
 The completeness gate (>=1 supervisor, >=1 organizer, >=3 jobs) and the
 1/hour cooldown are enforced in the RPC as the trust boundary; this module
@@ -74,7 +73,7 @@ def _actor_is_organizer(sb, *, event_id: str, member_id: str) -> bool:
 
 
 def _require_notify(sb, *, actor: dict, event_id: str) -> None:
-    """D5: supervisor OR organizer OR calendar:event:update."""
+    """Who may notify: supervisor OR organizer OR calendar:event:update."""
     if _actor_is_supervisor(sb, event_id=event_id, member_id=actor["id"]):
         return
     if _actor_is_organizer(sb, event_id=event_id, member_id=actor["id"]):
@@ -101,7 +100,7 @@ def _completeness_for_event(sb, *, event_id: str) -> tuple[dict, int]:
 
 
 def _notify_body(event: dict, open_job_count: int) -> str:
-    """"{title} — {date} {time}. {n} open jobs." (spec §2 Notify section)."""
+    """Format notification body with title, date, time, and open jobs count."""
     return f"{event['title']} — {event['date']} {event['time']}. {open_job_count} open jobs."
 
 

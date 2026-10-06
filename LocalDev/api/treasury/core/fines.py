@@ -1,6 +1,6 @@
 """Fine policy constants (GreekOS V1).
 
-Spec §5 Fines: flat $25 for V1 — no fine schedule (explicitly deferred), and
+Flat $25 for V1 — no fine schedule (explicitly deferred), and
 fines are NEVER automatic. The Finance Board issues fine invoices by hand at
 least 24 hours after a required event's attendance time.
 """

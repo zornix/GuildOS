@@ -114,7 +114,7 @@ def test_create_rejects_chair_from_other_chapter(sb_client, chapter_id, cursor, 
     foreign_member = str(cursor.fetchone()["id"])
 
     actor = user_factory()
-    with pytest.raises(Exception, match="member_not_in_chapter"):
+    with pytest.raises(svc.MemberNotInChapter):
         svc.create_initiative(
             sb_client,
             actor=actor,

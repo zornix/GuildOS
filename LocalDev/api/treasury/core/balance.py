@@ -2,11 +2,6 @@
 
 Reads ONLY operational tables; writes ONLY the cache; NEVER reads big_ledger
 (invariant 3 — balances are independent of the ledger).
-
-Method ownership (disjoint):
-- __init__ + chapter_balance ............ Chunk D
-- member_outstanding/recompute_member/recompute_all ... Chunk B
-- chapter-level adjustments term + member adjustment folding ... Chunk E
 """
 
 from __future__ import annotations
@@ -19,7 +14,7 @@ class BalanceEngine:
         self._sb = sb
         self._clock = clock
 
-    # ── Chunk D: chapter treasury balance ────────────────────────────────────
+    # ── Chapter treasury balance ──────────────────────────────────────────────
     def chapter_balance(self, chapter_id: str) -> Money:
         """verified payments in − active expenses out + chapter-level adjustments.
 
@@ -46,7 +41,7 @@ class BalanceEngine:
         return Money.from_cents(total_in - total_out + chapter_adjustments - refunds_out)
 
     def _chapter_refunds_cents(self, chapter_id: str) -> int:
-        """Total ACTIVE refunds paid out of the chapter (Chunk E) — money leaving."""
+        """Total ACTIVE refunds paid out of the chapter — money leaving."""
         rows = (
             self._sb.table("refunds")
             .select("amount_cents")
@@ -57,7 +52,7 @@ class BalanceEngine:
         return sum(int(r["amount_cents"]) for r in rows)
 
     def _chapter_adjustments_cents(self, chapter_id: str) -> int:
-        """Chapter-level adjustments term (Chunk E).
+        """Chapter-level adjustments term.
 
         Sum delta_cents of ACTIVE, chapter-scoped (member_id IS NULL) adjustments.
         Pending adjustments awaiting sign-off have no balance effect.
@@ -71,7 +66,7 @@ class BalanceEngine:
         ).data or []
         return sum(int(r["delta_cents"]) for r in rows if r["member_id"] is None)
 
-    # ── Chunk B: member balance ──────────────────────────────────────────────
+    # ── Member balance ───────────────────────────────────────────────────
     def _member_figures(self, member_id: str) -> dict:
         """Compute a member's balance from OPERATIONAL tables only (never the ledger).
 
@@ -116,7 +111,7 @@ class BalanceEngine:
         }
 
     def _member_adjustments_cents(self, member_id: str) -> int:
-        """Member-scoped adjustments term (Chunk E).
+        """Member-scoped adjustments term.
 
         Sum delta_cents of ACTIVE finance_adjustments for the member. Pending
         adjustments (awaiting a second officer's sign-off) have no balance effect.
@@ -131,7 +126,7 @@ class BalanceEngine:
         return sum(int(r["delta_cents"]) for r in rows)
 
     def _member_refunds_cents(self, member_id: str) -> int:
-        """Total ACTIVE refunds returned to the member (Chunk E)."""
+        """Total ACTIVE refunds returned to the member."""
         rows = (
             self._sb.table("refunds")
             .select("amount_cents")

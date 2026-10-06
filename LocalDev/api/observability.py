@@ -47,11 +47,6 @@ _logging_configured = False
 _sentry_configured = False
 
 
-def current_request_id() -> str:
-    """The in-flight request's id, or "-" outside a request."""
-    return request_id_ctx.get()
-
-
 def _configure_logging() -> None:
     global _logging_configured
     if _logging_configured:

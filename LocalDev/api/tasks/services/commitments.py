@@ -1,7 +1,7 @@
 """Task commitments service — volunteer/uncommit via tk_* RPCs, reads + attribution.
 
-Spec §4: open tasks are volunteered for; uncommit is always allowed but logged
-(late when < 24h before the linked event's start — resolved decision #1).
+Open tasks are volunteered for; uncommit is always allowed but logged
+(late when < 24h before the linked event's start).
 """
 
 from __future__ import annotations
@@ -151,7 +151,7 @@ def _event_role_counts(sb, *, chapter_id: str, member_id: str) -> tuple[int, int
 
 
 def attribution(sb, *, chapter_id: str, member_id: str, recent_limit: int = 10) -> dict:
-    """Per-member attribution ledger (spec §4).
+    """Per-member attribution ledger.
 
     Counts every structurally-derived contribution: task commitments plus the
     events this member organized or supervised. Positive-only by design — this

@@ -148,6 +148,22 @@ def test_void_endpoint_empty_reason_422(api, sb_client, cursor, chapter_id, memb
     assert resp.status_code == 422
 
 
+def test_void_endpoint_paid_invoice_returns_fixed_message(api, sb_client, cursor, chapter_id, member_factory):
+    treasurer = member_factory()
+    assign_role(cursor, chapter_id, treasurer, "treasurer")
+    inv = _make_invoice(sb_client, chapter_id, treasurer)
+    cursor.execute("UPDATE unpaid_invoices SET status='paid' WHERE id=%s", (inv["id"],))
+
+    client = api(make_user(treasurer, chapter_id))
+    resp = client.post(
+        f"/api/treasury/invoices/{inv['id']}/void",
+        json={"reason": "try voiding paid"},
+        headers={"Authorization": "Bearer x"},
+    )
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == "Only unpaid or partially paid invoices may be voided"
+
+
 # ── legacy waive route: same permission + reason body ─────────────────────────
 def test_waive_route_requires_reason_and_treasurer(api, sb_client, cursor, chapter_id, member_factory):
     treasurer = member_factory()
@@ -182,3 +198,16 @@ def test_waive_route_generic_officer_403(api, sb_client, cursor, chapter_id, mem
         headers={"Authorization": "Bearer x"},
     )
     assert resp.status_code == 403
+
+
+def test_waive_route_not_found_returns_fixed_message(api, cursor, chapter_id, member_factory):
+    treasurer = member_factory()
+    assign_role(cursor, chapter_id, treasurer, "treasurer")
+    client = api(make_user(treasurer, chapter_id))
+    resp = client.post(
+        "/api/fines/00000000-0000-0000-0000-000000000000/waive",
+        json={"reason": "does not exist"},
+        headers={"Authorization": "Bearer x"},
+    )
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Fine not found or cannot be waived"

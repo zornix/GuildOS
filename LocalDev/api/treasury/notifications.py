@@ -1,4 +1,4 @@
-"""Treasury notification boundary — durable, exactly-once message outbox (Chunk G).
+"""Treasury notification boundary — durable, exactly-once message outbox.
 
 Every lifecycle notification is *enqueued* into `message_outbox` rather than
 sent inline; the scheduled drain worker (`api/cron/services/outbox_drain.py`,

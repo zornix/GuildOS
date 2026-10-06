@@ -1,6 +1,6 @@
 """Tasks API schemas (domain-local, Pydantic v2).
 
-User-facing layer says "job"; storage/RPCs/routes stay tasks/tk_* (decision D1).
+User-facing layer says "job"; storage/RPCs/routes stay tasks/tk_*.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ class TaskCreate(BaseModel):
 
 
 class TaskUpdate(BaseModel):
-    """PATCH /api/tasks/{id} — a job's own fields only (D16).
+    """PATCH /api/tasks/{id} — a job's own fields only.
 
     Parent (event_id/initiative_id), kind and status are immutable here and are
     simply not part of the model; the RPC never writes them either.
@@ -50,7 +50,7 @@ class TaskStatusUpdate(BaseModel):
 
 
 class RejectIn(BaseModel):
-    """Rejecting a reported job requires a non-empty reason (spec §2.4)."""
+    """Rejecting a reported job requires a non-empty reason."""
 
     reason: str = Field(min_length=1)
 

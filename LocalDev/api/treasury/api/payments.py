@@ -16,11 +16,23 @@ from api.dependencies import get_current_user
 from api.rbac.auth import require_permission
 from api.rbac.services.permissions import has_permission
 from api.platform.db import get_db
+from api.platform.errors import public_message
 from api.treasury.services import payments as svc
 
 # Catalog permission keys gating this surface (ADR-0001; 0147).
 PAYMENT_REVIEW = "treasury:payment:verify"
 RECEIPT_VIEW = "treasury:audit:view"
+
+# tr_reallocate_payment's RAISE EXCEPTION texts, as regexes (\S+ = an id).
+REALLOCATE_KNOWN_ERRORS = {
+    r"a reason is required to reallocate a payment": "A reason is required to reallocate a payment",
+    r"p_allocations must be a JSON array": "Allocations must be a JSON array",
+    r"verified payment \S+ not found in chapter": "Verified payment not found",
+    r"allocations total \(\S+\) exceeds the verified amount": "Allocations total exceeds verified payment amount",
+    r"invoice \S+ does not belong to the paying member": "Invoice does not belong to the paying member",
+    r"cannot allocate to a cancelled invoice": "Cannot allocate to a cancelled invoice",
+    r"invoice \S+ not found in chapter": "Invoice not found",
+}
 
 router = APIRouter()
 
@@ -181,7 +193,7 @@ async def verify_payment_v1(
     user=Depends(require_permission("treasury:payment:verify")),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
-    """Verify + allocate oldest-first. Verifiers = full Finance Board (decision #2)."""
+    """Verify + allocate oldest-first. Verifiers = full Finance Board."""
     sb = get_db()
     return svc.verify_payment_v2(
         sb,
@@ -198,7 +210,7 @@ async def record_payment(
     user=Depends(require_permission(PAYMENT_REVIEW)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
-    """Officer records a payment for a member: submit + verify in one step (D1)."""
+    """Officer records a payment for a member: submit + verify in one step."""
     sb = get_db()
     try:
         return svc.record_payment(
@@ -228,7 +240,7 @@ async def reject_payment_v1(
     user=Depends(require_permission("treasury:payment:verify")),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
-    """Reject a submission — reason is MANDATORY and audit-logged (spec §5)."""
+    """Reject a submission — reason is MANDATORY and audit-logged."""
     if not body.reason.strip():
         raise HTTPException(422, "a non-empty reason is required to reject a submission")
     sb = get_db()
@@ -249,7 +261,7 @@ async def reallocate_payment(
     user=Depends(require_permission("treasury:invoice:void")),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
-    """Treasurer-only allocation override (spec: 'Treasurer can override allocation')."""
+    """Treasurer-only allocation override."""
     if not body.reason.strip():
         raise HTTPException(422, "a non-empty reason is required to reallocate")
     sb = get_db()
@@ -266,7 +278,10 @@ async def reallocate_payment(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(409, f"Reallocation failed: {exc}")
+        raise HTTPException(
+            409,
+            public_message(exc, REALLOCATE_KNOWN_ERRORS, "Reallocation could not be applied"),
+        )
 
 
 @router.get("/payments/{verified_payment_id}/allocations")

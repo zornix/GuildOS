@@ -370,3 +370,26 @@ def test_reallocate_endpoint_treasurer_only(api, sb_client, cursor, chapter_id, 
     )
     assert resp.status_code == 200
     assert len(resp.json()) == 3  # original + reversal + new
+
+
+def test_reallocate_endpoint_exceeds_amount_returns_fixed_message(api, sb_client, cursor, chapter_id, member_factory):
+    member = member_factory()
+    treasurer = member_factory()
+    assign_role(cursor, chapter_id, treasurer, "treasurer")
+
+    inv_b = _invoice(sb_client, chapter_id, member, 1000)
+    sub = _balance_submission(sb_client, chapter_id, member, 1000)
+    vp = pay_svc.verify_payment_v2(
+        sb_client, chapter_id=chapter_id, submission_id=sub["id"], actor_id=treasurer,
+    )
+
+    body = {
+        "allocations": [{"invoice_id": inv_b["id"], "amount_cents": 5000}],
+        "reason": "override too high",
+    }
+    resp = api(make_user(treasurer, chapter_id)).post(
+        f"/api/treasury/payments/{vp['id']}/reallocate",
+        json=body, headers={"Authorization": "Bearer x"},
+    )
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == "Allocations total exceeds verified payment amount"

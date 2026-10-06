@@ -6,8 +6,6 @@ path). Reads use the `sb.table(...)` builder.
 
 from __future__ import annotations
 
-
-from api.treasury.core.idempotency import idempotency_operation  # noqa: F401  (contract anchor)
 from api.platform.rpc import call_rpc
 from api.treasury.notifications import notify_invoice_issued
 
@@ -17,7 +15,7 @@ def recompute_member_balance(sb, member_id: str) -> None:
     """The ONE place receivables refreshes a member's cached balance.
 
     `BalanceEngine.recompute_member` writes only the `member_finance_accounts`
-    cache. Payment verification (Chunk C) refreshes through this same call site.
+    cache. Payment verification refreshes through this same call site.
     Keep this the only recompute call in the receivables service.
     """
     from api.treasury.core.balance import BalanceEngine
@@ -113,7 +111,7 @@ def void_invoice(
     reason: str,
     idempotency_key: str | None = None,
 ) -> dict:
-    """Void/waive an invoice (decision #5: Treasurer only, reason REQUIRED, logged).
+    """Void/waive an invoice (Treasurer only, reason REQUIRED, logged).
 
     The RPC enforces the reason too; this guard gives callers a clear error
     before any DB round-trip.
@@ -163,7 +161,7 @@ def present_invoice_v1(row: dict, *, now=None) -> dict:
     """Map a raw unpaid_invoices row to the V1 API shape.
 
     unpaid/partially_paid → "open", cancelled → "void"; raw status kept as
-    `raw_status`; `overdue` = due_at < now while still open (decision #3).
+    `raw_status`; `overdue` = due_at < now while still open.
     """
     from datetime import datetime, timezone
 

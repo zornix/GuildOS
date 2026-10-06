@@ -35,6 +35,8 @@ class LedgerEntry:
 
 
 class LedgerWriter:
+    """Test fixture only. Production writes go through tr_* RPCs."""
+
     def __init__(self, sb, clock: Clock | None = None):
         self._sb = sb
         self._clock = clock or SystemClock()

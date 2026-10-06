@@ -67,7 +67,7 @@ async def uncommit_task(
     user=Depends(get_current_user),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
-    """Always allowed (no hard lock — spec §4); the response carries `late` and
+    """Always allowed (no hard lock); the response carries `late` and
     `hours_before_event`. Uncommitting someone else requires tasks:review."""
     sb = get_db()
     member_id = (body.member_id if body else None) or user["id"]

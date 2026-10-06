@@ -1,14 +1,15 @@
-"""Fines route (Chunk A + GreekOS V1).
+"""Fines route.
 
-The legacy `fines` table is frozen (§7.8). Fines are unpaid_invoices(kind=fine):
+The legacy `fines` table is frozen. Fines are unpaid_invoices(kind=fine):
 - listing/summary read fine-kind invoices,
-- a waive routes through the V1 void service (Treasurer only, reason REQUIRED,
-  logged — decision #5),
-- V1 issuance is MANUAL: GET /missed/{event_id} surfaces who missed a required
+- a waive routes through the void service (Treasurer only, reason REQUIRED,
+  logged),
+- issuance is MANUAL: GET /missed/{event_id} surfaces who missed a required
   event; POST /issue creates flat $25 fine invoices ≥24h after the event start
-  (spec §5 Fines — never automatic).
+  (fines are never automatic).
 """
 
+import logging
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -23,6 +24,8 @@ from api.rbac.auth import require_permission
 from api.rbac.services.permissions import has_permission
 from api.treasury.core.fines import FINE_ISSUE_DELAY_HOURS, FLAT_FINE_CENTS
 from api.treasury.services import invoices as invoice_svc
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -145,7 +148,7 @@ async def list_missed_members(
 ):
     """Surface who missed a required event (unexcused) and whether already fined.
 
-    The system proposes; humans choose to invoice (spec §5 — never automatic).
+    The system proposes; humans choose to invoice (fines are never automatic).
     """
     sb = get_db()
     event = _load_required_event(sb, user["chapter_id"], event_id)
@@ -219,8 +222,7 @@ async def waive_fine(
     user=Depends(require_permission("treasury:invoice:void")),
 ):
     """Waive a fine — voids the underlying invoice (Treasurer only, reason
-    required, logged; decision #5). Was officer-gated pre-V1; the permission
-    change is intentional per spec."""
+    required, logged). Was officer-gated previously; void/waive is Treasurer only."""
     if not body.reason.strip():
         raise HTTPException(422, "a non-empty reason is required to waive a fine")
     sb = get_db()
@@ -233,7 +235,8 @@ async def waive_fine(
             reason=body.reason.strip(),
         )
     except Exception as exc:  # invoice not found / not waivable
-        raise HTTPException(404, f"Fine not found or not waivable: {exc}")
+        logger.warning("Waive fine failed: %s", exc)
+        raise HTTPException(404, "Fine not found or cannot be waived")
 
 
 @router.get("/summary")

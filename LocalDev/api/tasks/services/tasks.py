@@ -90,7 +90,7 @@ def update_task(
     due_at: str | None = None,
     idempotency_key: str | None = None,
 ) -> dict:
-    """Edit a job's own fields (D16). NULL = leave that column alone.
+    """Edit a job's own fields. NULL = leave that column alone.
 
     people_needed IS a param here (unlike tk_create_task, which still needs the
     Phase-1 follow-up UPDATE), so there is no second write after this call.
@@ -120,7 +120,7 @@ def cancel_task(
     actor_id: str,
     idempotency_key: str | None = None,
 ) -> dict:
-    """Job delete IS cancel (D16) — status='cancelled', row kept, open-only."""
+    """Job delete IS cancel — status='cancelled', row kept, open-only."""
     result = call_rpc(
         "tk_cancel_task",
         {
@@ -163,20 +163,7 @@ def list_tasks(sb, *, chapter_id: str, status: str | None = None) -> list[dict]:
         row["claimants"] = claimants
         row["claimed_count"] = len(claimants)
         row["people_needed"] = row.get("people_needed", 1)
-        # Surface the job kind (D12) so the frontend can render the security
+        # Surface the job kind so the frontend can render the security
         # shield variant and filter security jobs out of the Jobs section.
         row["kind"] = row.get("kind", "standard")
     return rows
-
-
-def incomplete_required_tasks(sb, *, chapter_id: str) -> list[dict]:
-    """Cross-service seam (§7): incomplete-required-task signals for standing
-    and announcements. Consumers read this; they do not re-query tasks."""
-    return (
-        sb.table("tasks")
-        .select("id, assigned_member_id, title, due_at, status")
-        .eq("chapter_id", chapter_id)
-        .eq("required", True)
-        .in_("status", ["open", "in_progress"])
-        .execute()
-    ).data or []

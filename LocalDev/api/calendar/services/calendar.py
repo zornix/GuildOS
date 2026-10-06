@@ -100,7 +100,7 @@ def get_calendar(
                     "chair_member_ids": chairs_by_initiative.get(ini["id"], []),
                 })
 
-    # --- 1c. Announcements (D15: a dated announcement is calendar presence) ---
+    # --- 1c. Announcements (a dated announcement is calendar presence) ---
     # Only sent, dated, unhidden, chapter-audience rows: drafts are not news,
     # the chapter calendar is not the officers-only / balance-targeted feed, and
     # a hidden row is one someone retired from the calendar via DELETE.

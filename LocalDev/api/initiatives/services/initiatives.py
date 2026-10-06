@@ -3,7 +3,7 @@
 Multi-row trust-boundary mutations go through the in_* plpgsql RPCs (0144);
 single-row reads are plain queries. Per-initiative authority is
 initiative_chairs membership (is_assigned_chair), never a role string
-comparison (D9). The RPCs re-check the same membership at the trust boundary
+comparison. The RPCs re-check the same membership at the trust boundary
 (defense in depth) — this layer's checks exist to return clean 403s before
 hitting the database mutation.
 """
@@ -32,6 +32,10 @@ class InvalidTimeRange(InitiativesError):
 
 class ChairRuleViolation(InitiativesError):
     """Min-1 chair invariant would be violated (HTTP 409)."""
+
+
+class MemberNotInChapter(InitiativesError):
+    """Member not in the caller's chapter (HTTP 404)."""
 
 
 # ── Reads & decoration ──────────────────────────────────────────────────────
@@ -210,22 +214,27 @@ def create_initiative(
         end_time=str(end_time) if end_time else None,
     )
 
-    result = call_rpc(
-        "in_create_initiative",
-        {
-            "p_chapter_id": chapter_id,
-            "p_title": title,
-            "p_description": description,
-            "p_date": str(date),
-            "p_time": str(time),
-            "p_end_date": str(end_date) if end_date else None,
-            "p_end_time": str(end_time) if end_time else None,
-            "p_chair_member_ids": chair_member_ids or [],
-            "p_actor_id": actor["id"],
-            "p_idempotency_key": idempotency_key,
-        },
-        sb=sb,
-    )
+    try:
+        result = call_rpc(
+            "in_create_initiative",
+            {
+                "p_chapter_id": chapter_id,
+                "p_title": title,
+                "p_description": description,
+                "p_date": str(date),
+                "p_time": str(time),
+                "p_end_date": str(end_date) if end_date else None,
+                "p_end_time": str(end_time) if end_time else None,
+                "p_chair_member_ids": chair_member_ids or [],
+                "p_actor_id": actor["id"],
+                "p_idempotency_key": idempotency_key,
+            },
+            sb=sb,
+        )
+    except Exception as exc:
+        if "member_not_in_chapter" in str(exc):
+            raise MemberNotInChapter("Member not found in chapter") from exc
+        raise
     initiative = result.data
     return _decorate_chairs(sb, initiative)
 
@@ -321,7 +330,7 @@ def add_chair(
                 "Managing chairs requires being an assigned chair"
             ) from exc
         if "member_not_in_chapter" in msg:
-            raise InitiativesError(msg) from exc
+            raise MemberNotInChapter("Member not found in chapter") from exc
         raise
     initiative = _get_initiative_row(
         sb, chapter_id=chapter_id, initiative_id=initiative_id

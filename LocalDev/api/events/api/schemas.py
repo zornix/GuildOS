@@ -129,7 +129,7 @@ class NotifyPreviewOut(BaseModel):
     last_notified_at: Optional[str] = None
 
 
-# ── Security assignments + swaps (Phase 4, D12–D14) ─────────────────────────
+# ── Security assignments + swaps ─────────────────────────
 
 class SecurityAssignIn(BaseModel):
     member_id: str

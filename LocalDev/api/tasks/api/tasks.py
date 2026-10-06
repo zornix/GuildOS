@@ -37,7 +37,7 @@ async def create_task(
     if body.event_id and body.initiative_id:
         raise HTTPException(422, "A job may not be linked to both an event and an initiative")
     # Attaching a job to an event requires running that event (supervisor/organizer)
-    # or holding tasks:assign (spec §5).
+    # or holding tasks:assign.
     if body.event_id and not can_create_event_job(sb, user=user, event_id=body.event_id):
         raise HTTPException(
             403,
@@ -45,7 +45,7 @@ async def create_task(
             "of it or holding tasks:assign",
         )
     # Attaching a job to an initiative requires being an assigned chair of it
-    # or holding tasks:assign (spec §5).
+    # or holding tasks:assign.
     if body.initiative_id and not can_create_initiative_job(
         sb, user=user, initiative_id=body.initiative_id
     ):
@@ -114,7 +114,7 @@ async def update_task_status(
 
 
 def _manageable_task_or_error(sb, *, user: dict, task_id: str) -> dict:
-    """404 the job, or 403 the caller — the manage gate for edit/cancel (D16)."""
+    """404 the job, or 403 the caller — the manage gate for edit/cancel."""
     task = svc.get_task(sb, chapter_id=user["chapter_id"], task_id=task_id)
     if not task:
         raise HTTPException(404, "Task not found")
@@ -130,7 +130,7 @@ async def update_task(
     user=Depends(get_current_user),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
-    """Edit a job's own fields (spec Screen 5). Parent/kind/status are immutable."""
+    """Edit a job's own fields. Parent/kind/status are immutable."""
     sb = get_db()
     _manageable_task_or_error(sb, user=user, task_id=task_id)
     try:
@@ -155,7 +155,7 @@ async def cancel_task(
     user=Depends(get_current_user),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
-    """Delete a job = cancel it (D16). Only while it is still in the To-do column."""
+    """Delete a job = cancel it. Only while it is still in the To-do column."""
     sb = get_db()
     _manageable_task_or_error(sb, user=user, task_id=task_id)
     try:

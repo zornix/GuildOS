@@ -1,4 +1,4 @@
-"""Treasury rebuild engine (Chunk G · Slice 11, §5).
+"""Treasury rebuild engine.
 
 Reconstructs what the ledger and balances *should* be purely from the OPERATIONAL
 tables (a shadow reconstruction), diffs the shadow against the live `big_ledger`

@@ -100,6 +100,19 @@ def test_open_session_still_allows_checkin(
     assert resp.status_code == 200, resp.text
 
 
+def test_checkin_rpc_rejection_is_a_fixed_404_not_a_500(
+    as_member, cursor, event_id, member_with_phone, checkin_link_factory
+):
+    """A member no longer active after sign-in gets the RPC's 'not found', mapped."""
+    _, code = checkin_link_factory(event_id)
+    client = as_member(member_with_phone)
+    cursor.execute("UPDATE members SET status = 'invited' WHERE id = %s", (member_with_phone,))
+
+    resp = client.post(f"/api/attendance/checkin/{code}")
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Member not found"
+
+
 def test_a_closed_session_bound_to_another_link_does_not_block(
     as_member, chapter_id, event_id, member_with_phone, checkin_link_factory, session_factory
 ):

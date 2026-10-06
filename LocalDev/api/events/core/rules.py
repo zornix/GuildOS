@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-# Soft minimum of organizers per event (spec §3). NEVER blocks creation; events
+# Soft minimum of organizers per event. NEVER blocks creation; events
 # below the minimum are publicly flagged "needs N more organizers".
-# D3 (docs/events-dev-status.md §2): the "Organizers Needed" badge fires at 0
-# organizers and the notify gate needs >=1 — dropped from 2.
+# The "Organizers Needed" badge fires at 0 organizers and the notify gate needs >=1.
 ORGANIZER_SOFT_MIN = 1
 
-# Notify-gate completeness thresholds (spec §2.7 / docs/imp-ev-ph2.md §3.1).
+# Notify-gate completeness thresholds.
 SUPERVISORS_COMPLETE_MIN = 1
 ORGANIZERS_COMPLETE_MIN = 1
 JOBS_COMPLETE_MIN = 3
@@ -23,7 +22,7 @@ DEFAULT_EVENT_TYPES: tuple[str, ...] = (
     "Recruitment",
 )
 
-# Resolved decision #4: API audience values map onto the stored visibility.
+# API audience values map onto the stored visibility.
 AUDIENCE_TO_VISIBILITY: dict[str, str] = {
     "all": "chapter",
     "officers": "officer",
@@ -40,7 +39,7 @@ def organizers_needed(organizer_count: int) -> int:
 
 
 def completeness(*, supervisor_count: int, organizer_count: int, job_count: int) -> dict:
-    """Notify-gate completeness (spec §2.7): >=1 supervisor, >=1 organizer,
+    """Notify-gate completeness: >=1 supervisor, >=1 organizer,
     >=3 jobs. Pure — the RPC (`ev_notify_event`) re-checks this server-side."""
     items = [
         {"key": "supervisors", "required": SUPERVISORS_COMPLETE_MIN, "current": supervisor_count},

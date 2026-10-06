@@ -1,10 +1,8 @@
 """Security assignments + swap requests — service layer (no FastAPI imports).
 
-Spec §2.5 (Security), §2.7 (swap notifications), plan docs/imp-ev-ph4.md.
-
-D12: a security assignment IS a `tasks` row (`kind='security'`) plus a
-pre-created active commitment (the source of truth for the holder). D13: swaps
-are `security_swap_requests` rows resolved by one atomic RPC. D14: the manage
+A security assignment IS a `tasks` row (`kind='security'`) plus a
+pre-created active commitment (the source of truth for the holder). Swaps
+are `security_swap_requests` rows resolved by one atomic RPC. The manage
 gate reuses `_require_supervisor_manage` (supervisor OR calendar:event:update)
 from `services/events.py`; swap request/accept/decline are identity-gated inside
 the RPCs, so those service methods carry no permission check (any authenticated
@@ -43,7 +41,7 @@ def _swap_out(row: dict) -> dict:
 # ── Reads ────────────────────────────────────────────────────────────────────
 
 def list_security(sb, *, chapter_id: str, event_id: str) -> list[dict]:
-    """Security roster for an event (spec Screen 3 read view).
+    """Security roster for an event (read view).
 
     Each non-cancelled security task decorated with its active-commitment holder,
     the task status/rejection_reason, and the pending swap (if any).
@@ -113,7 +111,7 @@ def list_my_swaps(sb, *, chapter_id: str, member_id: str) -> dict:
     }
 
 
-# ── Supervisor-gated mutations (D14 manage gate) ─────────────────────────────
+# ── Supervisor-gated mutations (supervisor manage gate) ─────────────────────────────
 
 def assign_security(
     sb, *, actor: dict, event_id: str, member_id: str,

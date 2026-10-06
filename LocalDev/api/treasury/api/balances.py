@@ -47,7 +47,7 @@ async def get_member_balance(member_id: str, user=Depends(get_current_user)):
 
 @router.get("/members/{member_id}/dashboard")
 async def get_member_treasury_dashboard(member_id: str, user=Depends(get_current_user)):
-    """V1 member treasury dashboard (decision #3: overdue invoices stay visible).
+    """Member treasury dashboard (overdue invoices stay visible).
 
     Access: the member themself, OR a `treasury:audit:view` holder, OR a
     `treasury:payment:verify` holder (Finance Board reviewers) — all scoped

@@ -1,7 +1,7 @@
 """Events domain permissions and role sets.
 
 No inline role/permission strings in route handlers: the service layer checks
-CHAIR_ROLES (supervisor eligibility, spec §1) and the routes gate with
+CHAIR_ROLES (supervisor eligibility) and the routes gate with
 require_permission on the calendar:* permissions below.
 """
 
@@ -12,7 +12,7 @@ EVENT_UPDATE = "calendar:event:update"
 EVENT_DELETE = "calendar:event:delete"
 OFFICER_VIEW = "calendar:officer:view"
 
-# Supervisor eligibility (spec §1: "must hold a chair position").
+# Supervisor eligibility: must hold a chair position.
 CHAIR_ROLES: tuple[str, ...] = (
     "risk_chair",
     "social_chair",
@@ -22,7 +22,7 @@ CHAIR_ROLES: tuple[str, ...] = (
     "standards_chair",
 )
 
-# Co-supervisor eligibility (spec §2.1: co-supervisors must hold an officer role).
+# Co-supervisor eligibility: co-supervisors must hold an officer role.
 # Superset of CHAIR_ROLES plus the executive board.
 OFFICER_ROLES: tuple[str, ...] = CHAIR_ROLES + (
     "president",

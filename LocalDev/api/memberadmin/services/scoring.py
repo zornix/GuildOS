@@ -12,12 +12,12 @@ from api.platform.db import get_db
 
 
 def _prior_security_shifts(chapter_id: str) -> dict[str, int]:
-    """How many approved security jobs each member has held (D17).
+    """How many approved security jobs each member has held.
 
-    Decoration only — the security picker's "prior shifts" column (spec Screen
-    6). Never an input to the 0–100 score, and never shown on the assigned
-    member's card. The active commitment is the source of truth for the holder
-    (D12); an approved job's commitment may be 'active' or 'completed', so both
+    Decoration only — the security picker's "prior shifts" column.
+    Never an input to the 0–100 score, and never shown on the assigned
+    member's card. The active commitment is the source of truth for the holder;
+    an approved job's commitment may be 'active' or 'completed', so both
     count.
     """
     sb = get_db()
