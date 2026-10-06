@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { OpenInvoiceDto } from '../api';
+import type { Member } from '../types';
 import { can } from './session';
 import {
   ADJUSTMENT_CREATE_KEY,
@@ -8,6 +9,7 @@ import {
   INVOICE_CREATE_KEY,
   PAYMENT_VERIFY_KEY,
   adaptInvoice,
+  duesRunCandidates,
   adaptSubmissions,
   duesRunErrorMessage,
   invoiceStatus,
@@ -262,4 +264,13 @@ test('a dues run the server already holds under different details asks for a fre
   const generic = 'Could not create the dues run. Try again — a retry will not bill anyone twice.';
   assert.equal(duesRunErrorMessage({ status: 500 }), generic);
   assert.equal(duesRunErrorMessage(new Error('boom')), generic);
+});
+
+test('a dues run pre-checks active members only', () => {
+  const m = (id: string, status: Member['status']): Member => ({
+    id, name: id, email: '', phone: '', role: 'Active Member', status, standing: 'Good Standing',
+    gpa: 0, duesBalanceCents: 0, duesBalance: 0, attendanceRate: 0, pledgeClass: ''
+  });
+  const list = [m('a', 'Active'), m('b', 'Alumni'), m('c', 'Inactive'), m('d', 'Alumni')];
+  assert.deepEqual(duesRunCandidates(list).map(x => x.id), ['a']);
 });

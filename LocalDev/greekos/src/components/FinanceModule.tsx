@@ -24,6 +24,7 @@ import {
   INVOICE_CREATE_KEY,
   PAYMENT_VERIFY_KEY,
   DuesRunDraft,
+  duesRunCandidates,
   Invoice,
   ProofDraft,
   ProofSubmission,
@@ -492,7 +493,7 @@ export default function FinanceModule({
 
       {showDuesRun && (
         <DuesRunModal
-          candidates={safeMembers.filter(m => m.status === 'Active' || m.status === 'Pledge')}
+          candidates={duesRunCandidates(safeMembers)}
           onSubmit={onCreateDuesRun}
           onClose={() => setShowDuesRun(false)}
         />

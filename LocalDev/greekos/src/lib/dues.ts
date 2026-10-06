@@ -6,6 +6,7 @@
 
 import type { OpenInvoiceDto, PaymentSubmissionDto } from '../api';
 import { formatMoney } from '../formatters';
+import type { Member } from '../types';
 import { dollarsToCents, type TransactionKind } from './transaction';
 
 /** POST /api/treasury/invoices and /invoices/bulk. */
@@ -291,4 +292,9 @@ export function toBase64(bytes: Uint8Array): string {
   let binary = '';
   for (const b of bytes) binary += String.fromCharCode(b);
   return btoa(binary);
+}
+
+/** Everyone a dues run pre-checks: active members only (#94). */
+export function duesRunCandidates(members: Member[]): Member[] {
+  return members.filter(m => m.status === 'Active');
 }
