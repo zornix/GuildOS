@@ -355,6 +355,26 @@ def test_refund_of_unallocated_credit_changes_no_invoice(sb_client, cursor, chap
     assert cursor.fetchone()["n"] == 0
 
 
+def test_refund_larger_than_remaining_allocation_reverses_only_coverage(
+    sb_client, cursor, chapter_id, member_id
+):
+    invoice, vp = _paid_invoice(sb_client, chapter_id, member_id, invoice_cents=3000, paid_cents=10000)
+
+    # This consumes all 7000 credit and all 3000 allocated cents, without
+    # trying to reverse the 10000 refund as if all of it covered the invoice.
+    refund = _refund(sb_client, chapter_id, member_id, vp, 10000)
+
+    assert refund["amount_cents"] == 10000
+    assert _status_and_remaining(cursor, invoice["id"]) == ("unpaid", 3000)
+    cursor.execute(
+        "SELECT COALESCE(SUM(amount_cents), 0) AS reversed FROM payment_allocations "
+        "WHERE verified_payment_id=%s AND reverses_allocation_id IS NOT NULL",
+        (vp["id"],),
+    )
+    assert cursor.fetchone()["reversed"] == 3000
+    assert bal_svc.get_member_balance(sb_client, member_id=member_id)["current_balance_cents"] == 3000
+
+
 def test_second_refund_reverses_only_what_credit_no_longer_covers(sb_client, cursor, chapter_id, member_id):
     invoice, vp = _paid_invoice(sb_client, chapter_id, member_id, invoice_cents=10000, paid_cents=15000)
 
