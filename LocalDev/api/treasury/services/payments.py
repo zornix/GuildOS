@@ -143,7 +143,11 @@ def verify_payment_v2(
         },
         sb=sb,
     )
-    vp = result.data
+    return _after_verify_v2(sb, chapter_id=chapter_id, vp=result.data)
+
+
+def _after_verify_v2(sb, *, chapter_id: str, vp: dict) -> dict:
+    """Refresh the member's cached balance; notify once, never on a replay."""
     created = bool(vp.get("_created"))
     clean = _strip_internal(vp)
 
@@ -153,10 +157,40 @@ def verify_payment_v2(
         notify_payment_approved(
             chapter_id=chapter_id,
             member_id=clean["member_id"],
-            submission_id=submission_id,
+            submission_id=clean["submission_id"],
             sb=sb,
         )
     return clean
+
+
+def record_payment(
+    sb,
+    *,
+    chapter_id: str,
+    member_id: str,
+    amount_cents: int,
+    method: str,
+    actor_id: str,
+    invoice_id: str | None = None,
+    reference: str | None = None,
+    idempotency_key: str | None = None,
+) -> dict:
+    """Officer records money for a member: submit + verify-v2 in one transaction (D1)."""
+    result = call_rpc(
+        "tr_record_payment",
+        {
+            "p_chapter_id": chapter_id,
+            "p_member_id": member_id,
+            "p_amount_cents": amount_cents,
+            "p_method": method,
+            "p_actor_id": actor_id,
+            "p_invoice_id": invoice_id,
+            "p_reference": reference,
+            "p_idempotency_key": idempotency_key,
+        },
+        sb=sb,
+    )
+    return _after_verify_v2(sb, chapter_id=chapter_id, vp=result.data)
 
 
 def reallocate_payment(
