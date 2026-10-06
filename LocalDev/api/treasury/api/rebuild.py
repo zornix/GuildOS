@@ -1,4 +1,4 @@
-"""Rebuild HTTP surface — Chunk G.
+"""Rebuild HTTP surface.
 
 POST /rebuild — reconstruct the ledger + balances from operational tables, diff
 against the live ledger and balance cache, and return a drift report. Gated on the

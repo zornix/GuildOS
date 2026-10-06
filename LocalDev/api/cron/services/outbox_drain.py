@@ -116,7 +116,7 @@ def _global_mode() -> str:
     mode = delivery_mode()
     if mode not in _DISPATCH_MODES:
         # Fail the row loudly: a typo in the Vercel env var must not silently
-        # simulate (or silently skip) a message (checklist 2.2). It is read per
+        # simulate (or silently skip) a message. It is read per
         # SMS row, like _email_mode, so a bad SMS setting cannot also stop the
         # email rows — the two channels have separate knobs.
         raise ValueError(

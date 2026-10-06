@@ -1,5 +1,4 @@
-"""Reports service — Chunk F-partial (Review Queue) + F-complete (Dashboard,
-Statement, Exports).
+"""Reports service — Review Queue, Dashboard, Statement, Exports.
 
 Provides read-only query functions for officer review workflows, the treasurer
 dashboard, member self-serve statements, and period CSV exports. All queries are
@@ -117,7 +116,7 @@ def list_payment_submissions(
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# Chunk F-complete — Dashboard
+# Dashboard
 # ════════════════════════════════════════════════════════════════════════════
 def dashboard_summary(sb, *, chapter_id: str, recent_limit: int = 10) -> dict:
     """Single treasurer aggregate for a chapter (all integer cents).
@@ -208,7 +207,7 @@ def dashboard_summary(sb, *, chapter_id: str, recent_limit: int = 10) -> dict:
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# Chunk F-complete — Member statement
+# Member statement
 # ════════════════════════════════════════════════════════════════════════════
 def member_statement(sb, *, member_id: str) -> dict:
     """A member's chronological financial events + current owed/credit.
@@ -313,7 +312,7 @@ def member_statement(sb, *, member_id: str) -> dict:
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# Chunk F-complete — Period CSV exports
+# Period CSV exports
 # ════════════════════════════════════════════════════════════════════════════
 _REPORT_DATASETS = {"payments", "invoices", "expenses", "member_balances", "ledger"}
 

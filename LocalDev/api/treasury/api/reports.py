@@ -1,4 +1,4 @@
-"""Review Queue HTTP surface — Chunk F-partial.
+"""Review Queue HTTP surface.
 
 GET /payments/submissions  — officer review queue, paginated.
 Guarded by treasury:payment:verify. Chapter-scoped from the authed user.
@@ -70,7 +70,7 @@ async def list_payment_submissions(
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# Chunk F-complete — Dashboard / Statement / Period CSV exports
+# Dashboard / Statement / Period CSV exports
 # ════════════════════════════════════════════════════════════════════════════
 @router.get("/dashboard")
 async def treasury_dashboard(

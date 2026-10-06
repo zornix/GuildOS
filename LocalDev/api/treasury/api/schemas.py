@@ -19,7 +19,7 @@ class FineSummary(BaseModel):
 
 
 class FineToInvoice(BaseModel):
-    """Float→cents boundary for fines entering Treasury (Chunk A, §7.8).
+    """Float→cents boundary for fines entering Treasury.
 
     `fine_amount` arrives as a NUMERIC-serialized float from the legacy events/fines
     surface. This is the ONLY sanctioned conversion point; downstream Treasury code

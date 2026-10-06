@@ -117,8 +117,8 @@ def production_config_violations(s: Settings) -> list[str]:
     return violations
 
 
-# Fail the Vercel deploy loudly rather than boot a misconfigured function
-# (imp-tenant-guards.md D5). Import-time so a bad config never serves a request.
+# Fail the Vercel deploy loudly rather than boot a misconfigured function.
+# Import-time check so a bad config never serves a request.
 _violations = production_config_violations(settings)
 if _violations:
     raise RuntimeError(

@@ -90,7 +90,7 @@ def reject_payment(
 
 # ── TREASURY V1: balance-level submissions, allocation, evidence ──────────────
 
-MAX_EVIDENCE_BYTES = 2 * 1024 * 1024  # spec: evidence uploads capped at 2 MiB
+MAX_EVIDENCE_BYTES = 2 * 1024 * 1024  # evidence uploads are capped at 2 MiB
 
 
 def submit_balance_payment(
@@ -105,7 +105,7 @@ def submit_balance_payment(
 ) -> dict:
     """Member submits a payment against their OVERALL balance (invoice_id NULL).
 
-    Enters 'pending' — no money moves, no ledger (spec §5 Payments).
+    Enters 'pending' — no money moves, no ledger.
     """
     result = call_rpc(
         "tr_submit_balance_payment",
@@ -131,7 +131,7 @@ def verify_payment_v2(
     idempotency_key: str | None = None,
 ) -> dict:
     """Verify an invoice-targeted OR balance-level submission, then allocate
-    the amount across the member's open invoices oldest-first (decision #2 path).
+    the amount across the member's open invoices oldest-first.
     Leftover stays as member credit (balance is computed, never stored)."""
     result = call_rpc(
         "tr_verify_payment_v2",
@@ -175,7 +175,7 @@ def record_payment(
     reference: str | None = None,
     idempotency_key: str | None = None,
 ) -> dict:
-    """Officer records money for a member: submit + verify-v2 in one transaction (D1)."""
+    """Officer records money for a member: submit + verify-v2 in one transaction."""
     result = call_rpc(
         "tr_record_payment",
         {

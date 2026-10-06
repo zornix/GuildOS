@@ -43,7 +43,7 @@ def create_draft(
                 "audience": audience,
                 "status": "draft",
                 "created_by": actor_id,
-                # D15: calendar slot, not a send time. Both stay NULL for the
+                # A calendar slot, not a send time. Both stay NULL for the
                 # plain feed post every existing caller creates.
                 "calendar_date": calendar_date,
                 "calendar_time": calendar_time,

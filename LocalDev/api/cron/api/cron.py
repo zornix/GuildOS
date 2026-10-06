@@ -23,7 +23,7 @@ router = APIRouter(dependencies=[Depends(require_cron_secret)])
 
 @router.get("/process-fines")
 async def cron_process_fines():
-    """DISABLED (GreekOS V1, spec §5 Fines): fines are never automatic.
+    """DISABLED: fines are never automatic.
 
     The route stays registered (route-registration regression tests) but is a
     no-op. Fine issuance is the manual, permission-gated POST /api/fines/issue

@@ -7,7 +7,7 @@ Public surface:
 
 No domain may hardcode role/permission checks inline; everything goes through
 these helpers — `require_officer` and treasury's `require_capability` were
-deleted by migration 0147 / imp-one-gate.md. Accounts that still carry only the
+deleted by migration 0147. Accounts that still carry only the
 legacy `members.role` column keep working via the compatibility mapping in
 core/policy.py.
 """

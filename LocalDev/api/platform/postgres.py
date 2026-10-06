@@ -593,7 +593,6 @@ class _LocalAuth:
 
     def __init__(self, secret: str):
         self._secret = secret
-        self.admin = _LocalAuthAdmin()
 
     def get_user(self, token: str):
         import jwt
@@ -625,11 +624,6 @@ class _LocalAuth:
             user: _User
 
         return _AuthResponse(user=_User(id=payload["sub"], claims=payload))
-
-
-class _LocalAuthAdmin:
-    def invite_user_by_email(self, email: str):
-        pass
 
 
 class PostgresClient:

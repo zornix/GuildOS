@@ -66,7 +66,7 @@ async def delete_announcement(
     announcement_id: str,
     user=Depends(require_permission(ANNOUNCEMENTS_CREATE)),
 ):
-    """Drop a draft, or retire a sent announcement from the calendar (D15).
+    """Drop a draft, or retire a sent announcement from the calendar.
 
     DELETE-only, so it cannot shadow GET /sms-log; the /{id}/sms-preview |
     send-sms | send paths are longer and cannot collide with it either.

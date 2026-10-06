@@ -15,7 +15,7 @@ from api.events.core.timing import chapter_timezone, has_started
 def attendance_summary(
     sb, *, chapter_id: str, member_id: str | None = None, now: datetime | None = None
 ) -> list[dict]:
-    """Derived attendance % over REQUIRED past events (spec §3).
+    """Derived attendance % over REQUIRED past events.
 
     For each active member: attended_required, total_required_past_events, and
     attendance_pct (None when the chapter has no required past events).

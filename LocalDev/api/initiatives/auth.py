@@ -1,6 +1,6 @@
 """Initiatives domain permissions and per-initiative chair authority.
 
-Chapter-level chair gating (`calendar:initiative:create` / `:update`, D9) is a
+Chapter-level chair gating (`calendar:initiative:create` / `:update`) is a
 seeded permission key granted to the six chair roles; per-initiative
 authority is `initiative_chairs` membership, checked via `is_assigned_chair`
 below — never a `user["role"] == ...` string comparison (hard rule).

@@ -14,7 +14,7 @@ class AnnouncementCreate(BaseModel):
     audience: str = Field(
         default="chapter", pattern="^(chapter|officers|members_with_balance)$"
     )
-    # D15: calendar presence, not a scheduled send. Twilio still fires on
+    # Calendar presence, not a scheduled send. Twilio still fires on
     # POST /{id}/send-sms; a dated announcement simply also shows on the calendar.
     calendar_date: date | None = None
     calendar_time: time | None = None

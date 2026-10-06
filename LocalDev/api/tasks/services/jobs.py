@@ -1,6 +1,6 @@
 """Job lifecycle service — report-done / approve / reject via tk_* RPCs.
 
-Storage/RPCs stay tasks/tk_* (decision D1). The state machine + tenancy +
+Storage/RPCs stay tasks/tk_*. The state machine + tenancy +
 outbox fan-out live in the RPCs (0142); approver authorization is decided in
 api/tasks/services/approvals.py and enforced by the routes.
 """
