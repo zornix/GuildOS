@@ -289,3 +289,90 @@ async def test_refund_requires_refund_create_permission(sb_client, cursor, chapt
         (chapter_id, member_id),
     )
     assert await dep(user=user) == user
+
+
+# ── F-030 / D3: a refund reopens the invoice it covered ──────────────────────
+def _paid_invoice(sb, chapter_id, member_id, *, invoice_cents, paid_cents):
+    invoice = inv_svc.create_invoice(
+        sb, chapter_id=chapter_id, member_id=member_id, kind="dues",
+        amount_cents=invoice_cents, description=None, actor_id=member_id,
+    )
+    submission = inv_svc.submit_payment(
+        sb, chapter_id=chapter_id, member_id=member_id, invoice_id=invoice["id"],
+        claimed_amount_cents=paid_cents, method="venmo", proof_ref="ref-1",
+        actor_id=member_id,
+    )
+    vp = pay_svc.verify_payment_v2(
+        sb, chapter_id=chapter_id, submission_id=submission["id"], actor_id=member_id
+    )
+    return invoice, vp
+
+
+def _refund(sb, chapter_id, member_id, vp, cents):
+    return ref_svc.issue_refund(
+        sb, chapter_id=chapter_id, verified_payment_id=vp["id"], amount_cents=cents,
+        reason="refund", officer_id=member_id,
+    )
+
+
+def _status_and_remaining(cursor, invoice_id):
+    cursor.execute(
+        "SELECT status, tr_invoice_remaining_cents(id) AS remaining FROM unpaid_invoices WHERE id=%s",
+        (invoice_id,),
+    )
+    row = cursor.fetchone()
+    return row["status"], row["remaining"]
+
+
+def test_full_refund_reopens_the_invoice(sb_client, cursor, chapter_id, member_id):
+    invoice, vp = _paid_invoice(sb_client, chapter_id, member_id, invoice_cents=10000, paid_cents=10000)
+    assert _status_and_remaining(cursor, invoice["id"]) == ("paid", 0)
+
+    _refund(sb_client, chapter_id, member_id, vp, 10000)
+
+    assert _status_and_remaining(cursor, invoice["id"]) == ("unpaid", 10000)
+    assert bal_svc.get_member_balance(sb_client, member_id=member_id)["outstanding_balance_cents"] == 10000
+
+
+def test_partial_refund_makes_invoice_partially_paid(sb_client, cursor, chapter_id, member_id):
+    invoice, vp = _paid_invoice(sb_client, chapter_id, member_id, invoice_cents=10000, paid_cents=10000)
+
+    _refund(sb_client, chapter_id, member_id, vp, 4000)
+
+    assert _status_and_remaining(cursor, invoice["id"]) == ("partially_paid", 4000)
+
+
+def test_refund_of_unallocated_credit_changes_no_invoice(sb_client, cursor, chapter_id, member_id):
+    invoice, vp = _paid_invoice(sb_client, chapter_id, member_id, invoice_cents=10000, paid_cents=15000)
+
+    _refund(sb_client, chapter_id, member_id, vp, 5000)
+
+    assert _status_and_remaining(cursor, invoice["id"]) == ("paid", 0)
+    cursor.execute(
+        "SELECT count(*) AS n FROM payment_allocations WHERE verified_payment_id=%s AND reverses_allocation_id IS NOT NULL",
+        (vp["id"],),
+    )
+    assert cursor.fetchone()["n"] == 0
+
+
+def test_second_refund_reverses_only_what_credit_no_longer_covers(sb_client, cursor, chapter_id, member_id):
+    invoice, vp = _paid_invoice(sb_client, chapter_id, member_id, invoice_cents=10000, paid_cents=15000)
+
+    _refund(sb_client, chapter_id, member_id, vp, 3000)  # 2000 credit left
+    assert _status_and_remaining(cursor, invoice["id"]) == ("paid", 0)
+    _refund(sb_client, chapter_id, member_id, vp, 4000)  # 2000 from credit, 2000 reopened
+
+    assert _status_and_remaining(cursor, invoice["id"]) == ("partially_paid", 2000)
+
+
+def test_refund_does_not_touch_cancelled_invoice(sb_client, cursor, chapter_id, member_id):
+    invoice, vp = _paid_invoice(sb_client, chapter_id, member_id, invoice_cents=10000, paid_cents=4000)
+    cursor.execute(
+        "SELECT tr_void_invoice(%s, %s, %s, %s)",
+        (chapter_id, invoice["id"], member_id, "issued by mistake"),
+    )
+
+    _refund(sb_client, chapter_id, member_id, vp, 4000)
+
+    cursor.execute("SELECT status FROM unpaid_invoices WHERE id=%s", (invoice["id"],))
+    assert cursor.fetchone()["status"] == "cancelled"
