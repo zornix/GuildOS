@@ -33,39 +33,28 @@ async def create_session(
     if not event.data:
         raise HTTPException(404, "Event not found")
 
-    checkin_link_id = None
-    link = None
-    if mode in ("short_link", "qr"):
-        # qr mode renders the same short link as a QR code client-side.
-        link = await create_checkin_link(event_id, actor_id)
-        link_row = (
-            sb.table("checkin_links")
-            .select("id")
-            .eq("short_code", link["short_code"])
-            .maybe_single()
-            .execute()
-        )
-        checkin_link_id = link_row.data["id"] if link_row.data else None
+    with sb.transaction() as tx:
+        link = None
+        if mode in ("short_link", "qr"):
+            # The new session owns this link; do not bind an older manual one.
+            link = await create_checkin_link(event_id, actor_id, sb=tx, bind_sessions=False)
 
-    session = unwrap_row(
-        sb.table("attendance_sessions")
-        .insert(
-            {
+        session = unwrap_row(
+            tx.table("attendance_sessions")
+            .insert({
                 "chapter_id": chapter_id,
                 "event_id": event_id,
                 "mode": mode,
                 "closes_at": closes_at,
-                "checkin_link_id": checkin_link_id,
+                "checkin_link_id": link["id"] if link else None,
                 "created_by": actor_id,
-            }
+            })
+            .execute()
         )
-        .execute()
-    )
-
-    # Events↔attendance seam (§7): the event points at its latest session.
-    sb.table("events").update({"linked_attendance_session_id": session["id"]}).eq(
-        "id", event_id
-    ).execute()
+        # Events↔attendance seam (§7): the event points at its latest session.
+        tx.table("events").update({"linked_attendance_session_id": session["id"]}).eq(
+            "id", event_id
+        ).execute()
 
     if link:
         session["checkin_link"] = link

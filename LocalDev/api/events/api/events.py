@@ -235,7 +235,11 @@ async def get_checkin_link(event_id: str, user=Depends(get_current_user)):
     )
     if not event.data:
         raise HTTPException(404, "Event not found")
+    from api.rbac.services.permissions import has_permission
+
     link = await get_active_link_for_event(event_id)
+    if link and not has_permission(user, CHECKIN_LINK_MANAGE, sb=sb):
+        return {"event_id": link["event_id"], "active": True, "expires_at": link["expires_at"]}
     return link or {}
 
 
