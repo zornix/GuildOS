@@ -157,7 +157,7 @@ function MessageRow({
 }) {
   // "no_consent" and "no_email" are not errors an officer can retry away, so
   // they read as explanations and hide Retry.
-  const failure = outboxFailure(message.error);
+  const failure = outboxFailure(message.error, message.eventType);
 
   return (
     <Card className="p-4 space-y-2">
@@ -199,6 +199,10 @@ function MessageRow({
           )}
         </div>
       </div>
+
+      {message.status === 'failed' && failure.hint && (
+        <p className="text-xs text-slate-600">{failure.hint}</p>
+      )}
 
       {message.body && <p className="text-sm text-slate-700 break-words">{message.body}</p>}
 

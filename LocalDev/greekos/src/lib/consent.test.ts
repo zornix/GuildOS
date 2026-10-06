@@ -51,3 +51,14 @@ test('any other failure keeps the raw error and the retry button', () => {
   });
   assert.equal(outboxFailure(undefined).retryable, true);
 });
+
+test('failed setup and reset code rows cannot be retried; other kinds can', () => {
+  for (const kind of ['SETUP_CODE', 'RESET_CODE']) {
+    assert.equal(outboxFailure('Provider unavailable', kind).retryable, false);
+    assert.equal(outboxFailure('Provider unavailable', kind).hint, 'This message carried a one-time code. Send the member a new code instead.');
+    assert.ok(outboxFailure(NO_EMAIL, kind).hint);
+  }
+  for (const kind of ['ANNOUNCEMENT', 'EVENT_NOTICE', 'JOB_ASSIGNED']) {
+    assert.equal(outboxFailure('Provider unavailable', kind).retryable, true);
+  }
+});
