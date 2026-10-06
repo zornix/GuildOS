@@ -130,7 +130,9 @@ def parse_roster_csv(raw: bytes, *, valid_role_keys: set[str]) -> list[dict]:
             seen.add(email)
         if not phone:
             errors.append({"row": row_no, "error": "phone is not a usable number (E.164 or 10-digit US)"})
-        if role_key and role_key not in valid_role_keys:
+        if role_key in ("admin", "president"):
+            errors.append({"row": row_no, "error": "admin and president cannot be set by import"})
+        elif role_key and role_key not in valid_role_keys:
             errors.append({"row": row_no, "error": f"unknown role: {role_key}"})
 
         rows.append({
