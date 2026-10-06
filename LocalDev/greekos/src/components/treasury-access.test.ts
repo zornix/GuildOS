@@ -11,7 +11,7 @@ function treasury(permissions: string[]) {
   return renderToStaticMarkup(createElement(FinanceModule, {
     members: [], fines: [], payments: [], events: [],
     permissions: new Set(permissions),
-    chapterName: 'Alpha', currentMemberName: 'Treasurer',
+    chapterName: 'Alpha', currentMemberId: 'm1',
     myInvoices: [],
     pendingProofCentsOf: () => 0, submissions: [], queueLoading: false,
     onRefreshQueue: asyncNoop, onCreateDuesRun: asyncNoop, onSubmitProof: asyncNoop,

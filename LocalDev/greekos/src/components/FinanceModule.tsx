@@ -41,7 +41,8 @@ interface FinanceModuleProps {
   /** The backend's own permission keys — every control gates on one. */
   permissions: Set<string>;
   chapterName: string;
-  currentMemberName: string;
+  /** The viewed member; modal and tab state reset when it changes. */
+  currentMemberId?: string;
   /** The signed-in member's open invoices, dues and fines alike. */
   myInvoices: Invoice[];
   pendingProofCentsOf: (invoiceId: string) => number;
@@ -95,7 +96,7 @@ export default function FinanceModule({
   events,
   permissions,
   chapterName,
-  currentMemberName,
+  currentMemberId,
   myInvoices,
   pendingProofCentsOf,
   submissions,
@@ -124,14 +125,13 @@ export default function FinanceModule({
 
   // Everything seeded from the viewed member resets when that member changes;
   // the component itself stays mounted (F-061).
-  const viewedMemberId = safeMembers.find(m => m.name === currentMemberName)?.id ?? currentMemberName;
   useEffect(() => {
     setActiveSubTab('invoices');
     setTransaction(null);
     setShowDuesRun(false);
     setOpenInvoice(null);
     setSearchMember('');
-  }, [viewedMemberId]);
+  }, [currentMemberId]);
 
   // The queue is only read when it is on screen — it is the one list that goes
   // stale while another officer works.
