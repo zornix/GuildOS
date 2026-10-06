@@ -222,10 +222,10 @@ def test_a_non_secret_row_keeps_its_payload(
     assert read_outbox(row["id"])["payload"] == {"title": "Formal"}
 
 
-def test_a_failed_setup_code_row_keeps_its_payload(
+def test_failed_code_row_has_no_payload(
     drain, outbox_row, read_outbox, email_mode, member_factory, monkeypatch, fake_email
 ):
-    """Retry has to be able to re-render it."""
+    """Finished rows must discard credentials even on delivery failure."""
     email_mode("smtp")
     monkeypatch.setattr(
         "api.cron.services.outbox_drain._member_email", lambda sb, member_id: ""
@@ -241,7 +241,7 @@ def test_a_failed_setup_code_row_keeps_its_payload(
     assert drain()["failed"] == 1
     after = read_outbox(row["id"])
     assert after["status"] == "failed"
-    assert after["payload"]["code"] == "KEEP0001"
+    assert after["payload"] == {}
 
 
 # ── The adapter itself ───────────────────────────────────────────────────────
@@ -359,3 +359,19 @@ def test_email_provider_call_is_stamped_first(
     monkeypatch.setattr("api.cron.services.outbox_drain.send_email", provider)
     assert drain()["sent"] == 1
     assert len(stamps) == 1 and stamps[0] is not None
+
+
+@pytest.mark.parametrize("parked", [False, True], ids=["attempt_capped", "parked"])
+def test_closed_code_row_has_no_payload(
+    parked, drain, outbox_row, read_outbox, member_factory, cursor
+):
+    row = outbox_row(event_type="SETUP_CODE" if parked else "RESET_CODE",
+                     member_id=member_factory(), payload={"credential": "test artifact"})
+    if parked:
+        cursor.execute("UPDATE message_outbox SET status='sending', claimed_at=now()-interval '20 minutes', provider_attempted_at=now() WHERE id=%s", (row["id"],))
+    else:
+        cursor.execute("UPDATE message_outbox SET attempts=5 WHERE id=%s", (row["id"],))
+    drain()
+    after = read_outbox(row["id"])
+    assert after["status"] == "failed"
+    assert after["payload"] == {}

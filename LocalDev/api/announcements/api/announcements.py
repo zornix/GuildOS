@@ -122,6 +122,8 @@ async def retry_outbox(
             actor_id=user["id"],
             include_treasury=has_permission(user, TREASURY_AUDIT_VIEW),
         )
+    except outbox_svc.OutboxRowNotRetryable:
+        raise HTTPException(409, "This message carried a one-time code. Send the member a new code instead.")
     except outbox_svc.OutboxRowNotFound:
         raise HTTPException(404, "Outbox message not found")
     except outbox_svc.OutboxRowNotFailed as exc:

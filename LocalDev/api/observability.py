@@ -32,7 +32,14 @@ REQUEST_ID_HEADER = "X-Request-ID"
 # db helpers) can be correlated without threading the id through every call.
 request_id_ctx: ContextVar[str] = ContextVar("request_id", default="-")
 
-_LOG_FORMAT = "%(asctime)s %(levelname)s [%(name)s] %(message)s"
+
+class _RequestIdFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.request_id = request_id_ctx.get()
+        return True
+
+
+_LOG_FORMAT = "%(asctime)s %(levelname)s [%(name)s] [rid=%(request_id)s] %(message)s"
 
 # `init_observability` runs at import time, and uvicorn --reload / pytest can
 # import the module more than once per process.
@@ -50,6 +57,8 @@ def _configure_logging() -> None:
     if _logging_configured:
         return
     logging.basicConfig(level=logging.INFO, format=_LOG_FORMAT)
+    for handler in logging.getLogger().handlers:
+        handler.addFilter(_RequestIdFilter())
     _logging_configured = True
 
 
@@ -103,8 +112,7 @@ def init_observability(app: FastAPI) -> None:
         """
         rid = getattr(request.state, "request_id", None) or request_id_ctx.get()
         logger.exception(
-            "Unhandled exception [request_id=%s] %s %s",
-            rid,
+            "Unhandled exception %s %s",
             request.method,
             request.url.path,
         )

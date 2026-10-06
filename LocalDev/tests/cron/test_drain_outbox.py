@@ -728,3 +728,52 @@ def test_budget_expiring_mid_batch_leaves_unused_claims_refundable(
     unused = read_outbox(rows[1]["id"])
     assert unused["status"] == "pending"
     assert unused["attempts"] == 0
+
+
+@pytest.mark.parametrize("target_table", ["announcement_sms_sends", "event_notification_sends"])
+@pytest.mark.parametrize("remaining_status", [None, "failed", "pending", "sending"])
+def test_retry_reconciles_parent_only_after_all_children_finish(
+    target_table, remaining_status, cursor, chapter_id, member_factory,
+    outbox_row, sb_client, delivery_mode
+):
+    from api.announcements.services.outbox import retry_outbox_row
+    actor = member_factory(role="officer")
+    if target_table == "announcement_sms_sends":
+        cursor.execute("INSERT INTO announcements (chapter_id,title,body,audience,status) VALUES (%s,'Update','Body','chapter','draft') RETURNING id", (chapter_id,))
+        parent_column = "announcement_id"
+    else:
+        cursor.execute("INSERT INTO events (chapter_id,title,date,time,location) VALUES (%s,'Event',CURRENT_DATE,'19:00','Hall') RETURNING id", (chapter_id,))
+        parent_column = "event_id"
+    target = str(cursor.fetchone()["id"])
+    cursor.execute(f"INSERT INTO {target_table} (chapter_id,{parent_column},sender_id,recipient_count,recipient_member_ids,body_snapshot,delivery_mode,status) VALUES (%s,%s,%s,1,'[]','Body','dry_run','failed') RETURNING id", (chapter_id,target,actor))
+    parent = str(cursor.fetchone()["id"])
+    row = outbox_row(event_type="ANNOUNCEMENT_SMS" if target_table == "announcement_sms_sends" else "EVENT_NOTIFY", member_id=actor, target_table=target_table, target_id=parent, payload={"body":"Body"}, status="failed")
+    if remaining_status:
+        outbox_row(member_id=actor, target_table=target_table, target_id=parent, status=remaining_status)
+    retry_outbox_row(sb_client, chapter_id=chapter_id, row_id=str(row["id"]), actor_id=actor)
+    assert drain_outbox(sb_client, chapter_id=chapter_id, limit=1)["simulated"] == 1
+    cursor.execute(f"SELECT status FROM {target_table} WHERE id=%s AND chapter_id=%s", (parent, chapter_id))
+    assert cursor.fetchone()["status"] == ("failed" if remaining_status else "sent")
+
+
+def test_parent_reconcile_failure_keeps_the_delivered_row(
+    cursor, chapter_id, member_factory, outbox_row, sb_client, delivery_mode, monkeypatch
+):
+    """A sent message must never be re-marked failed (and so retried) over parent bookkeeping."""
+    actor = member_factory(role="officer")
+    cursor.execute("INSERT INTO announcements (chapter_id,title,body,audience,status) VALUES (%s,'Update','Body','chapter','draft') RETURNING id", (chapter_id,))
+    target = str(cursor.fetchone()["id"])
+    cursor.execute("INSERT INTO announcement_sms_sends (chapter_id,announcement_id,sender_id,recipient_count,recipient_member_ids,body_snapshot,delivery_mode,status) VALUES (%s,%s,%s,1,'[]','Body','dry_run','failed') RETURNING id", (chapter_id, target, actor))
+    parent = str(cursor.fetchone()["id"])
+    row = outbox_row(event_type="ANNOUNCEMENT_SMS", member_id=actor, target_table="announcement_sms_sends", target_id=parent, payload={"body": "Body"}, status="pending")
+    real_table = sb_client.table
+
+    def table(name):
+        if name == "announcement_sms_sends":
+            raise RuntimeError("parent write unavailable")
+        return real_table(name)
+
+    monkeypatch.setattr(sb_client, "table", table)
+    assert drain_outbox(sb_client, chapter_id=chapter_id, limit=1)["simulated"] == 1
+    cursor.execute("SELECT status FROM message_outbox WHERE id=%s", (row["id"],))
+    assert cursor.fetchone()["status"] == "simulated"

@@ -212,4 +212,7 @@ app.include_router(contribution_router, prefix="/api/contribution", tags=["Contr
 
 @app.get("/api/health")
 async def health():
-    return await asyncio.to_thread(build_health_payload, get_db())
+    from fastapi.responses import JSONResponse
+
+    payload = await asyncio.to_thread(build_health_payload, get_db())
+    return JSONResponse(payload, status_code=503 if payload["status"] == "error" else 200)

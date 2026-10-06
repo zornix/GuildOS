@@ -31,7 +31,7 @@ def evaluate_health_payload(payload: Any) -> tuple[bool, str]:
         return False, "response was not a JSON object"
 
     status = str(payload.get("status", "")).strip().lower()
-    if status != "ok":
+    if status not in ("ok", "degraded"):
         status_label = status or "missing"
         return False, f"status={status_label}"
 
@@ -44,7 +44,7 @@ def evaluate_health_payload(payload: Any) -> tuple[bool, str]:
         db_label = db or "missing"
         return False, f"checks.database={db_label}"
 
-    return True, "status=ok checks.database=ok"
+    return True, f"status={status} checks.database=ok"
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -117,7 +117,8 @@ def run_check(
         healthy, reason = evaluate_health_payload(payload)
         if healthy:
             version = payload.get("version", "unknown")
-            print(f"UP: {url} ({reason}, version={version})")
+            label = "WARN" if payload.get("status") == "degraded" else "UP"
+            print(f"{label}: {url} ({reason}, version={version})")
             return 0
 
         if attempt < max_attempts - 1:

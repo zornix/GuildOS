@@ -12,10 +12,15 @@ the surface that exists to explain failures hides the worst of them.
 
 from __future__ import annotations
 
+from api.auth.notifications import RESET_CODE, SETUP_CODE
 from api.platform import message_templates as templates
 
 LIST_LIMIT_DEFAULT = 50
 LIST_LIMIT_MAX = 200
+
+
+class OutboxRowNotRetryable(Exception):
+    """A one-time code must be issued anew instead of retried."""
 
 
 class OutboxRowNotFound(Exception):
@@ -39,7 +44,7 @@ def _mask_phone(phone: str | None) -> str | None:
 # A setup/reset code in the payload is a live credential. Officers can issue
 # their own, but the outbox is a different surface with a different reader, so
 # the code itself never renders here.
-_SECRET_EVENT_TYPES = {"SETUP_CODE", "RESET_CODE"}
+_SECRET_EVENT_TYPES = {SETUP_CODE, RESET_CODE}
 
 # Money is a separate readership: a treasury row names a member and a dollar
 # amount, and announcements:send (secretary, VP) is not treasury:audit:view.
@@ -154,17 +159,27 @@ def retry_outbox_row(
     if row["status"] != "failed":
         raise OutboxRowNotFailed(row["status"])
 
-    sb.table("message_outbox").update(
-        {"status": "pending", "last_error": None, "attempts": 0, "claimed_at": None}
-    ).eq("id", row_id).eq("chapter_id", chapter_id).execute()
-    sb.table("audit_logs").insert(
-        {
-            "chapter_id": chapter_id,
-            "action": "OUTBOX_RETRIED",
-            "actor_id": actor_id,
-            "target_table": "message_outbox",
-            "target_id": row_id,
-            "metadata": {"event_type": row["event_type"]},
-        }
-    ).execute()
+    if row["event_type"] in _SECRET_EVENT_TYPES:
+        raise OutboxRowNotRetryable(row_id)
+
+    with sb.transaction() as tx:
+        # Re-check the status in the write: the drain may have claimed the row since the read.
+        requeued = tx.table("message_outbox").update(
+            {
+                "status": "pending", "last_error": None, "attempts": 0,
+                "claimed_at": None, "provider_attempted_at": None,
+            }
+        ).eq("id", row_id).eq("chapter_id", chapter_id).eq("status", "failed").execute().data
+        if not requeued:
+            raise OutboxRowNotFailed("changed")
+        tx.table("audit_logs").insert(
+            {
+                "chapter_id": chapter_id,
+                "action": "OUTBOX_RETRIED",
+                "actor_id": actor_id,
+                "target_table": "message_outbox",
+                "target_id": row_id,
+                "metadata": {"event_type": row["event_type"]},
+            }
+        ).execute()
     return {"id": row_id, "status": "pending"}

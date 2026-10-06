@@ -197,12 +197,28 @@ def _close_row(
         patch["provider_message_id"] = provider_message_id
     if status == "sent":
         patch["delivered_at"] = _now_iso()
-    if status in ("sent", "simulated") and row["event_type"] in _SECRET_EVENT_TYPES:
-        # The payload is a live credential; once the mail is out there is no
-        # reason to keep it. A 'failed' row keeps its payload so Retry can still
-        # render it. `payload` is NOT NULL, hence {} rather than NULL.
+    if row["event_type"] in _SECRET_EVENT_TYPES:
+        # A finished row must not retain a live credential, including failures.
+        # Officers issue a fresh code instead of retrying. payload is NOT NULL.
         patch["payload"] = {}
     sb.table("message_outbox").update(patch).eq("id", row["id"]).execute()
+    if status in ("sent", "simulated") and row.get("target_table") in (
+        "announcement_sms_sends", "event_notification_sends"
+    ):
+        # The message is delivered; a bookkeeping failure here must not re-mark it failed.
+        try:
+            remaining = (
+                sb.table("message_outbox").select("id", count="exact")
+                .eq("chapter_id", row["chapter_id"])
+                .eq("target_table", row["target_table"]).eq("target_id", row["target_id"])
+                .in_("status", ["failed", "pending", "sending"]).limit(0).execute()
+            )
+            if remaining.count == 0:
+                sb.table(row["target_table"]).update({"status": "sent"}).eq(
+                    "id", row["target_id"]
+                ).eq("chapter_id", row["chapter_id"]).execute()
+        except Exception:
+            logger.exception("could not reconcile parent send log for outbox row %s", row.get("id"))
 
 
 def _chapter_name(sb, chapter_id, cache: dict) -> str:
@@ -310,6 +326,7 @@ def drain_outbox(
     """
     client = _resolve_sb(sb)
 
+    started_at = _now_iso()
     started = time.monotonic()
     counts = {"processed": 0, "sent": 0, "simulated": 0, "failed": 0}
     names: dict = {}  # chapter_id -> name, for the message footer
@@ -330,6 +347,26 @@ def drain_outbox(
             counts["processed"] += 1
             counts[status] = counts.get(status, 0) + 1
 
-    if counts["processed"]:
+    if chapter_id is None:
+        try:
+            oldest = (
+                client.table("message_outbox").select("created_at")
+                .eq("status", "pending").order("created_at").limit(1).execute()
+            ).data or []
+            finished = datetime.now(timezone.utc)
+            age = None
+            if oldest:
+                created = oldest[0]["created_at"]
+                if isinstance(created, str):
+                    created = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                age = max(0, int((finished - created).total_seconds()))
+            client.table("cron_heartbeats").upsert(
+                {"job": "drain-outbox", "last_started_at": started_at,
+                 "last_finished_at": finished.isoformat(), "last_counts": counts,
+                 "oldest_pending_seconds": age}, on_conflict="job"
+            ).execute()
+        except Exception:
+            logger.exception("could not record outbox drain heartbeat")
+    if chapter_id is None or counts["processed"]:
         logger.info("outbox drain: %s", counts)
     return counts

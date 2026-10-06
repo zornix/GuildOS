@@ -133,3 +133,18 @@ def test_run_check_retries_on_http_error(capsys) -> None:
 
     assert code == 0
     assert mock_get.call_count == 2
+
+
+def test_run_check_warns_and_passes_for_stale_cron(capsys):
+    response = MagicMock(status_code=200)
+    response.json.return_value = {"status":"degraded", "checks":{"database":"ok", "outbox_drain":"stale"}}
+    with patch.object(MODULE.httpx, "get", return_value=response):
+        assert MODULE.run_check("https://example.test", 1, max_attempts=1) == 0
+    assert "WARN:" in capsys.readouterr().out
+
+
+def test_run_check_fails_on_503(capsys):
+    response = MagicMock(status_code=503)
+    with patch.object(MODULE.httpx, "get", return_value=response):
+        assert MODULE.run_check("https://example.test", 1, max_attempts=1) == 1
+    assert "http 503" in capsys.readouterr().out
