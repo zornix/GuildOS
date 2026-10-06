@@ -12,6 +12,8 @@ import csv
 import io
 from datetime import datetime, timezone
 
+from psycopg2.extras import RealDictCursor
+
 from api.treasury.core.balance import BalanceEngine
 
 
@@ -176,14 +178,19 @@ def dashboard_summary(sb, *, chapter_id: str, recent_limit: int = 10) -> dict:
     if submission_ids:
         submissions = (
             sb.table("payment_submissions")
-            .select("id, method")
+            .select("id, method, proof_ref")
             .eq("chapter_id", chapter_id)
             .in_("id", submission_ids)
             .execute()
         ).data or []
-    methods = {r["id"]: r["method"] for r in submissions}
+    by_submission = {r["id"]: r for r in submissions}
     recent_payments = [
-        {**r, "method": methods.get(r.get("submission_id"))} for r in recent_payments
+        {
+            **r,
+            "method": by_submission.get(r.get("submission_id"), {}).get("method"),
+            "proof_ref": by_submission.get(r.get("submission_id"), {}).get("proof_ref"),
+        }
+        for r in recent_payments
     ]
     recent_expenses = (
         sb.table("chapter_expenses")
@@ -358,24 +365,54 @@ def period_report_csv(sb, *, chapter_id: str, period: str, dataset: str) -> str:
     start, end = _period_bounds(period)
 
     if dataset == "member_balances":
-        rows = (
-            sb.table("member_finance_accounts")
-            .select("*")
-            .eq("chapter_id", chapter_id)
-            .order("member_id")
-            .execute()
-        ).data or []
-        outstanding = BalanceEngine(sb).outstanding_by_member(chapter_id)
-        by_member = {r["member_id"]: r for r in rows}
-        for row in rows:
-            row["outstanding_balance_cents"] = outstanding.get(row["member_id"], 0)
-        for mid, cents in outstanding.items():
-            row = by_member.setdefault(mid, {"chapter_id": chapter_id, "member_id": mid})
-            row["outstanding_balance_cents"] = cents
-        rows = [by_member[mid] for mid in sorted(by_member)]
+        # One statement snapshot, using the same operational-table formula as
+        # BalanceEngine: current = owed - paid + active adjustments + refunds.
+        # Start from members so even a member with no cache or activity gets zeros.
+        conn = sb._pool.getconn()
+        try:
+            if not getattr(sb._pool, "in_tx", False):
+                conn.autocommit = True
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    WITH movements AS (
+                        SELECT member_id, amount_cents AS owed, 0::bigint AS paid,
+                               amount_cents AS current
+                        FROM unpaid_invoices
+                        WHERE chapter_id = %(chapter_id)s AND status != 'cancelled'
+                        UNION ALL
+                        SELECT member_id, 0, amount_cents, -amount_cents
+                        FROM verified_payments WHERE chapter_id = %(chapter_id)s
+                        UNION ALL
+                        SELECT member_id, 0, 0, delta_cents
+                        FROM finance_adjustments
+                        WHERE chapter_id = %(chapter_id)s AND status = 'active'
+                          AND member_id IS NOT NULL
+                        UNION ALL
+                        SELECT member_id, 0, 0, amount_cents
+                        FROM refunds
+                        WHERE chapter_id = %(chapter_id)s AND status = 'active'
+                    )
+                    SELECT m.chapter_id, m.id AS member_id,
+                           COALESCE(SUM(v.owed), 0) AS total_owed_cents,
+                           COALESCE(SUM(v.paid), 0) AS total_paid_cents,
+                           COALESCE(SUM(v.current), 0) AS current_balance_cents,
+                           GREATEST(COALESCE(SUM(v.current), 0), 0)
+                               AS outstanding_balance_cents
+                    FROM members m
+                    LEFT JOIN movements v ON v.member_id = m.id
+                    WHERE m.chapter_id = %(chapter_id)s
+                    GROUP BY m.chapter_id, m.id
+                    ORDER BY m.id
+                    """,
+                    {"chapter_id": chapter_id},
+                )
+                rows = cur.fetchall()
+        finally:
+            sb._pool.putconn(conn)
         columns = [
             "chapter_id", "member_id", "total_owed_cents", "total_paid_cents",
-            "outstanding_balance_cents", "current_balance_cents", "recomputed_at",
+            "outstanding_balance_cents", "current_balance_cents",
         ]
         return _csv_from_rows(rows, columns)
 
