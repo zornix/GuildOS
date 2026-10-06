@@ -22,8 +22,7 @@ weak test · **P3** style or minor.
   - Self check-in doesn't void an open fine (10, 09).
   - The balances CSV mixes live and cached numbers (08, 09).
   - The event-type race inside `update_event` causes a 500 (01, 11).
-- **Full suite on the wave 4 merge:** not finished when this was written (it was at 86%, no
-  failures shown).
+- **Full suite on the wave 4 merge:** 1329 passed, 0 failed.
 
 ### The three P1s
 
