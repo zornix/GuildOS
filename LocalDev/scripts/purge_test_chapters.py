@@ -24,11 +24,6 @@ TEST_PREFIXES = ('tr-test-', 'rc-test-', 'at-test-', 'ob-test-', 'tx-test-',
 # Fixed tenant-guard names must not become broad "other" prefixes.
 TEST_NAMES = frozenset({'other', 'other2', 'ev-other', 'in-other', 'other-get',
                         'other-jobs', 'Other delete chapter'})
-DELETE_GUARD_TABLES = ('big_ledger', 'audit_logs', 'receipts', 'payment_allocations',
-                       'payment_evidence', 'invoice_line_items',
-                       'announcement_sms_sends', 'event_notification_sends',
-                       'security_swap_requests', 'task_commitment_log',
-                       'finance_adjustments', 'refunds', 'fines', 'usage_events')
 # These legacy FKs do not cascade. Delete their scoped rows before chapters.
 LEGACY_DELETE_ORDER = ('receipts', 'initiative_chairs', 'initiatives',
                        'attendance', 'checkin_links', 'excuses')
@@ -62,11 +57,13 @@ def apply_purge(cur, chapter_ids):
             SELECT c.relname, t.tgname, t.tgenabled
             FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
             JOIN pg_namespace n ON n.oid = c.relnamespace
-            WHERE n.nspname = 'public' AND c.relname = ANY(%s)
-              AND NOT t.tgisinternal AND (t.tgtype::int & 8) <> 0
+            WHERE n.nspname = 'public'
+              AND NOT t.tgisinternal AND (t.tgtype::int & 24) <> 0
               AND t.tgenabled <> 'D'
             ORDER BY c.relname, t.tgname
-        """, (list(DELETE_GUARD_TABLES),))
+        """)
+        # Every user UPDATE/DELETE trigger: append-only guards block the cascade's deletes and
+        # its ON DELETE SET NULL updates (big_ledger.member_id), and a fixed list kept missing some.
         triggers = cur.fetchall()
         for table, trigger, _ in triggers:
             cur.execute(sql.SQL('ALTER TABLE public.{} DISABLE TRIGGER {}')
