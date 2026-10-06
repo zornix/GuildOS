@@ -75,10 +75,17 @@ class _TxPool:
         self._conn = conn
 
     def getconn(self):
+        if self._conn is None:
+            raise RuntimeError("platform.postgres: this transaction client was used after its block ended")
         return self._conn
 
     def putconn(self, conn):
         pass
+
+    def release(self):
+        """Called when the block ends: the connection goes back to the pool, so a
+        leaked `tx` must fail instead of writing into another request's transaction."""
+        self._conn = None
 
 
 @dataclass
@@ -244,7 +251,7 @@ class QueryBuilder:
             else:
                 cols = [_ident(c.strip()) for c in cols_str.split(",") if c.strip()]
                 if not cols:
-                    continue
+                    raise ValueError(f'platform.postgres: "{tbl}()" names no columns; use {tbl}(*) or list them.')
             self._joins.append(_Join(table=tbl, cols=cols, fk_local=fk_local, fk_remote=fk_remote))
 
     def _exec_select(self, cur) -> QueryResult:
@@ -667,6 +674,7 @@ class PostgresClient:
                 conn.rollback()
                 raise
         finally:
+            tx._pool.release()
             if not conn.closed:
                 conn.autocommit = True
             self._pool.putconn(conn)

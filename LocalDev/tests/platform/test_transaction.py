@@ -86,3 +86,13 @@ def test_nested_transaction_joins_the_outer_one(sb_client):
             tx.table("chapters").insert({"name": b, "organization": "t", "school": "t"}).execute()
             raise RuntimeError("boom")
     assert not _exists(sb_client, a) and not _exists(sb_client, b)
+
+
+def test_tx_client_is_dead_after_the_block(sb_client):
+    """The connection is back in the pool; a leaked tx must not write into whoever has it next."""
+    with sb_client.transaction() as tx:
+        pending = tx.table("chapters").insert({"name": _name(), "organization": "t", "school": "t"})
+    with pytest.raises(RuntimeError, match="after its block ended"):
+        pending.execute()
+    with pytest.raises(RuntimeError, match="after its block ended"):
+        tx.table("chapters").select("id").limit(1).execute()
