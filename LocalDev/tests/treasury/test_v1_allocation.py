@@ -106,15 +106,51 @@ def test_verify_v2_works_for_invoice_targeted_submissions(
 ):
     inv_a = _invoice(sb_client, chapter_id, member_id, 1000)  # oldest
     inv_b = _invoice(sb_client, chapter_id, member_id, 4000)
-    # legacy invoice-targeted submission against inv_b
+    # invoice-targeted submission against inv_b
     sub = pay_svc_submit_legacy(sb_client, chapter_id, member_id, inv_b["id"], 4000)
 
     pay_svc.verify_payment_v2(
         sb_client, chapter_id=chapter_id, submission_id=sub["id"], actor_id=member_id,
     )
-    # allocation is still oldest-first across open invoices
-    assert _invoice_status(cursor, inv_a["id"]) == "paid"
-    assert _invoice_status(cursor, inv_b["id"]) == "partially_paid"
+    # F-032 / D7: the picked invoice is paid first; the older one is untouched
+    assert _invoice_status(cursor, inv_b["id"]) == "paid"
+    assert _invoice_status(cursor, inv_a["id"]) == "unpaid"
+
+
+def test_targeted_surplus_flows_oldest_first(sb_client, cursor, chapter_id, member_id):
+    inv_a = _invoice(sb_client, chapter_id, member_id, 3000)  # oldest
+    inv_b = _invoice(sb_client, chapter_id, member_id, 4000)
+    sub = pay_svc_submit_legacy(sb_client, chapter_id, member_id, inv_b["id"], 5000)
+
+    vp = pay_svc.verify_payment_v2(
+        sb_client, chapter_id=chapter_id, submission_id=sub["id"], actor_id=member_id,
+    )
+    assert _invoice_status(cursor, inv_b["id"]) == "paid"
+    assert _invoice_status(cursor, inv_a["id"]) == "partially_paid"
+    allocs = _allocations(cursor, chapter_id, verified_payment_id=vp["id"])
+    assert {str(a["invoice_id"]): a["amount_cents"] for a in allocs} == {
+        inv_b["id"]: 4000, inv_a["id"]: 1000,
+    }
+
+
+def test_target_already_closed_falls_back_to_oldest_first(
+    sb_client, cursor, chapter_id, member_id
+):
+    inv_a = _invoice(sb_client, chapter_id, member_id, 3000)  # oldest
+    inv_b = _invoice(sb_client, chapter_id, member_id, 2000)
+    sub = pay_svc_submit_legacy(sb_client, chapter_id, member_id, inv_b["id"], 2000)
+    cursor.execute(
+        "SELECT tr_void_invoice(%s, %s, %s, %s)",
+        (chapter_id, inv_b["id"], member_id, "issued by mistake"),
+    )
+
+    vp = pay_svc.verify_payment_v2(
+        sb_client, chapter_id=chapter_id, submission_id=sub["id"], actor_id=member_id,
+    )
+    assert _invoice_status(cursor, inv_b["id"]) == "cancelled"
+    assert _invoice_status(cursor, inv_a["id"]) == "partially_paid"
+    allocs = _allocations(cursor, chapter_id, verified_payment_id=vp["id"])
+    assert {str(a["invoice_id"]): a["amount_cents"] for a in allocs} == {inv_a["id"]: 2000}
 
 
 def pay_svc_submit_legacy(sb_client, chapter_id, member_id, invoice_id, amount):
