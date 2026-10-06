@@ -16,6 +16,7 @@ functions, triggers, and other procedural SQL.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import sys
 from pathlib import Path
@@ -38,7 +39,7 @@ from scripts.db_guard import (
 
 
 def _database_url() -> str:
-    url = os.environ.get("DATABASE_URL", "").strip()
+    url = _env_value("DATABASE_URL")
     if not url:
         print("error: set DATABASE_URL (e.g. from .env)", file=sys.stderr)
         sys.exit(1)
@@ -90,11 +91,22 @@ def _ensure_migrations_table(cur) -> None:
         );
         """
     )
+    cur.execute("ALTER TABLE schema_migrations ADD COLUMN IF NOT EXISTS checksum TEXT")
 
 
-def _applied_names(cur) -> set[str]:
-    cur.execute("SELECT name FROM schema_migrations")
-    return {row[0] for row in cur.fetchall()}
+def _applied(cur) -> dict[str, str | None]:
+    cur.execute("SELECT name, checksum FROM schema_migrations")
+    return {row[0]: row[1] for row in cur.fetchall()}
+
+
+def unknown_applied(applied: set[str], files: list[str]) -> list[str]:
+    """Names recorded in the database that this checkout does not contain."""
+    return sorted(applied - set(files))
+
+
+def edited_after_apply(applied: dict[str, str | None], files: dict[str, str]) -> list[str]:
+    """Applied migrations whose recorded checksum differs from the file now on disk."""
+    return sorted(n for n, d in applied.items() if d is not None and n in files and files[n] != d)
 
 
 def main() -> None:
@@ -141,7 +153,36 @@ def main() -> None:
         conn.commit()
 
         with conn.cursor() as cur:
-            applied = _applied_names(cur)
+            applied = _applied(cur)
+
+        checksums = {f.name: hashlib.sha256(f.read_bytes()).hexdigest() for f in files}
+
+        edited = edited_after_apply(applied, checksums)
+        if edited:
+            print("error: these migrations changed after they were applied "
+                  "(never edit an applied migration; add a new file):", file=sys.stderr)
+            for name in edited:
+                print(f"  {name}", file=sys.stderr)
+            sys.exit(1)
+
+        unknown = unknown_applied(set(applied), [f.name for f in files])
+        if unknown:
+            label = "error" if args.prod else "warning"
+            print(f"{label}: the database has applied migrations this checkout does not contain:",
+                  file=sys.stderr)
+            for name in unknown:
+                print(f"  {name}", file=sys.stderr)
+            if args.prod:
+                print("refusing to migrate a database with an unknown history", file=sys.stderr)
+                sys.exit(1)
+
+        # Rows applied before checksums existed: record the file as it is now.
+        with conn.cursor() as cur:
+            for name, digest in applied.items():
+                if digest is None and name in checksums:
+                    cur.execute("UPDATE schema_migrations SET checksum = %s WHERE name = %s",
+                                (checksums[name], name))
+        conn.commit()
 
         pending = [f for f in files if f.name not in applied]
         if not pending:
@@ -173,8 +214,8 @@ def main() -> None:
                 with conn.cursor() as cur:
                     cur.execute(sql)
                     cur.execute(
-                        "INSERT INTO schema_migrations (name) VALUES (%s)",
-                        (path.name,),
+                        "INSERT INTO schema_migrations (name, checksum) VALUES (%s, %s)",
+                        (path.name, checksums[path.name]),
                     )
                 conn.commit()
                 print(f"applied: {path.name}")
