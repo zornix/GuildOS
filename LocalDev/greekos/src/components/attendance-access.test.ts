@@ -55,3 +55,12 @@ test('the semester rate column follows standing:view_all', () => {
   assert.match(attendance(['standing:view_all'], 'roster_check'), /Semester rate/);
   assert.doesNotMatch(attendance(['attendance:override'], 'roster_check'), /Semester rate/);
 });
+
+test('each roll-call row is a named radio group with one roving tab stop', () => {
+  const html = attendance(['attendance:override'], 'roster_check');
+  assert.match(html, /role="radiogroup" aria-label="Attendance for Test Brother"/);
+  // Unmarked row: the first option is the tab stop, the rest are reached with arrows.
+  assert.match(html, /<button[^>]*role="radio"[^>]*aria-checked="false"[^>]*tabindex="0"[^>]*>Present</);
+  assert.match(html, /<button[^>]*role="radio"[^>]*aria-checked="false"[^>]*tabindex="-1"[^>]*>Late</);
+  assert.doesNotMatch(html, /aria-pressed/);
+});

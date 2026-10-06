@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { markRemainingPresent, rollCallSummary } from './rollCall';
+import { markRemainingPresent, nextStatus, rollCallSummary } from './rollCall';
 import type { Member } from '../types';
 
 const m = (id: string): Member => ({ id, name: id } as Member);
@@ -25,4 +25,21 @@ test('label only names non-zero buckets and says all marked when none left', () 
 test('markRemainingPresent fills only the gaps', () => {
   const next = markRemainingPresent(roster, { b: 'Absent' });
   assert.deepEqual(next, { a: 'Present', b: 'Absent', c: 'Present', d: 'Present' });
+});
+
+const OPTIONS = ['Present', 'Late', 'Excused', 'Absent'] as const;
+
+test('arrow keys move within the row and wrap around', () => {
+  assert.equal(nextStatus('Present', 'ArrowRight', OPTIONS), 'Late');
+  assert.equal(nextStatus('Late', 'ArrowDown', OPTIONS), 'Excused');
+  assert.equal(nextStatus('Absent', 'ArrowRight', OPTIONS), 'Present');
+  assert.equal(nextStatus('Late', 'ArrowLeft', OPTIONS), 'Present');
+  assert.equal(nextStatus('Present', 'ArrowUp', OPTIONS), 'Absent');
+});
+
+test('an unmarked row lands on the first option; other keys do nothing', () => {
+  assert.equal(nextStatus(undefined, 'ArrowRight', OPTIONS), 'Present');
+  assert.equal(nextStatus(undefined, 'ArrowLeft', OPTIONS), 'Present');
+  assert.equal(nextStatus('Late', 'Enter', OPTIONS), null);
+  assert.equal(nextStatus('Late', 'a', OPTIONS), null);
 });
