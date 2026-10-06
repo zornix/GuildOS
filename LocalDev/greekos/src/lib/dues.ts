@@ -6,18 +6,39 @@
 
 import type { OpenInvoiceDto, PaymentSubmissionDto } from '../api';
 import { formatMoney } from '../formatters';
-import { dollarsToCents } from './transaction';
+import { dollarsToCents, type TransactionKind } from './transaction';
 
-/** POST /api/treasury/invoices/bulk. */
+/** POST /api/treasury/invoices and /invoices/bulk. */
 export const INVOICE_CREATE_KEY = 'treasury:invoice:create';
-/** POST /api/treasury/payments/submissions/{id}/verify-v1 | reject-v1, and
- *  GET /api/treasury/payments/submissions. Everyone holding it is the
+/** POST /api/treasury/payments/record, …/submissions/{id}/verify-v1 | reject-v1,
+ *  and GET /api/treasury/payments/submissions. Everyone holding it is the
  *  treasury board. */
 export const PAYMENT_VERIFY_KEY = 'treasury:payment:verify';
 /** POST /api/fines/issue. */
 export const FINES_ISSUE_KEY = 'treasury:fines:issue';
 /** POST /api/treasury/adjustments — the ledger correction rows. */
 export const ADJUSTMENT_CREATE_KEY = 'treasury:adjustment:create';
+
+/** Which Add-transaction kinds a session may record, each by the key its
+ *  endpoint checks. A fine is two endpoints: on an event (FINES_ISSUE_KEY)
+ *  or free-form as a fine invoice (INVOICE_CREATE_KEY). */
+export interface TransactionAccess {
+  kinds: TransactionKind[];
+  eventFines: boolean;
+  freeFormFines: boolean;
+}
+
+export function transactionAccess(permissions: Iterable<string>): TransactionAccess {
+  const keys = new Set(permissions);
+  const eventFines = keys.has(FINES_ISSUE_KEY);
+  const freeFormFines = keys.has(INVOICE_CREATE_KEY);
+  const kinds: TransactionKind[] = [];
+  if (keys.has(PAYMENT_VERIFY_KEY)) kinds.push('Payment');
+  if (eventFines || freeFormFines) kinds.push('Fine');
+  if (freeFormFines) kinds.push('Invoice');
+  if (keys.has(ADJUSTMENT_CREATE_KEY)) kinds.push('Adjustment');
+  return { kinds, eventFines, freeFormFines };
+}
 
 /** The methods the backend's `method` pattern accepts, with member-facing labels. */
 export const PAYMENT_METHODS = [
@@ -170,6 +191,15 @@ export function planDuesRun(draft: DuesRunDraft): DuesRunPlan {
   };
 }
 
+/** What the treasurer reads when the bulk call fails. A 409 is the server
+ *  holding this key with a different payload (D11): the form was edited after
+ *  a submit that did land, so the only honest move is to look again. */
+export function duesRunErrorMessage(err: unknown): string {
+  return (err as { status?: number })?.status === 409
+    ? 'This dues run was already submitted with different details. Review and submit again.'
+    : 'Could not create the dues run. Try again — a retry will not bill anyone twice.';
+}
+
 // ── The "I paid" form ────────────────────────────────────────────────────────
 
 export interface ProofDraft {
@@ -186,9 +216,19 @@ export interface ProofPlan {
 
 const METHOD_VALUES = new Set<string>(PAYMENT_METHODS.map(m => m.value));
 
+/** Still owed and still open. A refund reopens the invoice it covered (D3),
+ *  so a once-paid invoice comes back here as payable. */
+export const isPayable = (invoice: Invoice): boolean =>
+  invoice.status !== 'Void' && invoice.remainingCents > 0;
+
+/** Where a verified payment lands (D7): the invoice it was submitted against
+ *  first, then the member's oldest unpaid invoice. */
+export const proofAllocationNote = (invoice: Invoice): string =>
+  `Pays ${invoiceTitle(invoice)} first; anything left over goes to your oldest unpaid invoice.`;
+
 /** Validate a proof submission against the invoice it is paying.
- *  Overpaying is allowed — verification allocates the surplus to the member's
- *  other open invoices and leaves any leftover as credit. */
+ *  Overpaying is allowed — verification covers this invoice first and puts
+ *  the surplus on the member's oldest unpaid invoice (D7). */
 export function planProof(invoice: Invoice, draft: ProofDraft): ProofPlan {
   const fail = (error: string): ProofPlan => ({
     valid: false, error, body: { invoice_id: invoice.id, claimed_amount_cents: 0, method: '' }

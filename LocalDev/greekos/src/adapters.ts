@@ -38,6 +38,7 @@ import {
   Task
 } from './types';
 import { ContributionRecord } from './lib/contribution';
+import { PAYMENT_METHODS } from './lib/dues';
 
 const nameOf = (members: Member[], id: string | null | undefined) =>
   members.find(m => m.id === id)?.name || 'Unknown Member';
@@ -222,6 +223,7 @@ export function adaptFines(rows: FineDto[], members: Member[]): Fine[] {
     memberId: row.member_id || '',
     memberName: row.member_name || nameOf(members, row.member_id),
     amountCents: row.amount_cents,
+    remainingCents: row.remaining_cents,
     amount: row.amount_cents / 100,
     reason: row.reason || 'Fine',
     date: day(row.issued_at),
@@ -238,12 +240,10 @@ export function adaptPayments(rows: VerifiedPaymentDto[], members: Member[]): Pa
     memberName: nameOf(members, row.member_id),
     amountCents: row.amount_cents,
     amount: row.amount_cents / 100,
-    // The backend records a verified payment against an invoice; it carries
-    // neither a category nor a method, so both fall back to a neutral default.
-    type: 'Dues',
     date: day(row.verified_at || row.created_at),
-    paymentMethod: 'Ledger Credit',
-    reference: row.invoice_id
+    // A dash, never a made-up method, when the row does not say.
+    paymentMethod: PAYMENT_METHODS.find(m => m.value === row.method)?.label ?? row.method ?? '—',
+    reference: row.invoice_id ?? undefined
   }));
 }
 

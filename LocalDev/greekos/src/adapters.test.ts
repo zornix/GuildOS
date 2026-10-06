@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { adaptCheckInLink, adaptTaskToJob, adaptTasks, groupJobsByParent } from './adapters';
-import type { TaskDto } from './api';
+import { adaptCheckInLink, adaptFines, adaptPayments, adaptTaskToJob, adaptTasks, groupJobsByParent } from './adapters';
+import type { FineDto, TaskDto } from './api';
 import type { Member } from './types';
 import { canClaimTask } from './lib/tasks';
 
@@ -101,4 +101,22 @@ test('a code-less check-in link (member view) still reads as an open door; {} is
     { checkInLinkActive: true, checkInToken: 'A7x9Kp' }
   );
   assert.deepEqual(adaptCheckInLink({}), { checkInLinkActive: false, checkInToken: undefined });
+});
+
+test('a fine carries what is still owed, not just its face amount', () => {
+  const row: FineDto = {
+    id: 'f1', amount_cents: 2500, remaining_cents: 1500, status: 'partially_paid', reason: 'Late',
+    issued_at: '2026-10-01T00:00:00Z', member_id: 'm1', member_name: 'Jake', event_id: null, event_title: null, event_date: null
+  };
+  const [fine] = adaptFines([row], []);
+  assert.equal(fine.amountCents, 2500);
+  assert.equal(fine.remainingCents, 1500);
+});
+
+test('a payment shows the method the server recorded and no invented type', () => {
+  const base = { id: 'p1', member_id: 'm1', invoice_id: null, amount_cents: 5000, created_at: '2026-10-01T00:00:00Z' };
+  const [venmo, unknown] = adaptPayments([{ ...base, method: 'bank_transfer' }, base], []);
+  assert.equal(venmo.paymentMethod, 'Bank transfer');
+  assert.equal(unknown.paymentMethod, '—');
+  assert.equal('type' in venmo, false);
 });

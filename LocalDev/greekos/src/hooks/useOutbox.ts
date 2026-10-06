@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { OutboxMessage, OutboxNotification, OutboxStatus } from '../types';
+import { OutboxMessage, OutboxStatus } from '../types';
 import { api } from '../api';
 import { adaptOutbox } from '../adapters';
-
-/** Legacy local-notice shape. The server sends notices; only useFinance still declares this dep. */
-export type EnqueueOutbox = (notif: Omit<OutboxNotification, 'id' | 'timestamp' | 'status'>) => void;
 
 /** The real message outbox, fetched by the Outbox module (officer-gated). */
 export function useOutboxFeed(status: OutboxStatus | 'all') {

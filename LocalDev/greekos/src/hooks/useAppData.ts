@@ -61,11 +61,7 @@ export function useAppData() {
 
   const events = useEvents({ members, syncApi, showToast, refetchJobs });
   const initiatives = useInitiatives({ members, syncApi, refetchJobs });
-  const finance = useFinance({
-    members, setMembers, currentMemberId, currentMemberName, isOfficer, syncApi, showToast,
-    // ponytail: useFinance (stream 05) still declares this no-op dep; drop it when that hook stops taking it.
-    enqueueOutbox: () => {}
-  });
+  const finance = useFinance({ members, setMembers, currentMemberId, backendDown, showToast });
   const attendance = useAttendance({
     members,
     setEvents: events.setEvents,
@@ -208,9 +204,6 @@ export function useAppData() {
         attendance.setExcuses(adaptExcuses(excuseRows, rosterRows));
         finance.setFines(adaptFines(fineRows, rosterRows));
         finance.setPayments(adaptPayments(treasury?.recent_payments || [], rosterRows));
-        // No chapter-wide ledger read exists yet (statements are per member),
-        // so the chapter-ledger view starts empty rather than faked.
-        finance.setLedger([]);
         setAnnouncements(adaptAnnouncements(annRows, rosterRows));
         recruitment.setPnms(adaptRecruits(recruitRows));
         initiatives.setInitiatives(adaptInitiatives(initRows, rosterRows));

@@ -190,34 +190,27 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
       )}
 
       {activeTab === 'finance' && (
-        <Fragment key={currentMember?.id ?? currentMemberName}>
-          <FinanceModule
-            members={roster.members}
-            fines={finance.fines}
-            payments={finance.payments}
-            ledger={finance.ledger}
-            permissions={app.permissions}
-            chapterName={app.chapterName}
-            currentMemberName={currentMemberName}
-            myBalance={viewedBalance}
-            myInvoices={finance.myInvoices}
-            pendingProofCentsOf={finance.pendingProofCentsOf}
-            submissions={finance.submissions}
-            queueLoading={finance.queueLoading}
-            onRefreshQueue={finance.refreshQueue}
-            onCreateDuesRun={finance.handleCreateDuesRun}
-            onSubmitProof={finance.handleSubmitProof}
-            onVerifyProof={finance.handleVerifyProof}
-            onRejectProof={finance.handleRejectProof}
-            onOpenEvidence={finance.openEvidence}
-            balanceCentsOf={finance.balanceCentsOf}
-            onRecordPayment={finance.handleRecordPayment}
-            onIssueFine={finance.handleIssueFine}
-            onPostInvoice={finance.handlePostInvoice}
-            onApproveFinePayment={finance.handleApproveFinePayment}
-            onPostLedgerCorrection={finance.handlePostLedgerCorrection}
-          />
-        </Fragment>
+        <FinanceModule
+          members={roster.members}
+          fines={finance.fines}
+          payments={finance.payments}
+          events={events.events}
+          permissions={app.permissions}
+          chapterName={app.chapterName}
+          currentMemberId={currentMember?.id}
+          myInvoices={finance.myInvoices}
+          pendingProofCentsOf={finance.pendingProofCentsOf}
+          submissions={finance.submissions}
+          queueLoading={finance.queueLoading}
+          onRefreshQueue={finance.refreshQueue}
+          onCreateDuesRun={finance.handleCreateDuesRun}
+          onSubmitProof={finance.handleSubmitProof}
+          onVerifyProof={finance.handleVerifyProof}
+          onRejectProof={finance.handleRejectProof}
+          onOpenEvidence={finance.openEvidence}
+          balanceCentsOf={finance.balanceCentsOf}
+          onSubmitTransaction={finance.submitTransaction}
+        />
       )}
 
       {activeTab === 'roster' && (

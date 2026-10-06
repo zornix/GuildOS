@@ -3,15 +3,21 @@ import assert from 'node:assert/strict';
 import type { OpenInvoiceDto } from '../api';
 import { can } from './session';
 import {
+  ADJUSTMENT_CREATE_KEY,
+  FINES_ISSUE_KEY,
   INVOICE_CREATE_KEY,
   PAYMENT_VERIFY_KEY,
   adaptInvoice,
   adaptSubmissions,
+  duesRunErrorMessage,
   invoiceStatus,
   invoiceTitle,
+  isPayable,
   planDuesRun,
   planProof,
-  rejectionReasonValid
+  proofAllocationNote,
+  rejectionReasonValid,
+  transactionAccess
 } from './dues';
 
 const invoiceDto = (over: Partial<OpenInvoiceDto> = {}): OpenInvoiceDto => ({
@@ -158,6 +164,26 @@ test('paying more than the invoice is allowed — verification allocates the res
   assert.equal(plan.body.claimed_amount_cents, 50000);
 });
 
+test('the proof form says the named invoice is paid first (D7)', () => {
+  assert.equal(
+    proofAllocationNote(invoice),
+    'Pays Fall 2026 dues first; anything left over goes to your oldest unpaid invoice.'
+  );
+  assert.equal(
+    proofAllocationNote(adaptInvoice(invoiceDto({ description: null, source: 'fine' }))),
+    'Pays Fine first; anything left over goes to your oldest unpaid invoice.'
+  );
+});
+
+test('an invoice a refund reopened is payable again; paid and void ones are not (D3)', () => {
+  const reopened = adaptInvoice(invoiceDto({ status: 'open', remaining_cents: 25000, overdue: true }));
+  assert.equal(reopened.status, 'Overdue');
+  assert.equal(isPayable(reopened), true);
+  assert.equal(isPayable(adaptInvoice(invoiceDto({ remaining_cents: 10000 }))), true);
+  assert.equal(isPayable(adaptInvoice(invoiceDto({ remaining_cents: 0 }))), false);
+  assert.equal(isPayable(adaptInvoice(invoiceDto({ status: 'void' }))), false);
+});
+
 test('a rejection must carry a reason', () => {
   assert.equal(rejectionReasonValid(''), false);
   assert.equal(rejectionReasonValid('   '), false);
@@ -212,4 +238,28 @@ test('the dues-run and verify controls gate on the endpoints own keys', () => {
   // Holding one key never implies the other.
   assert.equal(can(new Set([PAYMENT_VERIFY_KEY]), INVOICE_CREATE_KEY), false);
   assert.equal(can(new Set([INVOICE_CREATE_KEY]), PAYMENT_VERIFY_KEY), false);
+});
+
+test('each transaction kind is offered only to a holder of the key its endpoint checks', () => {
+  assert.deepEqual(transactionAccess([]), { kinds: [], eventFines: false, freeFormFines: false });
+  assert.deepEqual(transactionAccess([PAYMENT_VERIFY_KEY]).kinds, ['Payment']);
+  assert.deepEqual(transactionAccess([FINES_ISSUE_KEY]), { kinds: ['Fine'], eventFines: true, freeFormFines: false });
+  assert.deepEqual(transactionAccess([INVOICE_CREATE_KEY]), { kinds: ['Fine', 'Invoice'], eventFines: false, freeFormFines: true });
+  assert.deepEqual(transactionAccess([ADJUSTMENT_CREATE_KEY]).kinds, ['Adjustment']);
+  assert.deepEqual(
+    transactionAccess([PAYMENT_VERIFY_KEY, FINES_ISSUE_KEY, INVOICE_CREATE_KEY, ADJUSTMENT_CREATE_KEY]).kinds,
+    ['Payment', 'Fine', 'Invoice', 'Adjustment']
+  );
+  // An officer-shaped session without treasury keys records nothing.
+  assert.deepEqual(transactionAccess(['standing:view_all', 'events:create']).kinds, []);
+});
+
+test('a dues run the server already holds under different details asks for a fresh look (F-070)', () => {
+  assert.equal(
+    duesRunErrorMessage({ status: 409 }),
+    'This dues run was already submitted with different details. Review and submit again.'
+  );
+  const generic = 'Could not create the dues run. Try again — a retry will not bill anyone twice.';
+  assert.equal(duesRunErrorMessage({ status: 500 }), generic);
+  assert.equal(duesRunErrorMessage(new Error('boom')), generic);
 });

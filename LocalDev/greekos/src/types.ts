@@ -138,13 +138,14 @@ export interface Fine {
   memberId: string;
   memberName: string;
   amountCents: number;
+  /** Still owed after payments — what "Mark paid" sends. */
+  remainingCents: number;
   amount: number;
   reason: string;
   date: string;
   status: 'Unpaid' | 'Paid';
   issuedBy?: string;
   relatedEventId?: string;
-  ledgerRefId?: string;
 }
 
 export interface Payment {
@@ -153,11 +154,10 @@ export interface Payment {
   memberName: string;
   amountCents: number;
   amount: number;
-  type: 'Dues' | 'Fine' | 'Merch' | 'Assessment' | 'Adjustment';
   date: string;
-  paymentMethod: 'Card' | 'Venmo' | 'Bank Transfer' | 'Cash' | 'Ledger Credit';
+  /** Display label from PAYMENT_METHODS, or "—" when the server does not say. */
+  paymentMethod: string;
   reference?: string;
-  ledgerRefId?: string;
 }
 
 export interface LedgerEntry {

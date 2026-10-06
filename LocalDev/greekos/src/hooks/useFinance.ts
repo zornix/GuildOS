@@ -1,7 +1,7 @@
 import { useState, type Dispatch, type SetStateAction } from 'react';
-import { Fine, LedgerEntry, Member, Payment } from '../types';
-import { api, type MemberTreasuryDashboardDto } from '../api';
-import { adaptFines } from '../adapters';
+import { Fine, Member, Payment } from '../types';
+import { api, optionalOfficerCall, type MemberTreasuryDashboardDto } from '../api';
+import { adaptFines, adaptMembers, adaptPayments } from '../adapters';
 import { formatMoney } from '../formatters';
 import { adaptMemberBalance } from '../lib/balance';
 import {
@@ -11,31 +11,27 @@ import {
   ProofSubmission,
   adaptInvoices,
   adaptSubmissions,
+  duesRunErrorMessage,
   planDuesRun,
   planProof,
   toBase64
 } from '../lib/dues';
+import { TransactionDraft, submitTransaction as runTransaction } from '../lib/transaction';
 import { ShowToast } from './useToast';
-import { EnqueueOutbox } from './useOutbox';
-import { SyncApi } from './useBackend';
 
 interface Deps {
   members: Member[];
   setMembers: Dispatch<SetStateAction<Member[]>>;
   currentMemberId: string;
-  currentMemberName: string;
-  isOfficer: boolean;
-  syncApi: SyncApi;
+  backendDown: boolean;
   showToast: ShowToast;
-  enqueueOutbox: EnqueueOutbox;
 }
 
-/** Fines, payments and the chapter ledger. Balances live on the member
- *  rows, so this hook writes into the roster state too. */
-export function useFinance({ members, setMembers, currentMemberId, currentMemberName, isOfficer, syncApi, showToast, enqueueOutbox }: Deps) {
+/** Fines, payments, invoices and the officer-recorded transactions. Every
+ *  write goes to the server and every number shown afterwards is re-read. */
+export function useFinance({ members, setMembers, currentMemberId, backendDown, showToast }: Deps) {
   const [fines, setFines] = useState<Fine[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
-  const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   // The signed-in member's real treasury record — the one read behind both the
   // balance banner and the invoice list.
   const [myTreasury, setMyTreasury] = useState<MemberTreasuryDashboardDto | null>(null);
@@ -75,7 +71,7 @@ export function useFinance({ members, setMembers, currentMemberId, currentMember
       result = await api.bulkCreateInvoices(plan.items, idempotencyKey);
     } catch (err) {
       console.error('Dues run failed', err);
-      showToast('Could not create the dues run. Try again — a retry will not bill anyone twice.');
+      showToast(duesRunErrorMessage(err));
       throw err;
     }
     await refreshMyTreasury();
@@ -153,160 +149,59 @@ export function useFinance({ members, setMembers, currentMemberId, currentMember
 
   const refetchFines = async () => setFines(adaptFines(await api.getFines(), members));
 
-  const balanceCentsOf = (memberId: string) => {
-    const targetMem = members.find(m => m.id === memberId);
-    return targetMem ? (targetMem.duesBalanceCents || targetMem.duesBalance * 100) : 0;
+  /** Recent verified payments ride on the officer dashboard; a member session
+   *  simply has none to show. */
+  const refetchPayments = async () => {
+    const dashboard = await optionalOfficerCall(api.getTreasuryDashboard(), null);
+    setPayments(adaptPayments(dashboard?.recent_payments || [], members));
   };
 
-  const setMemberBalance = (memberId: string, newBalanceCents: number) =>
-    setMembers(prev => prev.map(m => {
-      if (m.id === memberId) {
-        return { ...m, duesBalanceCents: newBalanceCents, duesBalance: newBalanceCents / 100 };
-      }
-      return m;
-    }));
-
-  // Local only: the backend has no officer "record a payment" endpoint — money in
-  // arrives as a member balance-submission that an officer then verifies.
-  const handleRecordPayment = (paymentData: Omit<Payment, 'id' | 'date'>) => {
-    const paymentId = 'p_' + Math.random().toString(36).substring(2, 9);
-    const ledgerId = 'led_' + (1000 + ledger.length);
-    const amountCents = paymentData.amountCents || Math.round(paymentData.amount * 100);
-
-    const newPayment: Payment = {
-      ...paymentData,
-      id: paymentId,
-      date: new Date().toISOString().substring(0, 10),
-      ledgerRefId: ledgerId
-    };
-
-    // Balance after, derived from the roster updater's `prev` rather than the
-    // `members` closure, so two payments in the same tick compose instead of
-    // both subtracting from the same stale balance.
-    let newBalanceCents = 0;
-    setMembers(prev => prev.map(m => {
-      if (m.id !== paymentData.memberId) return m;
-      newBalanceCents = Math.max(0, (m.duesBalanceCents || m.duesBalance * 100) - amountCents);
-      return { ...m, duesBalanceCents: newBalanceCents, duesBalance: newBalanceCents / 100 };
-    }));
-
-    setPayments(prev => [newPayment, ...prev]);
-    // Entry is built inside the updater so `balanceAfterCents` is the number the
-    // roster updater above produced (React runs that one first — roster state is
-    // declared earlier), keeping the ledger and the member row on one balance.
-    setLedger(prev => [{
-      id: ledgerId,
-      sequence: ledger.length + 1,
-      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-      memberId: paymentData.memberId,
-      memberName: paymentData.memberName,
-      type: 'PAYMENT_CREDIT',
-      amountCents,
-      balanceAfterCents: newBalanceCents,
-      description: `Payment received via ${paymentData.paymentMethod} (Ref: ${paymentData.reference || 'DIRECT'})`,
-      authorizedBy: `${currentMemberName} (${isOfficer ? 'Officer' : 'Self-Service Gateway'})`
-    }, ...prev]);
-
-    showToast(`Recorded ${formatMoney(amountCents)} payment from ${paymentData.memberName}.`);
+  /** Same read as the initial load: the per-member unpaid-fines figure on the
+   *  roster comes from standing, so a fine or a payment changes it. */
+  const refetchRoster = async () => {
+    const [memberRows, standingRows, scoreRows] = await Promise.all([
+      api.getMembers(),
+      optionalOfficerCall(api.getStandings(), []),
+      optionalOfficerCall(api.getScores(), [])
+    ]);
+    setMembers(adaptMembers(memberRows, standingRows, scoreRows));
   };
 
-  const handleIssueFine = (fineData: Omit<Fine, 'id' | 'status' | 'date'>) => {
-    const fineId = 'f_' + Math.random().toString(36).substring(2, 9);
-    const ledgerId = 'led_' + (1000 + ledger.length);
-    const amountCents = fineData.amountCents || Math.round(fineData.amount * 100);
+  /** Unpaid fines for one member, from their standing row. */
+  const balanceCentsOf = (memberId: string) => members.find(m => m.id === memberId)?.duesBalanceCents ?? 0;
 
-    const newFine: Fine = {
-      ...fineData,
-      id: fineId,
-      date: new Date().toISOString().substring(0, 10),
-      status: 'Unpaid',
-      ledgerRefId: ledgerId
-    };
+  /** Every number on the tab after a write. The write already landed, so a
+   *  failed re-read is never shown as a failed transaction; false says the
+   *  lists on screen are stale. */
+  const refetchAfterWrite = async () => {
+    const results = await Promise.allSettled([
+      refetchFines(),
+      refetchPayments(),
+      refreshMyTreasury(),
+      refetchRoster(),
+      optionalOfficerCall(refreshQueue(), undefined)
+    ]);
+    for (const r of results) if (r.status === 'rejected') console.error('Refresh after transaction failed', r.reason);
+    return results.every(r => r.status === 'fulfilled');
+  };
 
-    const newBalanceCents = balanceCentsOf(fineData.memberId) + amountCents;
+  const submitTransaction = (draft: TransactionDraft, idempotencyKey: string) =>
+    runTransaction({ api, members, backendDown, refetch: refetchAfterWrite, showToast }, draft, idempotencyKey);
 
-    const newLedgerEntry: LedgerEntry = {
-      id: ledgerId,
-      sequence: ledger.length + 1,
-      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-      memberId: fineData.memberId,
-      memberName: fineData.memberName,
-      type: 'FINE_CHARGE',
-      amountCents,
-      balanceAfterCents: newBalanceCents,
-      description: `Disciplinary Fine Citation: ${fineData.reason}`,
-      authorizedBy: `${currentMemberName} (Officer)`
-    };
-
-    setFines(prev => [newFine, ...prev]);
-    setLedger(prev => [newLedgerEntry, ...prev]);
-    setMemberBalance(fineData.memberId, newBalanceCents);
-
-    // The API only issues flat fines to unexcused absentees of a known event
-    // (POST /api/fines/issue); a free-form citation has no event to attach to.
-    if (fineData.relatedEventId) {
-      syncApi(() => api.issueFines(fineData.relatedEventId!, [fineData.memberId]), refetchFines);
+  /** The command console's "fine NAME $N for REASON" (useAppData) lands here. */
+  const handleIssueFine = async (fine: { memberId: string; amountCents: number; reason: string; relatedEventId?: string }) => {
+    try {
+      await submitTransaction({
+        kind: 'Fine',
+        memberId: fine.memberId,
+        amountCents: fine.amountCents,
+        reason: fine.reason,
+        ...(fine.relatedEventId ? { eventId: fine.relatedEventId } : {})
+      }, crypto.randomUUID());
+    } catch (err) {
+      console.error('Fine failed', err);
+      showToast((err as Error).message);
     }
-
-    enqueueOutbox({
-      type: 'FINE_NOTICE',
-      recipient: fineData.memberName,
-      message: `[GreekOS Fine Notice] You received a ${formatMoney(amountCents)} citation for: ${fineData.reason}`,
-      channel: 'SMS'
-    });
-
-    showToast(`Assessed ${formatMoney(amountCents)} fine to ${fineData.memberName}.`);
-  };
-
-  // ponytail: client-local invoice for the design lab. The real path is
-  // POST /api/treasury/invoices; wire it when the form shape has survived a browser test.
-  const handlePostInvoice = (inv: { memberId: string; memberName: string; amountCents: number; description: string }) => {
-    const ledgerId = 'led_' + (1000 + ledger.length);
-    const newBalanceCents = balanceCentsOf(inv.memberId) + inv.amountCents;
-    setLedger(prev => [{
-      id: ledgerId,
-      sequence: ledger.length + 1,
-      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-      memberId: inv.memberId,
-      memberName: inv.memberName,
-      type: 'DUES_CHARGE',
-      amountCents: inv.amountCents,
-      balanceAfterCents: newBalanceCents,
-      description: inv.description || 'Invoice',
-      authorizedBy: `${currentMemberName} (Officer)`
-    }, ...prev]);
-    setMemberBalance(inv.memberId, newBalanceCents);
-    showToast(`Invoiced ${formatMoney(inv.amountCents)} to ${inv.memberName}.`);
-  };
-
-  const handleApproveFinePayment = (fineId: string) => {
-    setFines(prev => prev.map(f => f.id === fineId ? { ...f, status: 'Paid' } : f));
-    showToast(`Cleared fine citation.`);
-  };
-
-  const handlePostLedgerCorrection = (corr: { memberId: string; amountCents: number; description: string; correctsEntryId?: string }) => {
-    const ledgerId = 'led_' + (1000 + ledger.length);
-    const targetMem = members.find(m => m.id === corr.memberId);
-    const newBalanceCents = Math.max(0, balanceCentsOf(corr.memberId) + corr.amountCents);
-
-    const entry: LedgerEntry = {
-      id: ledgerId,
-      sequence: ledger.length + 1,
-      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-      memberId: corr.memberId,
-      memberName: targetMem ? targetMem.name : 'Unknown',
-      type: 'ADJUSTMENT_CORRECTION',
-      amountCents: Math.abs(corr.amountCents),
-      balanceAfterCents: newBalanceCents,
-      description: corr.description,
-      authorizedBy: `${currentMemberName} (Adjustment)`,
-      correctsEntryId: corr.correctsEntryId
-    };
-
-    setLedger(prev => [entry, ...prev]);
-    setMemberBalance(corr.memberId, newBalanceCents);
-
-    showToast(`Adjustment recorded.`);
   };
 
   return {
@@ -314,8 +209,6 @@ export function useFinance({ members, setMembers, currentMemberId, currentMember
     setFines,
     payments,
     setPayments,
-    ledger,
-    setLedger,
     myBalance,
     myInvoices,
     setMyTreasury,
@@ -329,10 +222,7 @@ export function useFinance({ members, setMembers, currentMemberId, currentMember
     handleRejectProof,
     openEvidence,
     balanceCentsOf,
-    handleRecordPayment,
-    handleIssueFine,
-    handlePostInvoice,
-    handleApproveFinePayment,
-    handlePostLedgerCorrection
+    submitTransaction,
+    handleIssueFine
   };
 }
