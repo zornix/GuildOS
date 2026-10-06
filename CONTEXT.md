@@ -115,6 +115,13 @@ _Avoid_: public check-in code, open link
 The two-value `members.role` column (`officer` or `member`), kept in step by the RPCs. It does not store the highest-precedence assigned role; permissions come from `member_roles` plus an implicit `member` baseline.
 _Avoid_: system role, permission level
 
+**Top role**:
+`admin` or `president`: only an admin may grant or revoke these roles, and every
+chapter must retain at least one admin. Roster import cannot assign them.
+_Avoid_: highest display role, officer flag
+
 **Heartbeat**:
-The `/api/health` monitoring probe. Reports 200 when database and outbox drain are healthy, 503 if the DB is down, or `degraded` if the cron drain is stale.
+The durable `cron_heartbeats` row for `drain-outbox`, recording `last_started_at`,
+`last_finished_at`, delivery counts and oldest pending age after a global drain.
+`/api/health` reads its finish time to report a stale drain after 15 minutes.
 _Avoid_: ping check, status page

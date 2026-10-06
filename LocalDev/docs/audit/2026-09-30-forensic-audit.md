@@ -1,5 +1,7 @@
 # GreekOS forensic audit — 2026-09-30
 
+> Historical snapshot: references to RLS on 43 tables describe the audit baseline; the current count of RLS-enabled tables in `migrations/` is 45 (verified 2026-10-06).
+
 > **How to read this.** Page one (TL;DR + Top 10) is enough to make decisions. Every later section opens with **In short**. Click a ▸ to expand detail. IDs like F-022 link to a finding card in §3. Severity tags: 🔴 P0 · 🟠 P1 · 🟡 P2 · 🔵 P3 · ⚪ P4.
 
 ## TL;DR

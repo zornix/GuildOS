@@ -46,6 +46,8 @@ Do not treat it as truth.
 
 - `api/platform/db.py` — `get_db()`; the only accessor
 - `api/platform/postgres.py` — PostgREST-shaped client over psycopg2; `_ARRAY_TYPED_RPC_PARAMS`
+- `api/platform/errors.py` — maps exception patterns to fixed public messages and logs the original
+- `api/platform/outbox.py` — shared deduplicated enqueue; logs plain-client failures, raises inside transactions
 - `api/platform/message_templates.py` — shared message templates
 - `api/dependencies.py` — JWT → member; `ver` vs `members.token_version`
 
@@ -61,7 +63,7 @@ There is no supabase-py path and no per-domain session or rpc modules.
 
 ### 5. Money as integer cents
 
-- `api/treasury/core/money.py` — `Money`; floats rejected; `from_numeric` is the sole legacy exception
+- `api/treasury/core/money.py` — `Money`; floats rejected; `from_numeric` is called only by the unused compatibility DTO `FineToInvoice`
 - `api/treasury/core/ledger.py` — append-only `big_ledger`; reversals are new rows
 - `greekos/src/formatters.ts` — only sanctioned cents → screen path (`formatMoney`)
 
@@ -100,7 +102,7 @@ There is no supabase-py path and no per-domain session or rpc modules.
 ### 11. Frontend shell
 
 - `greekos/src/App.tsx` — single-page React app, switches tabs
-- `greekos/src/components/Sidebar.tsx` — navigation and chapter switcher
+- `greekos/src/components/Sidebar.tsx` — navigation
 - `greekos/src/hooks/useAppData.ts` — composes domain hooks
 - `GET /api/rbac/me/permissions` + `can()` helper
 

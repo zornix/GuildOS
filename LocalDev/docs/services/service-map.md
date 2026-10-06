@@ -5,7 +5,7 @@ How the domains relate, which routes they own, and the seams between them.
 ## Route ownership
 
 Every prefix below is mounted in `api/index.py`, and the mounted paths are
-frozen — check `fratos/lib/api-client.ts` before changing one.
+frozen — check `greekos/src/api.ts` before changing one.
 
 | Prefix | Domain package | Notes |
 |---|---|---|
@@ -16,7 +16,7 @@ frozen — check `fratos/lib/api-client.ts` before changing one.
 | `/api/calendar` | `api/calendar` | read-only aggregator over events + initiatives |
 | `/api/attendance` | `api/attendance` | check-in routes + `/sessions` resource |
 | `/api/excuses`, `/api/checkin-links`, `/c/{short_code}` | `api/attendance` | standalone routers re-exported so the paths never changed |
-| `/api/fines` | `api/treasury` (`api/fines_legacy.py`) | fines → treasury via `FineToInvoice` (float→cents boundary) |
+| `/api/fines` | `api/treasury` (`api/treasury/api/fines_legacy.py`) | integer-cent invoices via `tr_issue_event_fines`; waivers via `tr_void_invoice` |
 | `/api/treasury` | `api/treasury` | pattern source |
 | `/api/tasks` | `api/tasks` | tasks, jobs, commitments, approvals |
 | `/api/announcements` | `api/announcements` | |
