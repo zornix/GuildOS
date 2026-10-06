@@ -167,7 +167,7 @@ def import_roster(sb, *, chapter_id: str, raw: bytes) -> dict:
         by_email = {r["email"]: i for i, r in enumerate(rows)}
         raise RosterFileError(
             [
-                {"row": by_email[e] + 2, "error": f"email already belongs to another chapter: {e}"}
+                {"row": by_email[e] + 2, "error": "Member cannot be invited"}
                 for e in sorted(foreign)
             ]
         )

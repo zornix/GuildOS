@@ -275,10 +275,11 @@ def test_production_rejects_localhost_urls(variable, host):
     assert any(variable in v for v in production_config_violations(s))
 
 
-def test_preview_allows_localhost_urls():
-    s = _prod_settings(VERCEL_ENV="preview", BASE_URL="http://localhost:8001",
+@pytest.mark.parametrize("vercel,app", [("preview", ""), ("", "")])
+def test_preview_and_unknown_reject_localhost_frontend(vercel, app):
+    s = _prod_settings(VERCEL_ENV=vercel, APP_ENV=app, BASE_URL="http://localhost:8001",
                        FRONTEND_URL="http://localhost:3000")
-    assert production_config_violations(s) == []
+    assert any("FRONTEND_URL" in v for v in production_config_violations(s))
 
 
 @pytest.mark.parametrize("vercel,app,deployed", [
@@ -288,3 +289,24 @@ def test_preview_allows_localhost_urls():
 ])
 def test_environment_guard_matrix(vercel, app, deployed):
     assert Settings(_env_file=None, VERCEL_ENV=vercel, APP_ENV=app).is_deployed is deployed
+
+
+@pytest.mark.parametrize("app_env", ["local", "test"])
+def test_explicit_local_environments_allow_localhost_frontend(app_env):
+    s = _prod_settings(VERCEL_ENV="", APP_ENV=app_env, FRONTEND_URL="http://localhost:3000")
+    assert production_config_violations(s) == []
+
+
+def test_health_database_initialization_failure_is_503(monkeypatch):
+    from fastapi.testclient import TestClient
+    from api import index
+    def fail():
+        raise RuntimeError("SQLSTATE XX000 relation private DETAIL secret")
+    monkeypatch.setattr(index, "get_db", fail)
+    with TestClient(index.app, raise_server_exceptions=False) as client:
+        response = client.get("/api/health")
+    assert response.status_code == 503
+    assert response.json() == {
+        "status": "error", "version": "0.1.0",
+        "checks": {"database": "error"}, "detail": "database_unreachable",
+    }

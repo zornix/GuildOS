@@ -30,6 +30,12 @@ class InvalidTimeRange(InitiativesError):
     """Initiative end is not strictly after its start (HTTP 422)."""
 
 
+# ponytail: the existing route maps InvalidTimeRange to 422; add a shared
+# validation-error base when the initiatives route mapper can be changed.
+class MemberNotActive(InvalidTimeRange):
+    """Member status prevents chair assignment (HTTP 422)."""
+
+
 class ChairRuleViolation(InitiativesError):
     """Min-1 chair invariant would be violated (HTTP 409)."""
 
@@ -232,6 +238,8 @@ def create_initiative(
             sb=sb,
         )
     except Exception as exc:
+        if "is not an active member" in str(exc):
+            raise MemberNotActive("Member must be active") from exc
         if "member_not_in_chapter" in str(exc):
             raise MemberNotInChapter("Member not found in chapter") from exc
         raise
@@ -325,6 +333,8 @@ def add_chair(
         )
     except Exception as exc:
         msg = str(exc)
+        if "is not an active member" in msg:
+            raise MemberNotActive("Member must be active") from exc
         if "not_assigned_chair" in msg:
             raise NotPermitted(
                 "Managing chairs requires being an assigned chair"
@@ -366,6 +376,8 @@ def remove_chair(
             raise NotPermitted(
                 "Managing chairs requires being an assigned chair"
             ) from exc
+        if "is not a chair" in msg:
+            raise MemberNotInChapter("Chair not found") from exc
         if "last_chair" in msg:
             raise ChairRuleViolation(
                 "An initiative must keep at least one chair"

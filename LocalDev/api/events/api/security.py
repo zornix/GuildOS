@@ -25,6 +25,10 @@ from .schemas import SecurityAssignIn, SecurityAssignmentOut, SwapOut, SwapReque
 
 router = APIRouter()
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 # 409-mapped RPC guard failures (state/uniqueness conflicts).
 _CONFLICT = (
     "security_preassigned",
@@ -42,15 +46,22 @@ _FORBIDDEN = ("not_assigned", "not_swap_target", "not_swap_requester")
 def _rpc_http_error(exc: Exception) -> HTTPException:
     """Map ev_* security RPC exceptions onto HTTP statuses."""
     msg = str(exc)
-    if "not found" in msg:
-        return HTTPException(404, msg)
-    if any(tok in msg for tok in _FORBIDDEN):
-        return HTTPException(403, msg)
+    if "not found" in msg or "is not in chapter" in msg:
+        return HTTPException(404, "Security assignment, event or member not found")
+    if "is not an active member" in msg:
+        return HTTPException(422, "Member must be active")
+    for token in _FORBIDDEN:
+        if token in msg:
+            return HTTPException(403, token)
     if "swap_self" in msg:
         return HTTPException(422, "You cannot swap a security assignment with yourself")
-    if any(tok in msg for tok in _CONFLICT):
-        return HTTPException(409, msg)
-    return HTTPException(400, msg)
+    for token in _CONFLICT:
+        if token in msg:
+            return HTTPException(409, token)
+    # Unmapped: log here because returning (not raising the original) skips
+    # the observability catch-all that would have recorded the trace.
+    logger.exception("unmapped RPC error")
+    return HTTPException(500, "Internal server error")
 
 
 @contextmanager
@@ -58,9 +69,9 @@ def _map_security_errors():
     try:
         yield
     except EventNotFound as exc:
-        raise HTTPException(404, str(exc) or "Not found")
+        raise HTTPException(404, "Event not found")
     except NotPermitted as exc:
-        raise HTTPException(403, str(exc))
+        raise HTTPException(403, "You are not permitted to manage security for this event")
     except HTTPException:
         raise
     except Exception as exc:

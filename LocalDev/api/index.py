@@ -8,6 +8,7 @@ Local:   uvicorn api.index:app --reload
 """
 
 import asyncio
+import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -108,11 +109,11 @@ def production_config_violations(s: Settings) -> list[str]:
     if s.is_production:
         if "localhost" in s.BASE_URL or "127.0.0.1" in s.BASE_URL:
             violations.append("BASE_URL points at localhost — set it to the public API origin")
-        if "localhost" in s.FRONTEND_URL or "127.0.0.1" in s.FRONTEND_URL:
-            violations.append(
-                "FRONTEND_URL points at localhost — set it to the public site origin; "
-                "check-in links redirect there"
-            )
+    if "localhost" in s.FRONTEND_URL or "127.0.0.1" in s.FRONTEND_URL:
+        violations.append(
+            "FRONTEND_URL points at localhost — set it to the public site origin; "
+            "check-in links redirect there"
+        )
 
     return violations
 
@@ -214,5 +215,12 @@ app.include_router(contribution_router, prefix="/api/contribution", tags=["Contr
 async def health():
     from fastapi.responses import JSONResponse
 
-    payload = await asyncio.to_thread(build_health_payload, get_db())
+    try:
+        payload = await asyncio.to_thread(lambda: build_health_payload(get_db()))
+    except Exception:
+        logging.getLogger(__name__).exception("health check could not reach the database")
+        payload = {
+            "status": "error", "version": app.version,
+            "checks": {"database": "error"}, "detail": "database_unreachable",
+        }
     return JSONResponse(payload, status_code=503 if payload["status"] == "error" else 200)

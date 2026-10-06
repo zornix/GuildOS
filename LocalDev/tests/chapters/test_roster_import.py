@@ -273,3 +273,22 @@ def test_roster_import_rolls_back_when_a_code_cannot_be_issued(
         (chapter_id,),
     )
     assert cursor.fetchall() == []
+
+
+
+def test_foreign_chapter_email_rejection_is_generic(monkeypatch):
+    from types import SimpleNamespace
+    from api.chapters.services import onboarding
+    monkeypatch.setattr(onboarding, "_role_keys", lambda sb: set())
+    class MembersQuery:
+        def select(self, *args):
+            return self
+        def in_(self, *args):
+            return self
+        def execute(self):
+            return SimpleNamespace(data=[{"email": "foreign@example.com", "chapter_id": "other"}])
+    sb = SimpleNamespace(table=lambda name: MembersQuery())
+    raw = b"name,email,phone\nMember,foreign@example.com,5551110001\n"
+    with pytest.raises(onboarding.RosterFileError) as caught:
+        onboarding.import_roster(sb, chapter_id="chapter", raw=raw)
+    assert caught.value.errors == [{"row": 2, "error": "Member cannot be invited"}]

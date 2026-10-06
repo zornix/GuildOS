@@ -107,9 +107,13 @@ async def update_task_status(
         )
     except Exception as exc:
         message = str(exc)
-        for prefix in ("task_closed:", "task_in_review:", "job_needs_review:"):
+        for prefix, detail in (
+            ("task_closed:", "A closed task cannot change status"),
+            ("task_in_review:", "Please approve or reject the reported job"),
+            ("job_needs_review:", "Jobs are completed through report and approve"),
+        ):
             if prefix in message:
-                raise HTTPException(409, message.split(prefix, 1)[1].splitlines()[0].strip()) from exc
+                raise HTTPException(409, detail) from exc
         raise _rpc_http_error(exc) from exc
 
 

@@ -15,22 +15,33 @@ from api.tasks.auth import TASKS_ASSIGN, TASKS_REVIEW
 from api.platform.db import get_db
 from api.tasks.services import commitments as svc
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
 def _rpc_http_error(exc: Exception) -> HTTPException:
     """Map tk_* RPC exceptions onto HTTP statuses (handlers stay thin)."""
     msg = str(exc)
-    if "not found" in msg:
-        return HTTPException(404, msg)
-    if (
-        "active commitment" in msg
-        or "cannot be committed" in msg
-        or "job_full" in msg
-        or "unclaim_locked" in msg
-    ):
-        return HTTPException(409, msg)
-    return HTTPException(400, msg)
+    if "not found" in msg or "is not in chapter" in msg:
+        return HTTPException(404, "Task or member not found")
+    if "is not an active member" in msg:
+        return HTTPException(422, "Member must be active")
+    if "has no active commitment" in msg:
+        return HTTPException(409, "Member has no active commitment on this task")
+    if "active commitment" in msg:
+        return HTTPException(409, "Member already has an active commitment")
+    if "cannot be committed" in msg:
+        return HTTPException(409, "Task cannot be committed to")
+    for token in ("job_full", "unclaim_locked", "security_preassigned", "security_no_unclaim"):
+        if token in msg:
+            return HTTPException(409, token)
+    # Unmapped: log here because returning (not raising the original) skips
+    # the observability catch-all that would have recorded the trace.
+    logger.exception("unmapped RPC error")
+    return HTTPException(500, "Internal server error")
 
 
 @router.post("/{task_id}/commit")

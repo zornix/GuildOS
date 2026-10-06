@@ -243,16 +243,24 @@ def test_remove_chair_waits_for_the_initiative_lock(
     try:
         with hold.cursor() as hcur:
             hcur.execute("SELECT 1 FROM initiatives WHERE id = %s FOR UPDATE", (ini["id"],))
-        cursor.execute("SET lock_timeout = '500ms'")
-        with pytest.raises(psycopg2.errors.LockNotAvailable):
-            cursor.execute(
-                "SELECT in_remove_chair(%s, %s, %s, %s, NULL)",
-                (chapter_id, ini["id"], co_chair, actor["id"]),
-            )
+        # SET LOCAL on a non-autocommit connection: stays on one pooler server
+        # connection and dies with the transaction (session SET can leak).
+        probe = psycopg2.connect(db_url)
+        try:
+            probe.autocommit = False
+            with probe.cursor() as pcur:
+                pcur.execute("SET LOCAL lock_timeout = '500ms'")
+                with pytest.raises(psycopg2.errors.LockNotAvailable):
+                    pcur.execute(
+                        "SELECT in_remove_chair(%s, %s, %s, %s, NULL)",
+                        (chapter_id, ini["id"], co_chair, actor["id"]),
+                    )
+        finally:
+            probe.rollback()
+            probe.close()
     finally:
         hold.rollback()
         hold.close()
-        cursor.execute("RESET lock_timeout")
 
 
 def test_add_chair_rejects_inactive_member(
