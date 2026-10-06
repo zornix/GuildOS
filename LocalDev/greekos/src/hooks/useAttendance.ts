@@ -1,9 +1,9 @@
 import { useState, type Dispatch, type SetStateAction } from 'react';
 import { ChapterEvent, Excuse, Member } from '../types';
+import { serverMessage } from '../lib/sync';
 import { api } from '../api';
 import { adaptExcuses } from '../adapters';
 import { ShowToast } from './useToast';
-import { EnqueueOutbox } from './useOutbox';
 import { SyncApi } from './useBackend';
 
 interface Deps {
@@ -12,12 +12,11 @@ interface Deps {
   refetchEvents: () => Promise<void>;
   syncApi: SyncApi;
   showToast: ShowToast;
-  enqueueOutbox: EnqueueOutbox;
 }
 
 /** Roll call, door-code check-in and absence excuses. Attendance is recorded onto
  *  the event rows, so this hook writes into the events state too. */
-export function useAttendance({ members, setEvents, refetchEvents, syncApi, showToast, enqueueOutbox }: Deps) {
+export function useAttendance({ members, setEvents, refetchEvents, syncApi, showToast }: Deps) {
   const [excuses, setExcuses] = useState<Excuse[]>([]);
 
   const refetchExcuses = async () => setExcuses(adaptExcuses(await api.getExcuses(), members));
@@ -50,27 +49,16 @@ export function useAttendance({ members, setEvents, refetchEvents, syncApi, show
       submittedAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
     };
     setExcuses(prev => [newExcuse, ...prev]);
-    syncApi(() => api.submitExcuse(newExcuse.eventId, newExcuse.reason), refetchExcuses);
-    showToast(`Excuse request submitted for executive review.`);
+    syncApi(() => api.submitExcuse(newExcuse.eventId, newExcuse.reason), refetchExcuses, 'Excuse request submitted for executive review.');
   };
 
   const handleReviewExcuse = (excuseId: string, status: 'Approved' | 'Rejected', reviewedBy: string) => {
-    const exc = excuses.find(e => e.id === excuseId);
     setExcuses(prev => prev.map(e => e.id === excuseId ? { ...e, status, decidedBy: reviewedBy } : e));
     syncApi(
       () => api.reviewExcuse(excuseId, status === 'Approved' ? 'approved' : 'denied'),
-      refetchExcuses
+      refetchExcuses,
+      `Excuse marked ${status}.`
     );
-
-    if (exc) {
-      enqueueOutbox({
-        type: 'EXCUSE_DECISION',
-        recipient: exc.memberName,
-        message: `[GreekOS Excuse Decision] Your excuse for "${exc.eventTitle}" was ${status} by ${reviewedBy}.`,
-        channel: 'SMS'
-      });
-    }
-    showToast(`Excuse marked ${status}.`);
   };
 
   /** Door-code check-in. The code identifies the event and the backend checks in
@@ -78,13 +66,13 @@ export function useAttendance({ members, setEvents, refetchEvents, syncApi, show
   const handleSelfCheckIn = async (code: string): Promise<{ ok: boolean; message: string }> => {
     try {
       const res = await api.checkInWithCode(code.trim());
-      await refetchEvents();
-      return { ok: true, message: `Checked in for ${res.event_title}.` };
+      await refetchEvents().catch(err => console.error('Refresh after check-in failed', err));
+      return { ok: true, message: `Checked in to ${res.event_title}.` };
     } catch (err) {
       const msg = (err as Error).message;
       if (msg.includes('(410)')) return { ok: false, message: 'That door code has expired or is not valid.' };
       if (msg.includes('(409)')) return { ok: false, message: 'You are already checked in for this event.' };
-      return { ok: false, message: 'Check-in failed. Ask an officer for the current door code.' };
+      return { ok: false, message: serverMessage(err, 'Check-in failed. Ask an officer for the current door code.') };
     }
   };
 

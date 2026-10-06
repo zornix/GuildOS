@@ -3,10 +3,8 @@ import { OutboxMessage, OutboxNotification, OutboxStatus } from '../types';
 import { api } from '../api';
 import { adaptOutbox } from '../adapters';
 
-/** Notices still enqueue from domain hooks; nothing renders a local outbox. */
+/** Legacy local-notice shape. The server sends notices; only useFinance still declares this dep. */
 export type EnqueueOutbox = (notif: Omit<OutboxNotification, 'id' | 'timestamp' | 'status'>) => void;
-
-export const enqueueOutbox: EnqueueOutbox = () => {};
 
 /** The real message outbox, fetched by the Outbox module (officer-gated). */
 export function useOutboxFeed(status: OutboxStatus | 'all') {

@@ -16,8 +16,8 @@ interface ModalProps {
 }
 
 /** Fixed overlay + centered white panel. Shared shell for every modal in the app.
- *  ponytail: no focus trap — initial focus lands on the panel, Escape and overlay
- *  close it. Add a trap only if keyboard users report tabbing out. */
+ *  Focus starts on the panel, Tab cycles inside it, and closing hands focus
+ *  back to whatever opened it. */
 export default function Modal({
   children,
   maxWidth = 'max-w-md',
@@ -31,7 +31,25 @@ export default function Modal({
 
   // Mount only. Call sites pass an inline `onClose`, so a focus() keyed on it
   // would re-run on every keystroke in a modal form and yank focus off the input.
-  useEffect(() => { panel.current?.focus(); }, []);
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    panel.current?.focus();
+    return () => opener?.focus();
+  }, []);
+
+  /** Tab from the last focusable element wraps to the first, Shift+Tab the other way. */
+  const trapTab = (e: React.KeyboardEvent) => {
+    if (e.key !== 'Tab' || !panel.current) return;
+    const focusable = panel.current.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    if (focusable.length === 0) { e.preventDefault(); return; }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = document.activeElement;
+    if (e.shiftKey && (active === first || active === panel.current)) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
+  };
 
   useEffect(() => {
     if (!onClose) return;
@@ -52,6 +70,7 @@ export default function Modal({
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
         onClick={e => e.stopPropagation()}
+        onKeyDown={trapTab}
         className={`bg-white rounded-2xl border border-slate-200 shadow-2xl ${maxWidth} w-full max-h-[calc(100dvh-2rem)] overflow-y-auto p-4 sm:p-6 animate-in fade-in zoom-in duration-150 outline-none ${className}`}
       >
         {(title || onClose) && (

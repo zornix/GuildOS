@@ -35,7 +35,7 @@ export default function CommandModule({
   const [commandHistory, setCommandHistory] = useState<Array<{
     input: string;
     timestamp: string;
-    status: 'Executed' | 'Error' | 'Permission Denied';
+    status: 'Sent' | 'Error' | 'Permission Denied';
     summary: string;
     details?: string;
   }>>([]);
@@ -84,7 +84,7 @@ export default function CommandModule({
           setCommandHistory(prev => [{
             input: raw,
             timestamp,
-            status: 'Executed',
+            status: 'Sent',
             summary: `Issued ${formatMoney(Math.round(amount * 100))} fine to ${matchedMember.name} for "${reason}"`
           }, ...prev]);
 
@@ -108,7 +108,7 @@ export default function CommandModule({
             type: 'TASK',
             payload: {
               title: taskTitle,
-              description: `Assigned via GreekOS Natural Command console to ${matchedMember.name}.`,
+              description: `Assigned from the command console to ${matchedMember.name}.`,
               assignedTo: matchedMember.name,
               assignedToId: matchedMember.id,
               dueDate: '2026-07-16',
@@ -120,7 +120,7 @@ export default function CommandModule({
           setCommandHistory(prev => [{
             input: raw,
             timestamp,
-            status: 'Executed',
+            status: 'Sent',
             summary: `Assigned task "${taskTitle}" to ${matchedMember.name}`
           }, ...prev]);
 
@@ -154,7 +154,7 @@ export default function CommandModule({
           type: 'EVENT',
           payload: {
             title: eventTitle,
-            description: 'Scheduled via GreekOS Natural Language Command console.',
+            description: 'Scheduled from the command console.',
             date: when.date,
             startTime: when.time,
             endTime,
@@ -182,7 +182,7 @@ export default function CommandModule({
         setCommandHistory(prev => [{
           input: raw,
           timestamp,
-          status: 'Executed',
+          status: 'Sent',
           summary: `Scheduled chapter event "${eventTitle}" for ${when.date} at ${when.time}`
         }, ...prev]);
 
@@ -208,7 +208,7 @@ export default function CommandModule({
         setCommandHistory(prev => [{
           input: raw,
           timestamp,
-          status: 'Executed',
+          status: 'Sent',
           summary: `Updated recruitment pipeline: Bid Extended to ${pnmName}`
         }, ...prev]);
 
@@ -236,7 +236,7 @@ export default function CommandModule({
       setCommandHistory(prev => [{
         input: raw,
         timestamp,
-        status: 'Executed',
+        status: 'Sent',
         summary: `Dispatched broadcast announcement to all brothers`
       }, ...prev]);
 
@@ -260,7 +260,7 @@ export default function CommandModule({
       setCommandHistory(prev => [{
         input: raw,
         timestamp,
-        status: 'Executed',
+        status: 'Sent',
         summary: `Approved excuse request for ${name}`
       }, ...prev]);
 
@@ -273,7 +273,7 @@ export default function CommandModule({
       input: raw,
       timestamp,
       status: 'Error',
-      summary: 'Command syntax not recognized. Try one of the quick templates below.'
+      summary: 'Not a supported command. See the list above.'
     }, ...prev]);
   };
 
@@ -289,7 +289,9 @@ export default function CommandModule({
             </h2>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Type an instruction in plain English. Every command is a real write to the chapter record.
+            Type a command. Supported: fine NAME $AMOUNT for REASON · assign TITLE to NAME · schedule TITLE on DATE at TIME ·
+            extend bid to NAME · send announcement: TEXT · approve excuse for NAME. NAME matches any part of a member's name;
+            DATE is today, tomorrow, a weekday, "July 17" or 2026-07-17; TIME is 8pm, 8:30 pm, 19:00, noon or midnight.
           </p>
         </div>
       </div>
@@ -303,7 +305,7 @@ export default function CommandModule({
             <span className="w-3 h-3 rounded-full bg-green-500 inline-block"></span>
             <span className="ml-2 font-bold text-slate-300">greekos-terminal &bull; {currentMemberName}</span>
           </div>
-          <span className="text-gold">Audited & Permission Checked</span>
+          <span className="text-gold">Permissions are checked by the server</span>
         </div>
 
         {/* Console Command Input Box */}
@@ -367,7 +369,7 @@ export default function CommandModule({
                   <span className="font-bold text-slate-900 font-mono text-xs">&gt; {item.input}</span>
                 </div>
                 <p className="text-slate-600 text-xs font-sans flex items-center gap-1.5">
-                  {item.status === 'Executed' ? (
+                  {item.status === 'Sent' ? (
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                   ) : (
                     <AlertCircle className="w-3.5 h-3.5 text-red-600 shrink-0" />
@@ -377,7 +379,7 @@ export default function CommandModule({
               </div>
 
               <span className={`text-xs px-2 py-0.5 rounded font-bold self-start sm:self-center ${
-                item.status === 'Executed' 
+                item.status === 'Sent' 
                   ? 'bg-emerald-100 text-emerald-800' 
                   : 'bg-red-100 text-red-800'
               }`}>

@@ -10,7 +10,7 @@ import {
 import { ChapterEvent, Member, Excuse } from '../types';
 import Modal from './ui/Modal';
 import Card from './ui/Card';
-import { RollStatus, markRemainingPresent, rollCallSummary } from '../lib/rollCall';
+import { RollStatus, markRemainingPresent, nextStatus, rollCallSummary } from '../lib/rollCall';
 import DoorCodeField from './home/DoorCodeField';
 
 interface AttendanceModuleProps {
@@ -32,6 +32,8 @@ interface AttendanceModuleProps {
   /** The door code identifies the event; the backend checks in the signed-in member. */
   onSelfCheckIn: (code: string) => Promise<{ ok: boolean; message: string }>;
 }
+
+const ROLL_OPTIONS = ['Present', 'Late', 'Excused', 'Absent'] as const;
 
 export default function AttendanceModule({
   events,
@@ -73,6 +75,15 @@ export default function AttendanceModule({
       ...prev,
       [memberId]: status
     }));
+  };
+
+  /** Arrow keys select within the row (Tab leaves it); focus follows the mark. */
+  const moveStatus = (e: React.KeyboardEvent<HTMLButtonElement>, memberId: string, current: RollStatus | undefined) => {
+    const next = nextStatus(current, e.key, ROLL_OPTIONS);
+    if (!next) return;
+    e.preventDefault();
+    handleStatusChange(memberId, next);
+    e.currentTarget.parentElement?.querySelector<HTMLElement>(`[data-status="${next}"]`)?.focus();
   };
 
   const summary = rollCallSummary(safeMembers, attendanceRecords);
@@ -247,15 +258,24 @@ export default function AttendanceModule({
                       )}
                       <td className="py-3 px-2 sm:px-3 text-right">
                         {!status && <span className="sr-only sm:not-sr-only sm:inline text-xs text-slate-400 mr-2">Unmarked</span>}
-                        <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 text-xs font-semibold">
-                          {(['Present', 'Late', 'Excused', 'Absent'] as const).map(st => {
+                        <div
+                          role="radiogroup"
+                          aria-label={`Attendance for ${mem.name}`}
+                          className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 text-xs font-semibold"
+                        >
+                          {ROLL_OPTIONS.map((st, idx) => {
                             const isCur = status === st;
                             return (
                               <button
                                 key={st}
+                                type="button"
+                                role="radio"
+                                aria-checked={isCur}
+                                tabIndex={isCur || (!status && idx === 0) ? 0 : -1}
+                                data-status={st}
                                 disabled={!canMarkAttendance}
-                                aria-pressed={isCur}
                                 onClick={() => handleStatusChange(mem.id, st)}
+                                onKeyDown={e => moveStatus(e, mem.id, status)}
                                 className={`px-1.5 sm:px-2.5 py-1 min-h-11 sm:min-h-0 rounded-md transition-all cursor-pointer ${
                                   isCur 
                                     ? st === 'Present' 

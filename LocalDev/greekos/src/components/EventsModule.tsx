@@ -1203,6 +1203,10 @@ export default function EventsModule({
                   Members enter it on Home or under Attendance &rarr; Door code. Expires shortly.
                 </p>
               </div>
+            ) : selectedEvent.checkInLinkActive ? (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+                The door is open. The code is on the officer's screen; enter it on Home or under Attendance &rarr; Door code.
+              </div>
             ) : (
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500">
                 No door code is open. Use <strong>Open door code</strong> on the event.

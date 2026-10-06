@@ -2,17 +2,15 @@ import { useState } from 'react';
 import { Task } from '../types';
 import { api } from '../api';
 import { canClaimTask, taskClaimants } from '../lib/tasks';
-import { ShowToast } from './useToast';
 import { SyncApi } from './useBackend';
 
 interface Deps {
   syncApi: SyncApi;
-  showToast: ShowToast;
   refetchJobs: () => Promise<void>;
 }
 
 /** Jobs: standalone or attached to an event or initiative. */
-export function useTasks({ syncApi, showToast, refetchJobs }: Deps) {
+export function useTasks({ syncApi, refetchJobs }: Deps) {
   const [tasks, setTasks] = useState<Task[]>([]);
 
   const handleAddTask = (newTask: Omit<Task, 'id' | 'status'>) => {
@@ -31,9 +29,9 @@ export function useTasks({ syncApi, showToast, refetchJobs }: Deps) {
           required: t.priority === 'High' || t.priority === 'Urgent',
           due_at: t.dueDate ? `${t.dueDate}T12:00:00Z` : null
         }),
-      refetchJobs
+      refetchJobs,
+      `Added job "${t.title}"`
     );
-    showToast(`Added job "${t.title}"`);
   };
 
   const handleToggleTaskStatus = (taskId: string) => {
@@ -55,9 +53,7 @@ export function useTasks({ syncApi, showToast, refetchJobs }: Deps) {
       }
       return t;
     }));
-    syncApi(() => api.commitTask(taskId, memberId), refetchJobs, {
-      onSuccess: () => showToast('Claimed job.')
-    });
+    syncApi(() => api.commitTask(taskId, memberId), refetchJobs, 'Claimed job.');
   };
 
   return { tasks, setTasks, handleAddTask, handleToggleTaskStatus, handleClaimTask };

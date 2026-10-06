@@ -286,8 +286,11 @@ export interface EventDetailDto extends EventDto {
   last_notified_at?: string | null;
 }
 
-/** Check-in link. GET answers `{}` when no link is live. */
+/** Check-in link. GET answers `{}` when no link is live; a member who cannot
+ *  manage check-in gets `{event_id, active, expires_at}` with no code. */
 export interface CheckInLinkDto {
+  event_id?: string;
+  active?: boolean;
   short_code?: string;
   url?: string;
   expires_at?: string;

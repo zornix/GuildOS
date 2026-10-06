@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, RoleDto } from '../api';
 import Modal from './ui/Modal';
+import { serverMessage } from '../lib/sync';
 
 /** The assigned-role keys after switching one role on or off. */
 export function toggleRoleKeys(keys: string[], key: string, on: boolean): string[] {
@@ -48,7 +49,7 @@ export default function MemberRolesPanel({ memberId, memberName, onRolesChanged,
       onRolesChanged?.(memberId);
     } catch (err) {
       setAssigned(previous);
-      setError(err instanceof Error ? err.message : String(err));
+      setError(serverMessage(err, 'Could not change that role. Try again.'));
     } finally {
       setPending(null);
     }

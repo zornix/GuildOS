@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { logout } from './api';
 import { useAppData } from './hooks/useAppData';
 import AppShell from './components/layout/AppShell';
@@ -19,11 +19,18 @@ import EventsBar from './components/EventsBar';
 import { useEventsChrome } from './hooks/useEventsChrome';
 import { filterEventsByType } from './lib/events';
 import { balanceForMember } from './lib/balance';
-import { can } from './lib/session';
+import { can, isOfficerView } from './lib/session';
+import { CHECKIN_STORAGE_KEY, readCheckinCode, stripCheckinParam } from './lib/checkinLink';
 
 export default function App() {
   const [authed, setAuthed] = useState(() => !!localStorage.getItem('g_token'));
   const [onboarding, setOnboarding] = useState(false);
+  // A /?checkin=CODE link (where the backend's /c/CODE redirect lands) must
+  // survive the login screen, so the code is parked until a member is signed in.
+  useEffect(() => {
+    const code = readCheckinCode(location.search);
+    if (code) sessionStorage.setItem(CHECKIN_STORAGE_KEY, code);
+  }, []);
   if (!authed) {
     return onboarding
       ? <OnboardingScreen onBack={() => setOnboarding(false)} />
@@ -37,7 +44,7 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
   const chrome = useEventsChrome();
   const app = useAppData();
   const { roster, events, initiatives, finance, attendance, tasks, recruitment } = app;
-  const { isOfficer, currentMemberId, currentMemberName } = app;
+  const { currentMemberId, currentMemberName } = app;
   const currentMember = roster.members.find(member => member.id === currentMemberId);
   const viewedBalance = balanceForMember(app.myBalance, currentMember?.id);
   const canMarkAttendance = can(app.permissions, 'attendance:override');
@@ -45,11 +52,20 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
   const canManageJobs = can(app.permissions, 'tasks:assign');
   const canInviteMembers = can(app.permissions, 'members:invite');
 
+  // Consume a parked door code exactly once, after the session has loaded.
+  useEffect(() => {
+    if (app.loading || !currentMemberId) return;
+    const code = sessionStorage.getItem(CHECKIN_STORAGE_KEY);
+    if (!code) return;
+    sessionStorage.removeItem(CHECKIN_STORAGE_KEY);
+    history.replaceState(null, '', stripCheckinParam(location.href));
+    attendance.handleSelfCheckIn(code).then(result => app.showToast(result.message));
+  }, [app.loading, currentMemberId]);
+
   return (
     <AppShell
       activeTab={activeTab}
       setActiveTab={setActiveTab}
-      isOfficer={isOfficer}
       permissions={app.permissions}
       currentMemberName={currentMemberName || app.sessionName}
       onLogout={onLogout}
@@ -65,7 +81,8 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
           tasks={tasks.tasks}
           initiatives={initiatives.initiatives}
           announcements={app.announcements}
-          isOfficer={isOfficer}
+          officerView={isOfficerView(app.permissions)}
+          canScheduleEvent={canCreateEvent}
           canDeleteAnnouncement={can(app.permissions, 'announcements:create')}
           currentMemberId={currentMemberId}
           currentMemberName={currentMemberName}

@@ -6,6 +6,7 @@ import { isOfficerView } from '../lib/session';
 import { EMPTY_CONTRIBUTION } from '../lib/contribution';
 import {
   adaptAnnouncements,
+  adaptCheckInLink,
   adaptContribution,
   adaptEventDetail,
   adaptEvents,
@@ -21,7 +22,6 @@ import {
 } from '../adapters';
 import { useToast } from './useToast';
 import { useBackend } from './useBackend';
-import { enqueueOutbox } from './useOutbox';
 import { useRoster } from './useRoster';
 import { useEvents } from './useEvents';
 import { useInitiatives } from './useInitiatives';
@@ -39,7 +39,6 @@ export function useAppData() {
   const [sessionName, setSessionName] = useState<string>('');
   const [chapterId, setChapterId] = useState<string>('');
   const [chapterName, setChapterName] = useState<string>('');
-  const [isOfficer, setIsOfficer] = useState<boolean>(false);
   const [currentMemberId, setCurrentMemberId] = useState<string>('');
   const [currentMemberName, setCurrentMemberName] = useState<string>('');
 
@@ -47,6 +46,9 @@ export function useAppData() {
 
   const { toastMessage, showToast, dismissToast } = useToast();
   const { loading, setLoading, backendDown, setBackendDown, syncApi } = useBackend(showToast);
+
+  // Derived, not stored: useFinance still takes it as a flag.
+  const isOfficer = isOfficerView(permissions);
 
   const roster = useRoster(showToast);
   const { members, setMembers } = roster;
@@ -57,23 +59,22 @@ export function useAppData() {
   const refetchJobsRef = useRef<() => Promise<void>>(async () => {});
   const refetchJobs = () => refetchJobsRef.current();
 
-  const events = useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJobs });
-  const initiatives = useInitiatives({ members, syncApi, showToast, refetchJobs });
-  const finance = useFinance({ members, setMembers, currentMemberId, currentMemberName, isOfficer, syncApi, showToast, enqueueOutbox });
+  const events = useEvents({ members, syncApi, showToast, refetchJobs });
+  const initiatives = useInitiatives({ members, syncApi, refetchJobs });
+  const finance = useFinance({
+    members, setMembers, currentMemberId, currentMemberName, isOfficer, syncApi, showToast,
+    // ponytail: useFinance (stream 05) still declares this no-op dep; drop it when that hook stops taking it.
+    enqueueOutbox: () => {}
+  });
   const attendance = useAttendance({
     members,
     setEvents: events.setEvents,
     refetchEvents: events.refetchEvents,
     syncApi,
-    showToast,
-    enqueueOutbox
+    showToast
   });
-  const tasks = useTasks({
-    syncApi,
-    showToast,
-    refetchJobs
-  });
-  const recruitment = useRecruitment({ syncApi, showToast, enqueueOutbox });
+  const tasks = useTasks({ syncApi, refetchJobs });
+  const recruitment = useRecruitment({ syncApi });
   const contribution = useContribution();
 
   /** Stamp the job rows onto whichever event/initiative owns each one. The chip
@@ -117,7 +118,6 @@ export function useAppData() {
       const perms = await api.getMyPermissions();
       const permissionSet = new Set(perms.permissions);
       setPermissions(permissionSet);
-      setIsOfficer(isOfficerView(permissionSet));
     } catch (err) {
       console.error('Permission refresh failed', err);
     }
@@ -183,8 +183,7 @@ export function useAppData() {
               securityByEvent.set(e.id, rows.map(row => adaptSecurityAssignment(row, membersById)));
               detailByEvent.set(e.id, {
                 ...adaptEventDetail(detail, rosterRows),
-                checkInToken: link.short_code,
-                checkInLinkActive: !!link.short_code
+                ...adaptCheckInLink(link)
               });
             } catch (err) {
               console.error(`Upcoming-event load failed for event ${e.id}`, err);
@@ -201,7 +200,6 @@ export function useAppData() {
         contribution.setRecord(contributionRow);
         setCurrentMemberId(me.id);
         setCurrentMemberName(me.name);
-        setIsOfficer(isOfficerView(permissionSet));
         events.setEvents(adaptedEvents.map(e => ({
           ...e,
           ...(detailByEvent.get(e.id) || {}),
@@ -240,12 +238,11 @@ export function useAppData() {
   /** Officer-only: drops a draft, retires a sent one from the calendar. */
   const handleDeleteAnnouncement = (announcementId: string) => {
     setAnnouncements(prev => prev.filter(a => a.id !== announcementId));
-    syncApi(() => api.deleteAnnouncement(announcementId), refetchAnnouncements);
-    showToast('Announcement removed from calendar.');
+    syncApi(() => api.deleteAnnouncement(announcementId), refetchAnnouncements, 'Announcement removed from calendar.');
   };
 
   // ----------------------------------------------------
-  // NATURAL LANGUAGE COMMAND EXECUTION
+  // COMMAND CONSOLE EXECUTION
   // ----------------------------------------------------
   const handleExecuteCommand = (cmdResult: {
     type: 'FINE' | 'TASK' | 'EVENT' | 'BID' | 'ANNOUNCEMENT' | 'EXCUSE_APPROVE' | 'ATTENDANCE';
@@ -283,14 +280,7 @@ export function useAppData() {
             calendar_date: calendarDate
           });
           await api.sendAnnouncement(created.id);
-        }, refetchAnnouncements);
-        enqueueOutbox({
-          type: 'ANNOUNCEMENT_BLAST',
-          recipient: 'All Brothers',
-          message: `[GreekOS Announcement] ${cmdResult.payload.content}`,
-          channel: 'SMS'
-        });
-        showToast(`Dispatched broadcast announcement.`);
+        }, refetchAnnouncements, 'Dispatched broadcast announcement.');
         break;
       }
       case 'EXCUSE_APPROVE':
@@ -305,7 +295,6 @@ export function useAppData() {
   };
 
   return {
-    isOfficer,
     permissions,
     sessionName,
     chapterId,

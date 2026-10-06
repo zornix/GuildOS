@@ -35,3 +35,14 @@ export function markRemainingPresent(members: Member[], records: Record<string, 
   for (const m of members) next[m.id] = records[m.id] || 'Present';
   return next;
 }
+
+/** Roving radio keys for one member's row: Right/Down select the next option,
+ *  Left/Up the previous, wrapping. An unmarked row lands on the first option.
+ *  Any other key: null (let it through). */
+export function nextStatus<T extends string>(current: T | undefined, key: string, options: readonly T[]): T | null {
+  const step = key === 'ArrowRight' || key === 'ArrowDown' ? 1 : key === 'ArrowLeft' || key === 'ArrowUp' ? -1 : 0;
+  if (!step) return null;
+  const at = current ? options.indexOf(current) : -1;
+  if (at < 0) return options[0];
+  return options[(at + step + options.length) % options.length];
+}

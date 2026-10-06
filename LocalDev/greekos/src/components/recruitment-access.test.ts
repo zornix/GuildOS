@@ -11,10 +11,10 @@ const viewKey = 'recruitment:pipeline:view';
 const updateKey = 'recruitment:pipeline:update';
 const noop = () => {};
 
-function navigation(permissions: string[], isOfficer = isOfficerView(permissions)) {
+function navigation(permissions: string[]) {
   return renderToStaticMarkup(createElement(Sidebar, {
     activeTab: 'dashboard', setActiveTab: noop,
-    permissions: new Set(permissions), isOfficer,
+    permissions: new Set(permissions),
     currentMemberName: 'Recruitment Chair', onLogout: noop,
     open: true, onClose: noop,
   }));
@@ -52,12 +52,11 @@ test('pipeline viewer sees prospects without create, vote or bid controls', () =
 
 test('standing cannot grant module navigation permissions', () => {
   assert.doesNotMatch(navigation(['standing:view_all']), />Recruitment</);
-  assert.doesNotMatch(navigation([], true), />Recruitment</);
-  assert.doesNotMatch(navigation([], true), />Command console</);
+  assert.doesNotMatch(navigation(['standing:view_all']), />Command console</);
 });
 
 test('module access follows permission keys, not officer presentation', () => {
-  const html = navigation(['standing:view_all', viewKey, 'nl_controller:execute'], false);
+  const html = navigation([viewKey, 'nl_controller:execute']);
   assert.match(html, />Recruitment</);
   assert.match(html, />Command console</);
 });

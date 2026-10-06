@@ -1,3 +1,4 @@
+import type { CheckInLinkDto } from './api';
 // Backend DTO -> prototype type mapping. Everything the backend does not send
 // gets an empty default here — nothing is invented. Client-local demo features
 // (GPA, pledge class) stay defaulted.
@@ -445,4 +446,10 @@ export function adaptContribution(row: ContributionDto): ContributionRecord {
     })),
     eventsAttendedCount: row.events_attended_count
   };
+}
+
+/** GET /api/events/{id}/checkin-link: `{}` when no door is open. Managers get
+ *  the code; members only learn that a door is open and when it closes. */
+export function adaptCheckInLink(dto: CheckInLinkDto): Pick<ChapterEvent, 'checkInLinkActive' | 'checkInToken'> {
+  return { checkInLinkActive: dto.active ?? !!dto.short_code, checkInToken: dto.short_code };
 }
