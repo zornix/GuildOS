@@ -316,7 +316,6 @@ export default function FinanceModule({
                   <th className="py-2.5 px-3 hidden sm:table-cell">Standing</th>
                   <th className="py-2.5 px-3 hidden sm:table-cell">Pledge Class</th>
                   <th className="py-2.5 px-3 text-right">Unpaid fines</th>
-                  {canVerifyPayments && <th className="py-2.5 px-3 text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -345,22 +344,6 @@ export default function FinanceModule({
                           {formatMoney(balanceCents)}
                         </span>
                       </td>
-                      {canVerifyPayments && (
-                        <td className="py-3 px-3 text-right">
-                          {balanceCents > 0 && (
-                            <button
-                              onClick={() => setTransaction({
-                                title: 'Record payment',
-                                note: `${mem.name} owes ${formatMoney(balanceCents)} in fines.`,
-                                initial: { kind: 'Payment', memberId: mem.id, amountDollars: (balanceCents / 100).toFixed(2) }
-                              })}
-                              className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold px-2 py-1 min-h-11 sm:min-h-0 rounded transition-all cursor-pointer"
-                            >
-                              Record payment
-                            </button>
-                          )}
-                        </td>
-                      )}
                     </tr>
                   );
                 })}
