@@ -20,6 +20,7 @@ with results nested under the relation key, matching PostgREST output.
 from __future__ import annotations
 
 import re
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -56,6 +57,36 @@ JOIN_STAR_COLUMNS: dict[str, list[str]] = {
     "members": ["id", "chapter_id", "name", "email", "phone", "role", "status", "created_at"],
 }
 
+_IDENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
+def _ident(name: str) -> str:
+    if not isinstance(name, str) or not _IDENT.fullmatch(name):
+        raise ValueError(f"platform.postgres: invalid identifier {name!r}")
+    return name
+
+
+class _TxPool:
+    """Stands in for the pool inside a transaction: always the same connection."""
+
+    in_tx = True
+
+    def __init__(self, conn):
+        self._conn = conn
+
+    def getconn(self):
+        if self._conn is None:
+            raise RuntimeError("platform.postgres: this transaction client was used after its block ended")
+        return self._conn
+
+    def putconn(self, conn):
+        pass
+
+    def release(self):
+        """Called when the block ends: the connection goes back to the pool, so a
+        leaked `tx` must fail instead of writing into another request's transaction."""
+        self._conn = None
+
 
 @dataclass
 class QueryResult:
@@ -85,6 +116,7 @@ class QueryBuilder:
     _is_single: bool = False
     _payload: dict | None = None
     _on_conflict: str | None = None
+    _ignore_conflict: str | None = None
     _chain_select: str | None = None
     _limit_n: int | None = None
     _offset_n: int | None = None
@@ -169,7 +201,8 @@ class QueryBuilder:
     def execute(self) -> QueryResult:
         conn = self._pool.getconn()
         try:
-            conn.autocommit = True
+            if not getattr(self._pool, "in_tx", False):
+                conn.autocommit = True
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 if self._op == "select":
                     return self._exec_select(cur)
@@ -192,13 +225,20 @@ class QueryBuilder:
         joins_found = join_pattern.findall(raw)
         remainder = join_pattern.sub("", raw)
         tokens = [p.strip() for p in remainder.split(",") if p.strip()]
+        for tok in tokens:
+            if tok != "*":
+                _ident(tok)
         # After stripping join clauses, commas often leave "", which must not become empty SELECT columns.
         self._select_cols = "*" if not tokens or tokens == ["*"] else ",".join(tokens)
 
         fk_info = FK_MAP.get(self._table, {})
         for tbl, cols_str in joins_found:
+            _ident(tbl)
             if tbl not in fk_info:
-                continue
+                raise ValueError(
+                    f'platform.postgres: "{self._table}" has no registered join to "{tbl}". '
+                    "Add it to FK_MAP or read the related rows with a second query."
+                )
             fk_local, fk_remote = fk_info[tbl]
             raw = cols_str.strip()
             if raw == "*":
@@ -209,9 +249,9 @@ class QueryBuilder:
                         "or use explicit columns, e.g. chapters(name)."
                     )
             else:
-                cols = [c.strip() for c in cols_str.split(",") if c.strip()]
+                cols = [_ident(c.strip()) for c in cols_str.split(",") if c.strip()]
                 if not cols:
-                    continue
+                    raise ValueError(f'platform.postgres: "{tbl}()" names no columns; use {tbl}(*) or list them.')
             self._joins.append(_Join(table=tbl, cols=cols, fk_local=fk_local, fk_remote=fk_remote))
 
     def _exec_select(self, cur) -> QueryResult:
@@ -246,7 +286,7 @@ class QueryBuilder:
             sql += f" WHERE {' AND '.join(where_parts)}"
         if self._order_col:
             direction = "DESC" if self._order_desc else "ASC"
-            sql += f' ORDER BY "{t}"."{self._order_col}" {direction}'
+            sql += f' ORDER BY "{t}"."{_ident(self._order_col)}" {direction}'
 
         # LIMIT/OFFSET as validated integer literals (count query intentionally omits them).
         if self._limit_n is not None:
@@ -320,14 +360,16 @@ class QueryBuilder:
         rows = self._payload if isinstance(self._payload, list) else [self._payload]
         if not rows:
             return QueryResult(data=[])
-        cols = list(rows[0].keys())
+        cols = [_ident(c) for c in rows[0].keys()]
         row_sql = "(" + ", ".join(["%s"] * len(cols)) + ")"
         vals = [self._adapt_value(r[c]) for r in rows for c in cols]
         col_str = ", ".join(f'"{c}"' for c in cols)
-        sql = (
-            f'INSERT INTO "{self._table}" ({col_str}) '
-            f'VALUES {", ".join([row_sql] * len(rows))} RETURNING *'
-        )
+        sql = f'INSERT INTO "{self._table}" ({col_str}) VALUES {", ".join([row_sql] * len(rows))}'
+        if self._ignore_conflict:
+            # Rows that hit the conflict are skipped and absent from RETURNING.
+            conflict = ", ".join(_ident(c.strip()) for c in self._ignore_conflict.split(","))
+            sql += f" ON CONFLICT ({conflict}) DO NOTHING"
+        sql += " RETURNING *"
         cur.execute(sql, vals)
         return QueryResult(data=[self._serialize(dict(r)) for r in cur.fetchall()])
 
@@ -337,7 +379,7 @@ class QueryBuilder:
         set_parts = []
         vals = []
         for k, v in self._payload.items():
-            set_parts.append(f'"{k}" = %s')
+            set_parts.append(f'"{_ident(k)}" = %s')
             vals.append(self._adapt_value(v))
 
         where_parts, where_vals = self._build_where(self._table)
@@ -367,13 +409,14 @@ class QueryBuilder:
     # ── upsert ───────────────────────────────────────────────────
 
     def _exec_upsert(self, cur) -> QueryResult:
-        cols = list(self._payload.keys())
+        cols = [_ident(c) for c in self._payload.keys()]
         placeholders = ["%s"] * len(cols)
         vals = [self._adapt_value(self._payload[c]) for c in cols]
         col_str = ", ".join(f'"{c}"' for c in cols)
 
-        conflict_cols = self._on_conflict or "id"
-        update_cols = [c for c in cols if c not in conflict_cols.split(",")]
+        conflict = [_ident(c.strip()) for c in (self._on_conflict or "id").split(",")]
+        conflict_cols = ", ".join(conflict)
+        update_cols = [c for c in cols if c not in conflict]
         update_str = ", ".join(f'"{c}" = EXCLUDED."{c}"' for c in update_cols)
 
         sql = (
@@ -393,9 +436,9 @@ class QueryBuilder:
         for op, col, val in self._filters:
             if "." in col:
                 tbl, c = col.split(".", 1)
-                qualified = f'"_j_{tbl}"."{c}"'
+                qualified = f'"_j_{_ident(tbl)}"."{_ident(c)}"'
             else:
-                qualified = f'"{table}"."{col}"'
+                qualified = f'"{table}"."{_ident(col)}"'
 
             if op == "eq":
                 parts.append(f"{qualified} = %s")
@@ -435,17 +478,14 @@ class QueryBuilder:
 
     @staticmethod
     def _serialize(row: dict) -> dict:
-        """Convert non-JSON-serializable types to strings."""
+        """Convert UUID and date/time values to strings."""
         import datetime
-        from decimal import Decimal
         from uuid import UUID
 
         out = {}
         for k, v in row.items():
             if isinstance(v, UUID):
                 out[k] = str(v)
-            elif isinstance(v, Decimal):
-                out[k] = float(v)
             elif isinstance(v, (datetime.date, datetime.time)):
                 out[k] = v.isoformat()
             elif isinstance(v, datetime.datetime):
@@ -464,8 +504,11 @@ class _TableAccessor:
         qb = QueryBuilder(_pool=self._pool, _table=self._table)
         return qb.select(cols, count=count)
 
-    def insert(self, data: dict) -> QueryBuilder:
-        return QueryBuilder(_pool=self._pool, _table=self._table, _op="insert", _payload=data)
+    def insert(self, data: dict | list[dict], *, ignore_conflict: str | None = None) -> QueryBuilder:
+        return QueryBuilder(
+            _pool=self._pool, _table=self._table, _op="insert", _payload=data,
+            _ignore_conflict=ignore_conflict,
+        )
 
     def update(self, data: dict) -> QueryBuilder:
         return QueryBuilder(_pool=self._pool, _table=self._table, _op="update", _payload=data)
@@ -520,10 +563,10 @@ class _RpcBuilder:
         return QueryBuilder._adapt_value(v)
 
     def execute(self) -> QueryResult:
-        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", self._function_name):
+        if not _IDENT.fullmatch(self._function_name):
             raise ValueError(f"Invalid RPC function name: {self._function_name!r}")
         for key in self._params:
-            if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
+            if not _IDENT.fullmatch(key):
                 raise ValueError(f"Invalid RPC parameter name: {key!r}")
 
         arg_sql = ", ".join(f"{key} => %s" for key in self._params)
@@ -535,7 +578,8 @@ class _RpcBuilder:
 
         conn = self._pool.getconn()
         try:
-            conn.autocommit = True
+            if not getattr(self._pool, "in_tx", False):
+                conn.autocommit = True
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(sql, vals)
                 row = cur.fetchone()
@@ -596,10 +640,44 @@ class PostgresClient:
         self.auth = _LocalAuth(jwt_secret)
 
     def table(self, name: str) -> _TableAccessor:
-        return _TableAccessor(self._pool, name)
+        return _TableAccessor(self._pool, _ident(name))
 
     def rpc(self, name: str, params: dict | None = None) -> _RpcBuilder:
         return _RpcBuilder(self._pool, name, params or {})
+
+    @contextmanager
+    def transaction(self):
+        """One connection, one transaction. Commit on exit, roll back on any error.
+
+        Yields a client bound to that connection; pass it as `sb` to every helper.
+        A helper that calls get_db() itself writes outside the transaction. Never
+        catch a database error inside the block and carry on: exit then raises.
+        Called on a transaction client, it joins that transaction.
+        """
+        if getattr(self._pool, "in_tx", False):
+            yield self
+            return
+        conn = self._pool.getconn()
+        try:
+            conn.autocommit = False
+            tx = PostgresClient.__new__(PostgresClient)
+            tx._pool = _TxPool(conn)
+            tx.auth = self.auth
+            try:
+                yield tx
+                if conn.get_transaction_status() == psycopg2.extensions.TRANSACTION_STATUS_INERROR:
+                    # A statement failed and the caller swallowed the error. COMMIT would
+                    # silently turn into ROLLBACK; fail loudly instead.
+                    raise RuntimeError("transaction aborted by an earlier database error that was swallowed")
+                conn.commit()
+            except BaseException:
+                conn.rollback()
+                raise
+        finally:
+            tx._pool.release()
+            if not conn.closed:
+                conn.autocommit = True
+            self._pool.putconn(conn)
 
     def close(self) -> None:
         self._pool.closeall()

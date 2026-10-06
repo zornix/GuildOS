@@ -1,19 +1,24 @@
 """Treasury notification boundary — durable, exactly-once message outbox (Chunk G).
 
-The former no-op stubs are replaced by a single transactional outbox. Every
-lifecycle notification is *enqueued* into `message_outbox` rather than sent
-inline; the scheduled drain worker (`api/cron/services/outbox_drain.py`, run by
-Vercel Cron every 5 minutes) flips rows from `pending` to `sent`/`simulated`/
-`failed`. This keeps the money-moving RPCs decoupled from a flaky SMS / email
-provider and gives us at-least-once persistence + exactly-once dedup. The
-enqueue itself lives in api/platform/outbox.py — auth and events use the same
-one. Every treasury notification is email (ADR-0005).
+Every lifecycle notification is *enqueued* into `message_outbox` rather than
+sent inline; the scheduled drain worker (`api/cron/services/outbox_drain.py`,
+run by Vercel Cron every 5 minutes) flips rows from `pending` to `sent`/
+`simulated`/`failed`. This keeps the money-moving RPCs decoupled from a flaky
+SMS / email provider. The enqueue itself lives in api/platform/outbox.py — auth
+and events use the same one. Every treasury notification is email (ADR-0005).
+
+Not transactional with the money:
+  The enqueue runs after the money RPC has committed, in a separate statement.
+  If it fails, the invoice/payment/refund stays committed and the notification
+  is missing; the failure is logged (logger `api.platform.outbox`), not raised,
+  unless the caller passed a transaction client as `sb`, in which case it
+  propagates and rolls that transaction back.
 
 Exactly-once / idempotent on retry:
   Each logical event derives a deterministic `dedup_key` from its
   (event_type, target_id). The outbox has a UNIQUE index on `dedup_key`, and the
-  enqueue is an INSERT ... ON CONFLICT DO NOTHING, so a retried operation that
-  re-fires the same notification produces no second row.
+  enqueue is an INSERT ... ON CONFLICT (dedup_key) DO NOTHING, so a retried
+  operation that re-fires the same notification produces no second row.
 
 Delivery gating:
   `settings.MESSAGE_DELIVERY_MODE` (api/config.py, NOT os.environ; `dry_run` in
