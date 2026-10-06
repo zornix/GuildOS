@@ -10,8 +10,7 @@ export type MemberRole =
   | 'Scholarship Chair' 
   | 'Officer' // backend members.role === 'officer' (no specific title exposed)
   | 'Active Member'
-  | 'Pledge'
-  | 'Pledge Educator'
+  | 'New Member Educator'
   | 'Alumni';
 
 export type MemberStanding = 
@@ -29,7 +28,7 @@ export interface Member {
   email: string;
   phone: string;
   role: MemberRole;
-  status: 'Active' | 'Pledge' | 'Alumni' | 'Inactive';
+  status: 'Active' | 'New candidate' | 'Alumni' | 'Inactive';
   standing: MemberStanding;
   major?: string;
   gpa: number;
@@ -38,7 +37,7 @@ export interface Member {
   duesBalanceCents: number; // Integer cents end to end
   duesBalance: number; // in dollars for display convenience
   attendanceRate: number;
-  pledgeClass: string; // e.g. "Fall '22"
+  memberClass: string; // e.g. "Fall '22"
   roomNumber?: string;
   securityHoursServed?: number;
   /** Approved security jobs already held (D17) — picker decoration only. */
@@ -53,7 +52,6 @@ export type EventType =
   | 'Brotherhood' 
   | 'Social' 
   | 'Recruitment' 
-  | 'Pledge Education' 
   | 'Community Service';
 
 export type JobStatus = 'To Do' | 'In Progress' | 'Done Reported' | 'Approved' | 'Rejected';
@@ -95,7 +93,7 @@ export interface ChapterEvent {
   time: string; // display string
   location: string;
   type: EventType;
-  audience: 'All Members' | 'Officers Only' | 'Actives Only' | 'Pledges Only';
+  audience: 'All Members' | 'Officers Only' | 'Actives Only';
   required: boolean;
   attendanceTaken: boolean;
   checkedInCount?: number;

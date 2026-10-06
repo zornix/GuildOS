@@ -64,7 +64,7 @@ export default function RosterModule({
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Everyone on the chapter roll, from new pledges to officers.
+            Everyone on the chapter roll, from new members to officers.
           </p>
         </div>
       </div>
@@ -74,7 +74,7 @@ export default function RosterModule({
       {/* Filter and Search Bar */}
       <Card className="p-4 flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
         <div className="flex flex-wrap items-center gap-1.5 text-xs">
-          {['ALL', 'President', 'Treasurer', 'Risk Manager', 'Active', 'Pledge'].map(r => (
+          {['ALL', 'President', 'Treasurer', 'Risk Manager', 'Active'].map(r => (
             <button
               key={r}
               onClick={() => setFilterRole(r)}
@@ -107,7 +107,7 @@ export default function RosterModule({
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs">
               <tr>
                 <th className="py-3 px-4">Brother & Role</th>
-                <th className="py-3 px-4 hidden md:table-cell">Pledge Class</th>
+                <th className="py-3 px-4 hidden md:table-cell">Class</th>
                 <th className="py-3 px-4 hidden sm:table-cell">Academic Standing</th>
                 {/* Attendance rates are for the member themself and officers only. */}
                 {canSeeStandingDetail && <th className="py-3 px-4 hidden md:table-cell">Attendance</th>}
@@ -139,7 +139,7 @@ export default function RosterModule({
                     </td>
 
                     <td className="py-3 px-4 text-slate-600 hidden md:table-cell">
-                      {mem.pledgeClass}
+                      {mem.memberClass}
                     </td>
 
                     <td className="py-3 px-4 hidden sm:table-cell">

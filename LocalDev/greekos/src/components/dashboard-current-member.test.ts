@@ -11,7 +11,7 @@ const noop = () => {};
 function member(id: string, smsConsent: boolean): Member {
   return {
     id, name: 'Same Name', email: `${id}@example.test`, phone: '',
-    role: 'Active Member', status: 'Active', pledgeClass: 'Fall 2026', major: 'Economics',
+    role: 'Active Member', status: 'Active', memberClass: 'Fall 2026', major: 'Economics',
     gpa: 3.4, standing: 'Good Standing', attendanceRate: 100,
     duesBalance: 0, duesBalanceCents: 0, securityHoursServed: 0, smsConsent
   };

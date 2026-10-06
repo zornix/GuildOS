@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EVENT_FILTER_TYPES, eventDeleteMessage, filterEventsByType, liveDoorEvent } from './events';
 import type { ChapterEvent } from '../types';
+import type { EventDto } from '../api';
+import { adaptEvents } from '../adapters';
 
 const ev = (over: Partial<ChapterEvent>): ChapterEvent => ({
   id: 'e', title: 't', date: '2026-09-10', startTime: '18:00', endTime: '20:00', time: '',
@@ -10,7 +12,7 @@ const ev = (over: Partial<ChapterEvent>): ChapterEvent => ({
 });
 
 test('filter list starts with All and matches the chips in the old filter card', () => {
-  assert.deepEqual([...EVENT_FILTER_TYPES], ['All', 'Chapter Meeting', 'Philanthropy', 'Brotherhood', 'Social', 'Pledge Education']);
+  assert.deepEqual([...EVENT_FILTER_TYPES], ['All', 'Chapter Meeting', 'Philanthropy', 'Brotherhood', 'Social']);
 });
 
 test('All keeps every event; a type keeps only that type', () => {
@@ -40,4 +42,10 @@ test('deleting an event says whether it was deleted or cancelled (D4)', () => {
     eventDeleteMessage({ deleted: false, cancelled: true }),
     'Event cancelled. Its attendance and fines were kept.'
   );
+});
+
+test('an unknown backend category falls back to Chapter Meeting', () => {
+  const minimalEventDto: EventDto = { id: 'e', title: 't', date: '2026-09-10', time: '18:00', location: '', required: false };
+  const [row] = adaptEvents([{ ...minimalEventDto, event_type: 'Something Retired' }]);
+  assert.equal(row.type, 'Chapter Meeting');
 });

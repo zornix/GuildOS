@@ -24,6 +24,7 @@ import {
   INVOICE_CREATE_KEY,
   PAYMENT_VERIFY_KEY,
   DuesRunDraft,
+  duesRunCandidates,
   Invoice,
   ProofDraft,
   ProofSubmission,
@@ -336,7 +337,7 @@ export default function FinanceModule({
                 <tr>
                   <th className="py-2.5 px-3">Brother</th>
                   <th className="py-2.5 px-3 hidden sm:table-cell">Standing</th>
-                  <th className="py-2.5 px-3 hidden sm:table-cell">Pledge Class</th>
+                  <th className="py-2.5 px-3 hidden sm:table-cell">Class</th>
                   <th className="py-2.5 px-3 text-right">Unpaid fines</th>
                 </tr>
               </thead>
@@ -358,7 +359,7 @@ export default function FinanceModule({
                           {mem.standing}
                         </span>
                       </td>
-                      <td className="py-3 px-3 text-slate-600 hidden sm:table-cell">{mem.pledgeClass}</td>
+                      <td className="py-3 px-3 text-slate-600 hidden sm:table-cell">{mem.memberClass}</td>
                       <td className="py-3 px-3 text-right">
                         <span className={`font-mono font-bold text-xs ${
                           balanceCents > 0 ? 'text-red-600' : 'text-emerald-600'
@@ -492,7 +493,7 @@ export default function FinanceModule({
 
       {showDuesRun && (
         <DuesRunModal
-          candidates={safeMembers.filter(m => m.status === 'Active' || m.status === 'Pledge')}
+          candidates={duesRunCandidates(safeMembers)}
           onSubmit={onCreateDuesRun}
           onClose={() => setShowDuesRun(false)}
         />
