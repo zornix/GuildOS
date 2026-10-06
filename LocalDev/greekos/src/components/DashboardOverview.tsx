@@ -22,8 +22,6 @@ interface DashboardOverviewProps {
   officerView: boolean;
   /** `calendar:event:create` — the Schedule event button. */
   canScheduleEvent: boolean;
-  /** `tasks:assign` — the key behind the approve button the sign-off nudge points at. */
-  canManageJobs: boolean;
   /** `announcements:create` — DELETE /api/announcements/{id}. */
   canDeleteAnnouncement: boolean;
   currentMemberId: string;
@@ -56,7 +54,7 @@ function TileHeader({ icon, title, onAll, allLabel }: { icon: React.ReactNode; t
 
 /** Home: welcome banner over four content tiles. No chapter KPIs, no ranking. */
 export default function DashboardOverview({
-  members, events, tasks, initiatives, announcements, officerView, canScheduleEvent, canManageJobs, canDeleteAnnouncement,
+  members, events, tasks, initiatives, announcements, officerView, canScheduleEvent, canDeleteAnnouncement,
   currentMemberId, currentMemberName,
   contribution, myBalance, onNavigateTab, onOpenEvent, onScheduleEvent,
   onVolunteerOrganizer, onSelfCheckIn, onDeleteAnnouncement
@@ -98,12 +96,14 @@ export default function DashboardOverview({
           a member who has in fact opted in. */}
       {currentMember && <SmsConsentCard consented={currentMember.smsConsent === true} />}
 
-      {canManageJobs && pendingJobSignOffs.length > 0 && (
+      {/* Approval is a supervisor check on the server, not a permission key, so
+          this is officer presentation: a heads-up, not a claim it is yours to sign. */}
+      {officerView && pendingJobSignOffs.length > 0 && (
         <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
           <div className="flex items-center gap-3">
             <Clock className="w-5 h-5 text-amber-900 shrink-0" />
             <p className="text-xs text-amber-950">
-              <strong>{pendingJobSignOffs.length} job{pendingJobSignOffs.length > 1 ? 's' : ''} reported done</strong> and waiting for your sign-off.
+              <strong>{pendingJobSignOffs.length} job{pendingJobSignOffs.length > 1 ? 's' : ''} reported done</strong> and waiting for a supervisor's sign-off.
             </p>
           </div>
           <button type="button" onClick={() => onNavigateTab('events')} className="text-xs bg-navy hover:bg-slate-800 text-gold font-bold px-3.5 py-2 rounded-lg cursor-pointer shrink-0">

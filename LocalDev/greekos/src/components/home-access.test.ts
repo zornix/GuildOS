@@ -21,7 +21,6 @@ function home(permissions: string[], events: ChapterEvent[] = []) {
     members: [], events, tasks: [], initiatives: [], announcements: [],
     officerView: isOfficerView(permissions),
     canScheduleEvent: can(permissions, 'calendar:event:create'),
-    canManageJobs: can(permissions, 'tasks:assign'),
     canDeleteAnnouncement: can(permissions, 'announcements:create'),
     currentMemberId: 'm1', currentMemberName: 'Test Brother',
     contribution: EMPTY_CONTRIBUTION, myBalance: null,
@@ -36,10 +35,10 @@ test('Schedule event follows calendar:event:create, not officer presentation', (
   assert.doesNotMatch(home(['standing:view_all']), /Schedule event/);
 });
 
-test('the sign-off nudge follows tasks:assign, the key behind the approve button it points at', () => {
-  assert.match(home(['tasks:assign'], [reportedJobEvent]), /waiting for your sign-off/);
-  assert.doesNotMatch(home(['standing:view_all'], [reportedJobEvent]), /waiting for your sign-off/);
-  assert.doesNotMatch(home(['tasks:assign']), /waiting for your sign-off/);
+test('the sign-off nudge is officer presentation: approval is a supervisor check, not a key', () => {
+  assert.match(home(['standing:view_all'], [reportedJobEvent]), /waiting for a supervisor's sign-off/);
+  assert.doesNotMatch(home(['tasks:assign'], [reportedJobEvent]), /sign-off/);
+  assert.doesNotMatch(home(['standing:view_all']), /sign-off/);
 });
 
 test('the door-code section is the member presentation of Home', () => {

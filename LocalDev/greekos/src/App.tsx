@@ -83,7 +83,6 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
           announcements={app.announcements}
           officerView={isOfficerView(app.permissions)}
           canScheduleEvent={canCreateEvent}
-          canManageJobs={canManageJobs}
           canDeleteAnnouncement={can(app.permissions, 'announcements:create')}
           currentMemberId={currentMemberId}
           currentMemberName={currentMemberName}
