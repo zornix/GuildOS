@@ -27,7 +27,8 @@ TEST_NAMES = frozenset({'other', 'other2', 'ev-other', 'in-other', 'other-get',
 DELETE_GUARD_TABLES = ('big_ledger', 'audit_logs', 'receipts', 'payment_allocations',
                        'payment_evidence', 'invoice_line_items',
                        'announcement_sms_sends', 'event_notification_sends',
-                       'security_swap_requests', 'task_commitment_log')
+                       'security_swap_requests', 'task_commitment_log',
+                       'finance_adjustments', 'refunds', 'fines', 'usage_events')
 # These legacy FKs do not cascade. Delete their scoped rows before chapters.
 LEGACY_DELETE_ORDER = ('receipts', 'initiative_chairs', 'initiatives',
                        'attendance', 'checkin_links', 'excuses')
@@ -126,7 +127,9 @@ def main(argv=None):
 if __name__ == '__main__':
     try:
         raise SystemExit(main())
-    except Exception:
-        # Driver errors can contain connection details or row contents.
-        print('Purge failed; no changes committed. Check configuration and schema.', file=sys.stderr)
+    except Exception as exc:
+        # Driver errors can contain connection details or row contents: name the class only,
+        # except for the guard, whose message is already safe to show.
+        detail = str(exc) if type(exc).__name__ == 'ProdGuardError' else type(exc).__name__
+        print(f'Purge failed ({detail}); no changes committed.', file=sys.stderr)
         raise SystemExit(1)

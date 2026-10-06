@@ -73,3 +73,14 @@ def test_apply_restores_trigger_states_on_success_and_error(monkeypatch, failure
         assert cursor.deleted
     assert cursor.states == cursor.initial
     assert cursor.commands[-1] == 'RELEASE SAVEPOINT purge_test_chapters'
+
+
+def test_every_delete_blocking_table_is_unguarded_during_the_purge():
+    """A table whose trigger blocks DELETE and is missing here makes --apply roll back."""
+    import re
+    from pathlib import Path
+    from scripts.purge_test_chapters import DELETE_GUARD_TABLES
+    pattern = re.compile(r"BEFORE\s+[A-Z\s]*DELETE[A-Z\s]*\s+ON\s+(?:public\.)?(\w+)", re.I)
+    migrations = Path(__file__).resolve().parents[1] / "migrations"
+    blocked = {m.group(1) for f in migrations.glob("*.sql") for m in pattern.finditer(f.read_text())}
+    assert blocked - set(DELETE_GUARD_TABLES) == set()
