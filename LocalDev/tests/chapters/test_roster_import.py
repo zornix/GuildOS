@@ -77,6 +77,59 @@ def test_optional_role_column_grants_the_catalog_role(
     assert [r["role_key"] for r in cursor.fetchall()] == ["treasurer"]
 
 
+def test_non_officer_role_keeps_legacy_column_member(
+    upload, csv_bytes, unique, cleanup, cursor, sb_client
+):
+    from api.rbac.services.permissions import get_member_permissions
+
+    line_tv, email_tv = _row(unique, role="treasury_viewer")
+    line_sc, email_sc = _row(unique, role="social_chair")
+    cleanup["emails"] += [email_tv, email_sc]
+
+    res = upload(csv_bytes([line_tv, line_sc], header="name,email,phone,role"))
+
+    assert res.status_code == 200, res.text
+    for email, key in ((email_tv, "treasury_viewer"), (email_sc, "social_chair")):
+        cursor.execute("SELECT id, role FROM members WHERE email = %s", (email,))
+        row = cursor.fetchone()
+        assert row["role"] == "member"
+        cursor.execute(
+            "SELECT role_key FROM member_roles WHERE member_id = %s", (row["id"],)
+        )
+        assert [r["role_key"] for r in cursor.fetchall()] == [key]
+    member = (
+        sb_client.table("members").select("*").eq("email", email_tv).single().execute().data
+    )
+    assert "roles:assign" not in get_member_permissions(member, sb=sb_client)
+
+
+def test_officer_csv_role_marks_the_legacy_column(
+    upload, csv_bytes, unique, cleanup, cursor
+):
+    line, email = _row(unique, role="officer")
+    cleanup["emails"].append(email)
+
+    res = upload(csv_bytes([line], header="name,email,phone,role"))
+
+    assert res.status_code == 200, res.text
+    cursor.execute("SELECT id, role FROM members WHERE email = %s", (email,))
+    row = cursor.fetchone()
+    assert row["role"] == "officer"
+    cursor.execute("SELECT role_key FROM member_roles WHERE member_id = %s", (row["id"],))
+    assert [r["role_key"] for r in cursor.fetchall()] == ["officer"]
+
+
+def test_import_rejects_top_roles(upload, csv_bytes, unique, cursor):
+    line, email = _row(unique, role="admin")
+
+    res = upload(csv_bytes([line], header="name,email,phone,role"))
+
+    assert res.status_code == 422, res.text
+    assert res.json()["detail"]["errors"][0]["error"] == "admin and president cannot be set by import"
+    cursor.execute("SELECT 1 FROM members WHERE email = %s", (email,))
+    assert cursor.fetchone() is None
+
+
 @pytest.mark.parametrize("cell", ["yes", "Y", "TRUE", "1"])
 def test_a_truthy_consent_column_records_sms_consent(
     upload, csv_bytes, unique, cleanup, cursor, cell

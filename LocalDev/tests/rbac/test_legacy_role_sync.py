@@ -70,11 +70,7 @@ async def test_demotion_revokes_the_officer_permissions(
     The grant is seeded the way 0147 §4 seeded it — a backfilled officer, not one
     promoted through this endpoint — so the test pins the revoke, not the promote.
     """
-    target = member_factory(role="officer")
-    cursor.execute(
-        "INSERT INTO member_roles (chapter_id, member_id, role_key) VALUES (%s, %s, 'officer')",
-        (chapter_id, target),
-    )
+    target = member_factory(role="officer")   # the factory also seeds the member_roles grant
 
     result = await set_role(target, "member")
 
@@ -90,11 +86,7 @@ async def test_demotion_leaves_separately_granted_roles_alone(
     set_role, cursor, member_factory, chapter_id
 ):
     """Stackable roles come from rbac_assign_role; this endpoint must not strip them."""
-    target = member_factory(role="officer")
-    cursor.execute(
-        "INSERT INTO member_roles (chapter_id, member_id, role_key) VALUES (%s, %s, 'officer')",
-        (chapter_id, target),
-    )
+    target = member_factory(role="officer")   # the factory also seeds the member_roles grant
     cursor.execute(
         "SELECT rbac_assign_role(%s, %s, 'treasurer', %s)", (chapter_id, target, target)
     )
