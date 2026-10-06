@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from api.treasury.core.balance import BalanceEngine
+from api.treasury.services.remaining import remaining_by_invoice
 
 
 def _parse_ts(value):
@@ -22,29 +23,6 @@ def _parse_ts(value):
     except ValueError:
         return None
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
-
-
-def _net_allocated_cents(sb, invoice_id: str) -> int:
-    rows = (
-        sb.table("payment_allocations")
-        .select("amount_cents, reverses_allocation_id")
-        .eq("invoice_id", invoice_id)
-        .execute()
-    ).data or []
-    return sum(
-        int(r["amount_cents"]) if r["reverses_allocation_id"] is None else -int(r["amount_cents"])
-        for r in rows
-    )
-
-
-def _direct_paid_cents(sb, invoice_id: str) -> int:
-    rows = (
-        sb.table("verified_payments")
-        .select("amount_cents")
-        .eq("invoice_id", invoice_id)
-        .execute()
-    ).data or []
-    return sum(int(r["amount_cents"]) for r in rows)
 
 
 def get_member_dashboard(sb, *, chapter_id: str, member_id: str, now=None) -> dict:
@@ -89,20 +67,16 @@ def get_member_dashboard(sb, *, chapter_id: str, member_id: str, now=None) -> di
         .order("created_at")
         .execute()
     ).data or []
+    remaining = remaining_by_invoice(sb, invoices)
     open_invoices = []
     for inv in invoices:
-        remaining = (
-            int(inv["amount_cents"])
-            - _direct_paid_cents(sb, inv["id"])
-            - _net_allocated_cents(sb, inv["id"])
-        )
         due_at = _parse_ts(inv.get("due_at"))
         open_invoices.append(
             {
                 "id": inv["id"],
                 "description": inv.get("description"),
                 "amount_cents": int(inv["amount_cents"]),
-                "remaining_cents": max(0, remaining),
+                "remaining_cents": remaining[inv["id"]],
                 "due_at": due_at.isoformat() if due_at else None,
                 "overdue": bool(due_at is not None and due_at < now),
                 "source": inv.get("kind"),

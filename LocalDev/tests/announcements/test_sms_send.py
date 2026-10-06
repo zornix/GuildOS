@@ -103,14 +103,14 @@ def test_preview_members_with_balance_audience(
     settled = member_factory()
     set_phone(settled, "+15551250002")
 
-    for member, cents in ((owing_with_phone, 2500), (owing_no_phone, 1000), (settled, 0)):
+    # Audiences read live balances, so the debt is an invoice, not a cache row.
+    for member, cents in ((owing_with_phone, 2500), (owing_no_phone, 1000)):
         cursor.execute(
             """
-            INSERT INTO member_finance_accounts
-                (chapter_id, member_id, total_owed_cents, outstanding_balance_cents)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO unpaid_invoices (chapter_id, member_id, kind, amount_cents, status)
+            VALUES (%s, %s, 'fine', %s, 'unpaid')
             """,
-            (chapter_id, member, cents, cents),
+            (chapter_id, member, cents),
         )
 
     ann = announcement_factory(audience="members_with_balance")

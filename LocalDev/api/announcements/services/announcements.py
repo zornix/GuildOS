@@ -129,14 +129,9 @@ def audiences_for_viewer(sb, *, chapter_id: str, viewer: dict) -> set[str]:
     if is_officer(viewer, role_keys):
         audiences.add(AUDIENCE_OFFICERS)
 
-    account = (
-        sb.table("member_finance_accounts")
-        .select("outstanding_balance_cents")
-        .eq("chapter_id", chapter_id)
-        .eq("member_id", viewer["id"])
-        .execute()
-    ).data or []
-    if any((row.get("outstanding_balance_cents") or 0) > 0 for row in account):
+    from api.treasury.core.balance import BalanceEngine
+
+    if BalanceEngine(sb).member_outstanding(viewer["id"]).cents > 0:
         audiences.add(AUDIENCE_MEMBERS_WITH_BALANCE)
 
     return audiences

@@ -136,16 +136,9 @@ def dashboard_summary(sb, *, chapter_id: str, recent_limit: int = 10) -> dict:
     engine = BalanceEngine(sb)
     chapter_balance_cents = engine.chapter_balance(chapter_id).cents
 
-    # Member finance accounts (the cache) — sum outstanding, count those > 0.
-    accounts = (
-        sb.table("member_finance_accounts")
-        .select("outstanding_balance_cents")
-        .eq("chapter_id", chapter_id)
-        .execute()
-    ).data or []
-    outstanding_values = [int(r["outstanding_balance_cents"]) for r in accounts]
-    total_outstanding_cents = sum(v for v in outstanding_values if v > 0)
-    members_with_balance_count = sum(1 for v in outstanding_values if v > 0)
+    outstanding = engine.outstanding_by_member(chapter_id)
+    total_outstanding_cents = sum(outstanding.values())
+    members_with_balance_count = sum(1 for v in outstanding.values() if v > 0)
 
     # Pending proofs awaiting review.
     pending = (
@@ -179,6 +172,20 @@ def dashboard_summary(sb, *, chapter_id: str, recent_limit: int = 10) -> dict:
         .limit(recent_limit)
         .execute()
     ).data or []
+    submission_ids = [r["submission_id"] for r in recent_payments if r.get("submission_id")]
+    submissions = []
+    if submission_ids:
+        submissions = (
+            sb.table("payment_submissions")
+            .select("id, method")
+            .eq("chapter_id", chapter_id)
+            .in_("id", submission_ids)
+            .execute()
+        ).data or []
+    methods = {r["id"]: r["method"] for r in submissions}
+    recent_payments = [
+        {**r, "method": methods.get(r.get("submission_id"))} for r in recent_payments
+    ]
     recent_expenses = (
         sb.table("chapter_expenses")
         .select("*")
@@ -250,7 +257,7 @@ def member_statement(sb, *, member_id: str) -> dict:
                 "id": row["id"],
                 "amount_cents": -int(row["amount_cents"]),  # money in reduces what is owed
                 "occurred_at": row["created_at"],
-                "detail": {"invoice_id": row["invoice_id"]},
+                "detail": {},
             }
         )
 
@@ -359,6 +366,14 @@ def period_report_csv(sb, *, chapter_id: str, period: str, dataset: str) -> str:
             .order("member_id")
             .execute()
         ).data or []
+        outstanding = BalanceEngine(sb).outstanding_by_member(chapter_id)
+        by_member = {r["member_id"]: r for r in rows}
+        for row in rows:
+            row["outstanding_balance_cents"] = outstanding.get(row["member_id"], 0)
+        for mid, cents in outstanding.items():
+            row = by_member.setdefault(mid, {"chapter_id": chapter_id, "member_id": mid})
+            row["outstanding_balance_cents"] = cents
+        rows = [by_member[mid] for mid in sorted(by_member)]
         columns = [
             "chapter_id", "member_id", "total_owed_cents", "total_paid_cents",
             "outstanding_balance_cents", "current_balance_cents", "recomputed_at",

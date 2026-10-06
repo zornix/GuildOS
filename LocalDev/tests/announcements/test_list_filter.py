@@ -78,9 +78,8 @@ def test_member_with_balance_sees_balance_audience(
     debtor = member_factory()
     cursor.execute(
         """
-        INSERT INTO member_finance_accounts (chapter_id, member_id, outstanding_balance_cents)
-        VALUES (%s, %s, 2500)
-        ON CONFLICT (member_id) DO UPDATE SET outstanding_balance_cents = 2500
+        INSERT INTO unpaid_invoices (chapter_id, member_id, kind, amount_cents, status)
+        VALUES (%s, %s, 'fine', 2500, 'unpaid')
         """,
         (chapter_id, debtor),
     )

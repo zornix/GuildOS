@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+
+from api.events.core.timing import chapter_timezone, has_started
 
 from api.platform.db import get_db
+from api.treasury.services.remaining import remaining_by_invoice
 
 
 @dataclass(frozen=True)
@@ -39,59 +43,51 @@ async def load_member_engagement(
         query = query.order("name")
     members = query.execute().data
 
+    now = datetime.now(timezone.utc)
+    tz = chapter_timezone(sb, chapter_id)
     required_events = (
         sb.table("events")
-        .select("id")
+        .select("id, date, time")
         .eq("chapter_id", chapter_id)
         .eq("required", True)
-        .lte("date", "now()")
+        .lte("date", (now + timedelta(days=1)).date().isoformat())
         .execute()
     ).data
 
-    if not required_events:
-        return [
-            MemberEngagement(
-                member_id=m["id"],
-                name=m["name"],
-                email=m["email"],
-                role=m.get("role") if include_role else None,
-                attended=0,
-                excused=0,
-                missed=0,
-                total_required=0,
-                unpaid_fines=0,
-                unpaid_amount_cents=0,
-            )
-            for m in members
-        ]
+    required_events = [e for e in required_events if has_started(e, tz, now)]
 
     event_ids = [e["id"] for e in required_events]
     total_required = len(event_ids)
 
-    attendance = (
-        sb.table("attendance")
-        .select("member_id, event_id")
-        .in_("event_id", event_ids)
-        .eq("checked_in", True)
-        .execute()
-    ).data
+    attendance = excuses = []
+    if event_ids:
+        attendance = (
+            sb.table("attendance")
+            .select("member_id, event_id")
+            .in_("event_id", event_ids)
+            .eq("checked_in", True)
+            .execute()
+        ).data
 
-    excuses = (
-        sb.table("excuses")
-        .select("member_id, event_id")
-        .in_("event_id", event_ids)
-        .eq("status", "approved")
-        .execute()
-    ).data
+        excuses = (
+            sb.table("excuses")
+            .select("member_id, event_id")
+            .in_("event_id", event_ids)
+            .eq("status", "approved")
+            .execute()
+        ).data
 
     fines = (
         sb.table("unpaid_invoices")
-        .select("member_id, amount_cents")
+        .select("id, member_id, amount_cents")
         .eq("chapter_id", chapter_id)
         .eq("kind", "fine")
-        .eq("status", "unpaid")
+        .in_("status", ["unpaid", "partially_paid"])
         .execute()
     ).data
+
+    remaining = remaining_by_invoice(sb, fines)
+    fines = [f for f in fines if remaining[f["id"]] > 0]
 
     att_by_member: dict[str, set[str]] = {}
     for row in attendance:
@@ -124,7 +120,7 @@ async def load_member_engagement(
                 missed=missed,
                 total_required=total_required,
                 unpaid_fines=len(member_fines),
-                unpaid_amount_cents=sum(f["amount_cents"] for f in member_fines),
+                unpaid_amount_cents=sum(remaining[f["id"]] for f in member_fines),
             )
         )
 
