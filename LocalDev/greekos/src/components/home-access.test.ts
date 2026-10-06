@@ -36,7 +36,7 @@ test('Schedule event follows calendar:event:create, not officer presentation', (
 });
 
 test('the sign-off nudge is officer presentation: approval is a supervisor check, not a key', () => {
-  assert.match(home(['standing:view_all'], [reportedJobEvent]), /waiting for a supervisor's sign-off/);
+  assert.match(home(['standing:view_all'], [reportedJobEvent]), /waiting for a supervisor(&#x27;|')s sign-off/);
   assert.doesNotMatch(home(['tasks:assign'], [reportedJobEvent]), /sign-off/);
   assert.doesNotMatch(home(['standing:view_all']), /sign-off/);
 });
