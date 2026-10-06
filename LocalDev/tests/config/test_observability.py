@@ -32,3 +32,21 @@ def test_the_dsn_and_environment_are_passed(monkeypatch):
     kwargs = _init_sentry(monkeypatch)
     assert kwargs["dsn"] == "https://key@example.test/1"
     assert kwargs["traces_sample_rate"] == 0
+
+
+@pytest.mark.parametrize("request_id", ["req-123", "-"])
+def test_service_logs_carry_request_id(request_id, caplog, monkeypatch):
+    import logging
+    from api import observability
+    monkeypatch.setattr(observability, "_logging_configured", False)
+    observability._configure_logging()
+    token = observability.request_id_ctx.set(request_id)
+    try:
+        with caplog.at_level(logging.WARNING):
+            logging.getLogger("api.cron.services.outbox_drain").warning("delivery summary")
+        record = caplog.records[-1]
+        assert record.request_id == request_id
+        rendered = logging.Formatter(observability._LOG_FORMAT).format(record)
+        assert f"[rid={request_id}]" in rendered
+    finally:
+        observability.request_id_ctx.reset(token)
