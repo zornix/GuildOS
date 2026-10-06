@@ -8,6 +8,7 @@ Local:   uvicorn api.index:app --reload
 """
 
 import asyncio
+import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -214,5 +215,12 @@ app.include_router(contribution_router, prefix="/api/contribution", tags=["Contr
 async def health():
     from fastapi.responses import JSONResponse
 
-    payload = await asyncio.to_thread(build_health_payload, get_db())
+    try:
+        payload = await asyncio.to_thread(lambda: build_health_payload(get_db()))
+    except Exception:
+        logging.getLogger(__name__).exception("health check could not reach the database")
+        payload = {
+            "status": "error", "version": app.version,
+            "checks": {"database": "error"}, "detail": "database_unreachable",
+        }
     return JSONResponse(payload, status_code=503 if payload["status"] == "error" else 200)
