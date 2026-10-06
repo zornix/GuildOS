@@ -95,6 +95,7 @@ export default function FinanceModule({
   events,
   permissions,
   chapterName,
+  currentMemberName,
   myInvoices,
   pendingProofCentsOf,
   submissions,
@@ -120,6 +121,17 @@ export default function FinanceModule({
 
   const { canCreateDuesRun, canVerifyPayments } = treasuryAbilities(permissions);
   const access = transactionAccess(permissions);
+
+  // Everything seeded from the viewed member resets when that member changes;
+  // the component itself stays mounted (F-061).
+  const viewedMemberId = safeMembers.find(m => m.name === currentMemberName)?.id ?? currentMemberName;
+  useEffect(() => {
+    setActiveSubTab('invoices');
+    setTransaction(null);
+    setShowDuesRun(false);
+    setOpenInvoice(null);
+    setSearchMember('');
+  }, [viewedMemberId]);
 
   // The queue is only read when it is on screen — it is the one list that goes
   // stale while another officer works.

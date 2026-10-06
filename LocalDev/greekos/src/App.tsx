@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { useState } from 'react';
 import { logout } from './api';
 import { useAppData } from './hooks/useAppData';
 import AppShell from './components/layout/AppShell';
@@ -173,29 +173,27 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
       )}
 
       {activeTab === 'finance' && (
-        <Fragment key={currentMember?.id ?? currentMemberName}>
-          <FinanceModule
-            members={roster.members}
-            fines={finance.fines}
-            payments={finance.payments}
-            events={events.events}
-            permissions={app.permissions}
-            chapterName={app.chapterName}
-            currentMemberName={currentMemberName}
-            myInvoices={finance.myInvoices}
-            pendingProofCentsOf={finance.pendingProofCentsOf}
-            submissions={finance.submissions}
-            queueLoading={finance.queueLoading}
-            onRefreshQueue={finance.refreshQueue}
-            onCreateDuesRun={finance.handleCreateDuesRun}
-            onSubmitProof={finance.handleSubmitProof}
-            onVerifyProof={finance.handleVerifyProof}
-            onRejectProof={finance.handleRejectProof}
-            onOpenEvidence={finance.openEvidence}
-            balanceCentsOf={finance.balanceCentsOf}
-            onSubmitTransaction={finance.submitTransaction}
-          />
-        </Fragment>
+        <FinanceModule
+          members={roster.members}
+          fines={finance.fines}
+          payments={finance.payments}
+          events={events.events}
+          permissions={app.permissions}
+          chapterName={app.chapterName}
+          currentMemberName={currentMemberName}
+          myInvoices={finance.myInvoices}
+          pendingProofCentsOf={finance.pendingProofCentsOf}
+          submissions={finance.submissions}
+          queueLoading={finance.queueLoading}
+          onRefreshQueue={finance.refreshQueue}
+          onCreateDuesRun={finance.handleCreateDuesRun}
+          onSubmitProof={finance.handleSubmitProof}
+          onVerifyProof={finance.handleVerifyProof}
+          onRejectProof={finance.handleRejectProof}
+          onOpenEvidence={finance.openEvidence}
+          balanceCentsOf={finance.balanceCentsOf}
+          onSubmitTransaction={finance.submitTransaction}
+        />
       )}
 
       {activeTab === 'roster' && (
