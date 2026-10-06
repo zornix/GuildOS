@@ -438,4 +438,5 @@ async def test_rebuild_requires_rebuild_run_permission(sb_client, cursor, chapte
         "ON CONFLICT DO NOTHING",
         (chapter_id, member_id),
     )
+    user.pop("_rbac")  # a new request starts without the per-request permission cache
     assert await dep(user=user) == user

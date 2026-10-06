@@ -288,6 +288,7 @@ async def test_refund_requires_refund_create_permission(sb_client, cursor, chapt
         "ON CONFLICT DO NOTHING",
         (chapter_id, member_id),
     )
+    user.pop("_rbac")  # a new request starts without the per-request permission cache
     assert await dep(user=user) == user
 
 
