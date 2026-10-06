@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -26,7 +27,7 @@ def _stub_recompute(monkeypatch):
 
 
 def _make_event(cursor, chapter_id, *, hours_ago: float, required: bool = True) -> str:
-    start = datetime.now(timezone.utc) - timedelta(hours=hours_ago)
+    start = (datetime.now(timezone.utc) - timedelta(hours=hours_ago)).astimezone(ZoneInfo("America/Los_Angeles"))
     cursor.execute(
         """INSERT INTO events (chapter_id, title, description, date, time, location, required, fine_amount)
            VALUES (%s, 'Chapter Meeting', '', %s, %s, 'Hall', %s, 0) RETURNING id""",
@@ -290,3 +291,99 @@ def test_list_fines_reports_remaining_cents_after_a_partial_payment(
     rows = officer.get("/api/fines", headers={"Authorization": "Bearer x"}).json()
     remaining = {str(r["id"]): r["remaining_cents"] for r in rows}
     assert remaining == {part["id"]: 1500, untouched["id"]: 2500}
+
+
+def test_issue_is_all_or_nothing(cursor, chapter_id, member_factory):
+    import uuid
+    import psycopg2
+    members = [member_factory(), member_factory(), str(uuid.uuid4())]
+    event = _make_event(cursor, chapter_id, hours_ago=30)
+    with pytest.raises(psycopg2.errors.RaiseException, match="not in chapter"):
+        cursor.execute('SELECT tr_issue_event_fines(%s,%s,%s::jsonb,2500,%s,%s)',
+                       (chapter_id, event, json.dumps(members), 'Missed', members[0]))
+    cursor.execute('SELECT count(*) AS n FROM unpaid_invoices WHERE chapter_id=%s AND source_event_id=%s',
+                   (chapter_id,event))
+    assert cursor.fetchone()['n'] == 0
+
+
+def test_reissue_skips_everyone_and_creates_nothing(api, sb_client, cursor, chapter_id, member_factory):
+    actor = member_factory(role='officer')
+    members = [member_factory() for _ in range(3)]
+    event = _make_event(cursor, chapter_id, hours_ago=30)
+    client = api(make_user(actor, chapter_id, role='officer'))
+    for attempt in range(2):
+        response = client.post('/api/fines/issue', json={'event_id': event, 'member_ids': members})
+        assert response.status_code == 200, response.text
+        if attempt:
+            assert set(response.json()['skipped_member_ids']) == set(members)
+            assert response.json()['invoices'] == []
+    cursor.execute('SELECT count(*) AS n FROM unpaid_invoices WHERE chapter_id=%s AND source_event_id=%s', (chapter_id,event))
+    assert cursor.fetchone()['n'] == 3
+
+
+def test_issue_queues_one_notice_per_fined_member(api, sb_client, cursor, chapter_id, member_factory):
+    actor = member_factory(role='officer')
+    members = [member_factory() for _ in range(3)]
+    event = _make_event(cursor, chapter_id, hours_ago=30)
+    client = api(make_user(actor, chapter_id, role='officer'))
+    response = client.post('/api/fines/issue', json={'event_id': event, 'member_ids': members})
+    assert response.status_code == 200, response.text
+    cursor.execute("SELECT member_id,target_id,event_type,channel FROM message_outbox WHERE chapter_id=%s", (chapter_id,))
+    notices = cursor.fetchall()
+    assert len(notices) == 3
+    assert {str(n['member_id']) for n in notices} == set(members)
+    assert {str(n['target_id']) for n in notices} == {i['id'] for i in response.json()['invoices']}
+    assert all(n['event_type'] == 'INVOICE_ISSUED' and n['channel'] == 'email' for n in notices)
+    response = client.post('/api/fines/issue', json={'event_id': event, 'member_ids': members})
+    assert response.status_code == 200, response.text
+    cursor.execute('SELECT count(*) AS n FROM message_outbox WHERE chapter_id=%s', (chapter_id,))
+    assert cursor.fetchone()['n'] == 3
+
+
+def test_process_event_route_is_gone(api, sb_client, cursor, chapter_id, member_factory):
+    actor = member_factory(role='officer')
+    event = _make_event(cursor, chapter_id, hours_ago=30)
+    response = api(make_user(actor, chapter_id, role='officer')).post(f'/api/fines/process-event/{event}')
+    assert response.status_code in (404,405)
+
+
+def test_fine_gate_uses_chapter_timezone(api, sb_client, cursor, chapter_id, member_factory):
+    actor, member = member_factory(role='officer'), member_factory()
+    client = api(make_user(actor, chapter_id, role='officer'))
+    for hours, expected in ((20,422),(25,200)):
+        local = (datetime.now(timezone.utc)-timedelta(hours=hours)).astimezone(ZoneInfo('America/Los_Angeles'))
+        event = _make_event(cursor, chapter_id, hours_ago=hours)
+        cursor.execute('UPDATE events SET date=%s,time=%s WHERE id=%s', (local.date(),local.time(),event))
+        response = client.post('/api/fines/issue', json={'event_id':event,'member_ids':[member]})
+        assert response.status_code == expected, response.text
+        missed = client.get(f'/api/fines/missed/{event}').json()
+        assert missed['finable_now'] == (expected == 200)
+        assert datetime.fromisoformat(missed['event_start']) == local.astimezone(timezone.utc)
+
+
+def test_fine_summary_counts_remaining_after_one_cent_payment(api, sb_client, cursor, chapter_id, member_factory):
+    actor, member = member_factory(role='officer'), member_factory()
+    invoice = inv_svc.create_invoice_v2(sb_client, chapter_id=chapter_id, member_id=member,
+                                       kind='fine', amount_cents=2500, description='Missed', actor_id=actor)
+    cursor.execute("SELECT tr_record_payment(%s,%s,1,'cash',%s,%s,NULL,NULL)", (chapter_id,member,actor,invoice['id']))
+    response = api(make_user(actor, chapter_id, role='officer')).get('/api/fines/summary')
+    assert response.status_code == 200, response.text
+    assert response.json()['total_unpaid_cents'] == 2499
+    assert response.json()['count_unpaid'] == 1
+
+
+def test_fine_reads_use_shared_remaining_helper(api, sb_client, cursor, chapter_id, member_factory, monkeypatch):
+    import api.treasury.services.remaining as remaining
+    calls = []
+    original = remaining.remaining_by_invoice
+    def tracked(sb, invoices):
+        calls.append([i['id'] for i in invoices])
+        return original(sb, invoices)
+    monkeypatch.setattr(remaining, 'remaining_by_invoice', tracked)
+    actor = member_factory(role='officer')
+    invoice = inv_svc.create_invoice_v2(sb_client, chapter_id=chapter_id, member_id=actor,
+                                       kind='fine', amount_cents=2500, description='Missed', actor_id=actor)
+    client = api(make_user(actor, chapter_id, role='officer'))
+    assert client.get('/api/fines/').status_code == 200
+    assert client.get('/api/fines/summary').status_code == 200
+    assert calls == [[invoice['id']], [invoice['id']]]
