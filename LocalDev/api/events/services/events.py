@@ -54,12 +54,9 @@ def ensure_default_event_types(sb, *, chapter_id: str) -> None:
     if existing:
         return
     for name in DEFAULT_EVENT_TYPES:
-        try:
-            sb.table("event_types").insert(
-                {"chapter_id": chapter_id, "name": name}
-            ).execute()
-        except Exception:
-            pass  # concurrent seeding — unique index makes this safe to ignore
+        sb.table("event_types").insert(
+            {"chapter_id": chapter_id, "name": name}, ignore_conflict=True
+        ).execute()
 
 
 def list_event_types(sb, *, chapter_id: str) -> list[dict]:
@@ -82,19 +79,21 @@ def resolve_event_type_id(
     for t in types:
         if t["name"].strip().lower() == wanted.lower():
             return t["id"]
-    try:
-        created = (
-            sb.table("event_types")
-            .insert({"chapter_id": chapter_id, "name": wanted, "created_by": actor_id})
-            .execute()
-        ).data
+    created = (
+        sb.table("event_types")
+        .insert(
+            {"chapter_id": chapter_id, "name": wanted, "created_by": actor_id},
+            ignore_conflict=True,
+        )
+        .execute()
+    ).data
+    if created:
         return created[0]["id"]
-    except Exception:
-        # Lost a race on the case-insensitive unique index: re-resolve.
-        for t in list_event_types(sb, chapter_id=chapter_id):
-            if t["name"].strip().lower() == wanted.lower():
-                return t["id"]
-        raise
+    # A skipped insert lost the race; re-read without aborting the transaction.
+    for t in list_event_types(sb, chapter_id=chapter_id):
+        if t["name"].strip().lower() == wanted.lower():
+            return t["id"]
+    raise EventsError("Event type could not be resolved")
 
 
 # ── Reads & decoration ─────────────────────────────────────────────────────────
