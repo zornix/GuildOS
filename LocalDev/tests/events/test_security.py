@@ -173,16 +173,24 @@ def test_assign_security_takes_the_event_lock(
                 "SELECT pg_advisory_xact_lock(hashtext('ev_security:' || %s))",
                 (ev["id"],),
             )
-        cursor.execute("SET lock_timeout = '500ms'")
-        with pytest.raises(psycopg2.errors.LockNotAvailable):
-            cursor.execute(
-                "SELECT ev_assign_security(%s, %s, %s, %s, NULL, NULL)",
-                (chapter_id, ev["id"], member["id"], officer["id"]),
-            )
+        # SET LOCAL on a non-autocommit connection: stays on one pooler server
+        # connection and dies with the transaction (session SET can leak).
+        probe = psycopg2.connect(db_url)
+        try:
+            probe.autocommit = False
+            with probe.cursor() as pcur:
+                pcur.execute("SET LOCAL lock_timeout = '500ms'")
+                with pytest.raises(psycopg2.errors.LockNotAvailable):
+                    pcur.execute(
+                        "SELECT ev_assign_security(%s, %s, %s, %s, NULL, NULL)",
+                        (chapter_id, ev["id"], member["id"], officer["id"]),
+                    )
+        finally:
+            probe.rollback()
+            probe.close()
     finally:
         hold.rollback()
         hold.close()
-        cursor.execute("RESET lock_timeout")
 
 
 def test_assign_security_rejects_inactive_member(
