@@ -1,98 +1,95 @@
-# Handoff — audit remediation: wave 2 DONE, wave 3 next (updated 2026-10-05, session 3)
+# Handoff — audit remediation: wave 3 DONE, wave 4 next (updated 2026-10-06, session 3)
 
 Read `00-README.md` first (rules, contracts, decisions, runbook). This file says where things
 stand and what a new session does first. The model rules below override the README's model column.
 
 ## Where things stand
 
-- **Waves 1 and 2 (streams 01–08, 10–13) are merged to `main` and green.** Full backend suite
-  after the wave 2 merges: 1245 passed, 1 failed (`test_legacy_paths_still_registered`, a
-  cross-stream leftover fixed in `241734b`; that file passes). Ruff clean. Wave 2 did not
-  touch `greekos/`.
-- Migrations applied to the demo DB and checksummed: 0176, 0178–0183, 0186–0188, 0191.
-  Free in the wave 2 ranges: 0177, 0184–0185, 0189–0190, 0192–0194 (do not reuse; wave 3 has
-  its own ranges 0195–0202).
-- All wave 2 branches and worktrees are deleted. **Nothing is pushed.**
-- Stream reports, reviews and files the streams deleted (gitignored, local):
-  `archive/audit-remediation-2026-10/<id>/` (`report.txt`, `review/result.json`, `deleted/`).
-  Full-suite log: `archive/audit-remediation-2026-10/wave2-full-suite.txt`.
+- **Waves 1–3 (streams 01–15) and stream 18's code tasks are merged to `main` and green.**
+  Full backend suite on the wave 3 merge: 1298 passed. Frontend: 143 tests, lint, build ok.
+  Ruff clean. Stream 18 (merged after the suite started) adds 9 tests that pass on their own.
+- Migrations applied to the demo DB and checksummed through 0201. Numbers used outside the
+  README ranges: 0199 (09's fine guard; 0195 left unused because 0196–0198 were applied first)
+  and 0201 (09 review fix, in 14's spare range). 0177, 0184–0185, 0189–0190, 0192–0195, 0202
+  stay unused.
+- All branches and worktrees through wave 3 are deleted. **Nothing is pushed.**
+- Stream reports, reviews, deleted files and the demo refund script (gitignored, local):
+  `archive/audit-remediation-2026-10/<id>/`. Suite logs: `wave2-full-suite.txt`,
+  `wave3-full-suite.txt` there. R-08 residue moved to `archive/residue-2026-10/`.
 - `migrate_db.py` warns that the demo DB has `0157_dues_run_bulk_due_at.sql` applied: an old
-  rename (that file is now 0158). Harmless; stream 18 can tidy the recorded name.
+  rename (that file is now 0158). Harmless.
 
-## How wave 2 went (so wave 3 can copy it)
+## Decisions made this session (user)
 
-- All five ran on Codex `gpt-6.1-sol` via `run-stream.sh` in 8–15 minutes each; reviews by
-  Gemini 3.8 Flash via `review-stream.sh <id> <plan> agy "Gemini 3.8 Flash (Medium)"` (4–12 min).
-- Orchestrator fixes made on the branches: 0180/0183 revoke PUBLIC on the two new functions
-  (`at_checkin_self`, `ev_delete_or_cancel_event`) — **every new DB function needs
-  `REVOKE ALL … FROM PUBLIC`; put that in each wave 3 dispatch**; cancelled events refuse edits
-  (`_get_event_row` filters `cancelled`); `POST /api/tasks/{id}/status` maps unknown RPC errors
-  through `_rpc_http_error` (security task was a 500); stream 08's calendar switched to
-  `remaining_by_invoice` and the old coverage helpers deleted; two announcement tests now
-  create invoice debt (balances are live, D14).
-- Review findings dismissed with reason: `CREATE OR REPLACE` keeps grants (12); member ids are
-  per chapter so `member_outstanding(member_id)` is chapter-scoped (08); the DB client has no
-  PostgREST 1000-row cap (08); ids come back as strings (D23).
-- Accepted ceiling: inline SMS `dispatch_send` sets the send row's status from the rows it
-  claimed itself; if the cron claimed some in the same second, the send row can say `sent`
-  while those are still in flight (12).
-- Committing: `hunks.py`-style partial staging (`git diff HEAD -- f` split on `@@`, apply
-  chosen hunks with `git apply --cached`). Hunk numbers shift after each partial stage —
-  re-list before every use.
+- **Paid duplicate fines (2026-10-05):** keep the strict "one live fine per event and member"
+  index. The demo DB's 8 event/member pairs with several paid fines were refunded through the
+  normal refund path (43 refunds, 222,500 cents, chapter Delta Mu) before 0199 applied.
+  **Production will need the same hand refunds before 0199 can run** (the migration stops with a
+  clear error if two paid fines exist for one pair). Script:
+  `archive/audit-remediation-2026-10/09/refund_paid_duplicate_fines.py` (demo-guarded).
+- `tr_issue_event_fines` skips a member who has any fine for the event, voided or waived
+  included (0201), as the issue route did before.
 
-## Start wave 3 (needs the user's go-ahead)
+## Start wave 4 (needs the user's go-ahead)
 
-Wave 3 = **09, 14, 15**, then **18** (orchestrator, needs the user for anything touching prod).
+Wave 4 = **16 (sweep)** and **17 (docs)**. Both are Antigravity · Gemini 3.8 Flash in the README;
+`run-stream.sh` maps them to `agy`. Review each with Sol (`review-stream.sh <id> <plan> codex
+gpt-6.1-sol medium`).
 
-1. Carry-overs (put into the dispatch prompts via `EXTRA_FILE`):
-   - All: new DB functions get `REVOKE ALL ON FUNCTION … FROM PUBLIC` in the same migration.
-   - All: `member_factory(role="officer")` also writes the `member_roles` row; a column-only
-     officer is `UPDATE members SET role='officer'`.
-   - 09: `GET /api/fines/` computes `remaining_cents` its own way; switch it (and
-     `fine_summary`) to `api/treasury/services/remaining.py::remaining_by_invoice`.
-     `api/events/core/timing.py` has `chapter_timezone`, `event_start_utc`, `has_started`.
-   - 14: templates now live at `api/platform/message_templates.py`; outbox rows have
-     `provider_attempted_at` / `provider_message_id`; the reaper parks stamped rows `failed`.
-   - 15: `DELETE /api/events/{id}` → `{deleted, cancelled}`; cancelled events 404 on read and
-     edit; `GET /api/events/{id}/checkin-link` → `{}` or `{event_id, active, expires_at}` for
-     members; `/c/{code}` → 302 `{FRONTEND_URL}/?checkin=CODE`.
-2. 09 and 14 → `run-stream.sh` (Codex Sol). 15 is frontend: Agent tool, `model: "opus"`,
-   `isolation: worktree`, or Sol if the user prefers no Claude usage.
+Carry-overs (put into the dispatch prompts via `EXTRA_FILE`):
+- 16: the cron drain routes already have unique operation ids (R-02, stream 14); the legacy
+  `fine_processor` and `/api/fines/process-event` are already gone (09); the operations template
+  API is gone (11).
+- 17: document in `ops-runbook.md`: hand refunds of paid duplicate fines before 0199 on prod; the
+  stream 18 checklist is already there under "Before the next production deploy" (extend, do not
+  duplicate). Chapter timezone ADR (0007) facts: `chapters.timezone`, `api/events/core/timing.py`,
+  `ev_local_start` (0197). Authority ADR (0006): `member_roles` + implicit `member` baseline (D9),
+  admin tier (D8).
+
+Then stream 18:
+- **Task 2 apply** (demo only, needs go-ahead): `python3 scripts/purge_test_chapters.py --apply`.
+  Dry run: 26,751 test chapters older than 2 days (37,519 members, 29,786 audit rows, …); only
+  "Delta Mu" plus four odd one-off names are kept.
+- **Task 4** (after wave 4, needs go-ahead): `bash LocalDev/scripts/build_prod.sh --check`
+  shows the drift (at last check: 91 differing, 151 missing, 10 extra), then sync, Prod smoke,
+  commit, then add the CI drift step.
 
 ## Human follow-ups collected so far
 
-- Before the next production deploy: set `BASE_URL` and `FRONTEND_URL` in Vercel to the public
-  origins and make sure `APP_ENV` is not `local`/`test` there — production refuses to boot
-  otherwise (13). `/c/CODE` redirects to `FRONTEND_URL` (10).
-- `LocalDev/.env` still carries nine unused names (ESCALATION_DELAY_MINUTES,
-  FEATURE_SECRETARY_COMMS, FEATURE_VP_OPERATIONS, MESSAGE_WEBHOOK_SECRET, SENDGRID_API_KEY,
-  SENDGRID_FROM_EMAIL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL); delete by
-  hand. `APP_ENV` is already set.
-- Demo DB rows left by wave 1 browser checks (fine for Alex Rivera $7.50, invoice for Chris Park
-  $11.25, adjustment for Ethan Davis −$1.50, one attendance row). Harmless.
+The full checklist is in `LocalDev/docs/ops-runbook.md` → "Before the next production deploy".
+Added this session:
+- Refund paid duplicate fines on prod before running 0199 (see above).
+- Set `BASE_URL`, `FRONTEND_URL` in Vercel to public origins; `APP_ENV` must not be
+  `local`/`test` there, or production refuses to boot.
+- Delete the nine unused names from `LocalDev/.env` (list in the runbook).
+- Demo DB rows left by browser checks: wave 1 (fine Alex Rivera $7.50, invoice Chris Park
+  $11.25, adjustment Ethan Davis −$1.50, one attendance row); wave 3 stream 15 left a cancelled,
+  hidden event "S15 check 5" (dated 2099) with one attendance row for Jake. Harmless.
 
 ## Model rules (user directive 2026-10-05)
 
-- **Every Claude subagent runs on Opus** (`model: "opus"`), never Fable, even where a plan
-  names Fable.
-- Prefer the external CLIs: **Sol = `codex -m gpt-6.1-sol`** for implementation and
-  **Gemini 3.8 Flash** (`agy --model "Gemini 3.8 Flash (Medium)"`) for review. Cursor/Grok is
-  out of usage. Fall back to Opus only if both CLIs fail.
+- **Every Claude subagent runs on Opus** (`model: "opus"`), never Fable.
+- Prefer the external CLIs: **Sol = `codex -m gpt-6.1-sol`** and **Gemini 3.8 Flash**
+  (`agy --model "Gemini 3.8 Flash (Medium)"`). Cursor/Grok is out of usage.
+- Each stream is reviewed by the other vendor. Sol fix-up runs worked well for review gaps
+  (09, 15): a custom prompt with the remaining tasks, same worktree, `codex exec … -o
+  report-fixup.txt`.
 - Keep the orchestrator light: read `report.txt` and `review/result.json`, diff DB functions
-  programmatically (`fndiff`: parse `CREATE OR REPLACE FUNCTION … $$;` blocks from the new
-  migration and the last earlier one defining the same name, `difflib.unified_diff`).
+  programmatically (`fndiff`), stage hunks with a `git apply --cached` helper (re-list hunks after
+  each partial stage; numbers shift).
 
-## Tools
+## Lessons from waves 2–3
 
-- `run-stream.sh <id>` (this folder): worktree + `.env` + headless CLI; `EXTRA_FILE=` appends
-  carry-overs; `SETUP_ONLY=1` prints the prompt.
-- `review-stream.sh <id> <plan.md> <codex|cursor|agy> [model] [effort]`: read-only review,
-  writes `archive/audit-remediation-2026-10/<id>/review/result.json`.
-- `pytest` refuses to run when the demo DB is behind the checkout; apply with
-  `python3 scripts/migrate_db.py` from `LocalDev/`.
-- Never `pkill -f` a pattern that appears in your own command line.
+- Every new DB function needs `REVOKE ALL … FROM PUBLIC` in the same migration; say so in each
+  dispatch. `CREATE OR REPLACE` keeps existing grants.
+- Codex's sandbox can only write inside the worktree; point any out-of-repo output at the
+  worktree's gitignored `archive/`.
+- Agent worktrees: create them yourself (`git worktree add`, copy `.env`, `npm ci`) and tell the
+  agent the path; do not rely on `isolation: worktree`.
+- Cross-stream test leftovers show up only in the full suite after merging (wave 2: a removed
+  route still listed in `test_route_registration.py`).
 
 ## Cost notes
 
-Session 3 (wave 2): no Claude subagents; orchestrator context stayed small by reading reports,
-review JSON and targeted hunks only.
+Session 3: waves 2 and 3. One Opus agent (stream 15, ~206k tokens); everything else on Sol and
+Gemini. Orchestrator context ~210k at the end of wave 3.
