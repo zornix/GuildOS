@@ -160,11 +160,19 @@ def test_admin_revoke_takes_the_chapter_lock(db_url, cursor, chapter_id, member_
     hold.autocommit = False
     try:
         with hold.cursor() as hcur:
-            hcur.execute("SELECT 1 FROM chapters WHERE id = %s FOR UPDATE", (chapter_id,))
-        cursor.execute("SET lock_timeout = '500ms'")
-        with pytest.raises(psycopg2.errors.LockNotAvailable):
-            cursor.execute("SELECT rbac_revoke_role(%s, %s, 'admin', %s, NULL)", (chapter_id, a, a))
+            # NO KEY UPDATE: conflicts with the function's FOR UPDATE but not with
+            # the audit insert's FK check, so the test fails if the lock is removed.
+            hcur.execute("SELECT 1 FROM chapters WHERE id = %s FOR NO KEY UPDATE", (chapter_id,))
+        probe = psycopg2.connect(db_url)
+        try:
+            probe.autocommit = False
+            with probe.cursor() as pcur:
+                pcur.execute("SET LOCAL lock_timeout = '500ms'")
+                with pytest.raises(psycopg2.errors.LockNotAvailable):
+                    pcur.execute("SELECT rbac_revoke_role(%s, %s, 'admin', %s, NULL)", (chapter_id, a, a))
+        finally:
+            probe.rollback()
+            probe.close()
     finally:
         hold.rollback()
         hold.close()
-        cursor.execute("RESET lock_timeout")
