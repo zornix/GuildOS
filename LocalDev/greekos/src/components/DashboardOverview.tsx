@@ -19,7 +19,11 @@ interface DashboardOverviewProps {
   initiatives: Initiative[];
   announcements: Announcement[];
   /** Home's chapter-wide variant (`standing:view_all`), presentation only. */
-  isOfficer: boolean;
+  officerView: boolean;
+  /** `calendar:event:create` — the Schedule event button. */
+  canScheduleEvent: boolean;
+  /** `tasks:assign` — the key behind the approve button the sign-off nudge points at. */
+  canManageJobs: boolean;
   /** `announcements:create` — DELETE /api/announcements/{id}. */
   canDeleteAnnouncement: boolean;
   currentMemberId: string;
@@ -52,7 +56,8 @@ function TileHeader({ icon, title, onAll, allLabel }: { icon: React.ReactNode; t
 
 /** Home: welcome banner over four content tiles. No chapter KPIs, no ranking. */
 export default function DashboardOverview({
-  members, events, tasks, initiatives, announcements, isOfficer, canDeleteAnnouncement, currentMemberId, currentMemberName,
+  members, events, tasks, initiatives, announcements, officerView, canScheduleEvent, canManageJobs, canDeleteAnnouncement,
+  currentMemberId, currentMemberName,
   contribution, myBalance, onNavigateTab, onOpenEvent, onScheduleEvent,
   onVolunteerOrganizer, onSelfCheckIn, onDeleteAnnouncement
 }: DashboardOverviewProps) {
@@ -76,7 +81,8 @@ export default function DashboardOverview({
         member={currentMember}
         currentMemberName={currentMemberName}
         memberCount={safeMembers.length}
-        isOfficer={isOfficer}
+        officerView={officerView}
+        canScheduleEvent={canScheduleEvent}
         contribution={contribution}
         myBalance={myBalance}
         liveDoorEvent={liveDoorEvent(safeEvents, today)}
@@ -92,7 +98,7 @@ export default function DashboardOverview({
           a member who has in fact opted in. */}
       {currentMember && <SmsConsentCard consented={currentMember.smsConsent === true} />}
 
-      {isOfficer && pendingJobSignOffs.length > 0 && (
+      {canManageJobs && pendingJobSignOffs.length > 0 && (
         <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
           <div className="flex items-center gap-3">
             <Clock className="w-5 h-5 text-amber-900 shrink-0" />

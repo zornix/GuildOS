@@ -19,7 +19,7 @@ import EventsBar from './components/EventsBar';
 import { useEventsChrome } from './hooks/useEventsChrome';
 import { filterEventsByType } from './lib/events';
 import { balanceForMember } from './lib/balance';
-import { can } from './lib/session';
+import { can, isOfficerView } from './lib/session';
 
 export default function App() {
   const [authed, setAuthed] = useState(() => !!localStorage.getItem('g_token'));
@@ -37,7 +37,7 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
   const chrome = useEventsChrome();
   const app = useAppData();
   const { roster, events, initiatives, finance, attendance, tasks, recruitment } = app;
-  const { isOfficer, currentMemberId, currentMemberName } = app;
+  const { currentMemberId, currentMemberName } = app;
   const currentMember = roster.members.find(member => member.id === currentMemberId);
   const viewedBalance = balanceForMember(app.myBalance, currentMember?.id);
   const canMarkAttendance = can(app.permissions, 'attendance:override');
@@ -49,7 +49,6 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
     <AppShell
       activeTab={activeTab}
       setActiveTab={setActiveTab}
-      isOfficer={isOfficer}
       permissions={app.permissions}
       currentMemberName={currentMemberName || app.sessionName}
       onLogout={onLogout}
@@ -65,7 +64,9 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
           tasks={tasks.tasks}
           initiatives={initiatives.initiatives}
           announcements={app.announcements}
-          isOfficer={isOfficer}
+          officerView={isOfficerView(app.permissions)}
+          canScheduleEvent={canCreateEvent}
+          canManageJobs={canManageJobs}
           canDeleteAnnouncement={can(app.permissions, 'announcements:create')}
           currentMemberId={currentMemberId}
           currentMemberName={currentMemberName}

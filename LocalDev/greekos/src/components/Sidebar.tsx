@@ -1,11 +1,10 @@
 import { LogOut } from 'lucide-react';
 import { NAV_ITEMS, NavItem } from '../config/navigation';
-import { can } from '../lib/session';
+import { can, isOfficerView } from '../lib/session';
 
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
-  isOfficer: boolean;
   permissions: Set<string>;
   currentMemberName: string;
   onLogout: () => void;
@@ -16,7 +15,6 @@ interface SidebarProps {
 export default function Sidebar({
   activeTab,
   setActiveTab,
-  isOfficer,
   permissions,
   currentMemberName,
   onLogout,
@@ -76,7 +74,7 @@ export default function Sidebar({
               {currentMemberName || 'Signed in'}
             </span>
             <span className="block text-xs text-slate-400 truncate">
-              {isOfficer ? 'Officer' : 'Member'}
+              {isOfficerView(permissions) ? 'Officer' : 'Member'}
             </span>
           </span>
         </div>

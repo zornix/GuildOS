@@ -39,7 +39,6 @@ export function useAppData() {
   const [sessionName, setSessionName] = useState<string>('');
   const [chapterId, setChapterId] = useState<string>('');
   const [chapterName, setChapterName] = useState<string>('');
-  const [isOfficer, setIsOfficer] = useState<boolean>(false);
   const [currentMemberId, setCurrentMemberId] = useState<string>('');
   const [currentMemberName, setCurrentMemberName] = useState<string>('');
 
@@ -47,6 +46,9 @@ export function useAppData() {
 
   const { toastMessage, showToast, dismissToast } = useToast();
   const { loading, setLoading, backendDown, setBackendDown, syncApi } = useBackend(showToast);
+
+  // Derived, not stored: useFinance still takes it as a flag.
+  const isOfficer = isOfficerView(permissions);
 
   const roster = useRoster(showToast);
   const { members, setMembers } = roster;
@@ -113,7 +115,6 @@ export function useAppData() {
       const perms = await api.getMyPermissions();
       const permissionSet = new Set(perms.permissions);
       setPermissions(permissionSet);
-      setIsOfficer(isOfficerView(permissionSet));
     } catch (err) {
       console.error('Permission refresh failed', err);
     }
@@ -197,7 +198,6 @@ export function useAppData() {
         contribution.setRecord(contributionRow);
         setCurrentMemberId(me.id);
         setCurrentMemberName(me.name);
-        setIsOfficer(isOfficerView(permissionSet));
         events.setEvents(adaptedEvents.map(e => ({
           ...e,
           ...(detailByEvent.get(e.id) || {}),
@@ -299,7 +299,6 @@ export function useAppData() {
   };
 
   return {
-    isOfficer,
     permissions,
     sessionName,
     chapterId,

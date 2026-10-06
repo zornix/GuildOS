@@ -21,7 +21,8 @@ function home(currentMemberId: string) {
   return renderToStaticMarkup(createElement(DashboardOverview, {
     members: [member('m1', false), member('m2', true)],
     events: [], tasks: [], initiatives: [], announcements: [],
-    isOfficer: false, canDeleteAnnouncement: false, currentMemberId, currentMemberName: 'Same Name',
+    officerView: false, canScheduleEvent: false, canManageJobs: false, canDeleteAnnouncement: false,
+    currentMemberId, currentMemberName: 'Same Name',
     contribution: EMPTY_CONTRIBUTION, myBalance: null,
     onNavigateTab: noop, onOpenEvent: noop, onScheduleEvent: noop,
     onVolunteerOrganizer: noop, onSelfCheckIn: async () => ({ ok: true, message: '' }),

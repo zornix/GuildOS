@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Menu, Sparkles, X } from 'lucide-react';
 import Sidebar from '../Sidebar';
+import { isOfficerView } from '../../lib/session';
 
 interface AppShellProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
-  isOfficer: boolean;
   permissions: Set<string>;
   currentMemberName: string;
   onLogout: () => void;
@@ -20,7 +20,6 @@ interface AppShellProps {
 export default function AppShell({
   activeTab,
   setActiveTab,
-  isOfficer,
   permissions,
   currentMemberName,
   onLogout,
@@ -65,7 +64,6 @@ export default function AppShell({
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        isOfficer={isOfficer}
         permissions={permissions}
         currentMemberName={currentMemberName}
         onLogout={onLogout}
@@ -92,7 +90,7 @@ export default function AppShell({
             </div>
             <div className="hidden sm:block text-left">
               <span className="text-xs font-bold text-slate-900 block leading-tight">{currentMemberName || '…'}</span>
-              <span className="text-xs text-slate-600 block">{isOfficer ? 'Officer' : 'Member'}</span>
+              <span className="text-xs text-slate-600 block">{isOfficerView(permissions) ? 'Officer' : 'Member'}</span>
             </div>
           </div>
         </header>

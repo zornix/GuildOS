@@ -8,7 +8,10 @@ interface WelcomeBannerProps {
   member: Member | undefined;
   currentMemberName: string;
   memberCount: number;
-  isOfficer: boolean;
+  /** `standing:view_all` presentation: officer counts, no door-code entry. */
+  officerView: boolean;
+  /** `calendar:event:create`. */
+  canScheduleEvent: boolean;
   contribution: ContributionRecord;
   myBalance: MemberBalance | null;
   liveDoorEvent: ChapterEvent | undefined;
@@ -22,12 +25,12 @@ interface WelcomeBannerProps {
  *  the two actions that finish on this screen: schedule (officer) and
  *  check in (member, when a door is open). */
 export default function WelcomeBanner({
-  member, currentMemberName, memberCount, isOfficer, contribution, myBalance, liveDoorEvent,
+  member, currentMemberName, memberCount, officerView, canScheduleEvent, contribution, myBalance, liveDoorEvent,
   onScheduleEvent, onOpenTreasury, onOpenAttendance, onSelfCheckIn
 }: WelcomeBannerProps) {
   const counts = [
     `Organized ${contribution.eventsOrganized.length}`,
-    ...(isOfficer ? [`Supervised ${contribution.eventsSupervised.length}`] : []),
+    ...(officerView ? [`Supervised ${contribution.eventsSupervised.length}`] : []),
     `Chaired ${contribution.initiativesChaired.length}`
   ];
   const balanceLine = balanceStatusLine(myBalance);
@@ -68,7 +71,7 @@ export default function WelcomeBanner({
             </button>
           )}
 
-          {isOfficer && (
+          {canScheduleEvent && (
             <button
               type="button"
               onClick={onScheduleEvent}
@@ -81,7 +84,7 @@ export default function WelcomeBanner({
         </div>
       </div>
 
-      {!isOfficer && (
+      {!officerView && (
         <div className="border-t border-[#1e2d42] pt-4">
           {liveDoorEvent ? (
             <div className="space-y-2">
