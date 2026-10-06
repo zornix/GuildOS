@@ -135,4 +135,13 @@ async def manual_checkin(
     except Exception as exc:
         raise _rpc_http_error(exc) from exc
 
+    # The attendance change committed; a cache failure must not fail it.
+    from api.treasury.core.balance import BalanceEngine
+    import logging
+
+    try:
+        BalanceEngine(get_db()).recompute_member(member_id)
+    except Exception:
+        logging.getLogger(__name__).exception("Failed to refresh balance after manual attendance")
+
     return result.data
