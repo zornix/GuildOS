@@ -27,8 +27,8 @@ VALID_EMAIL_DELIVERY_MODES = ("dry_run", "smtp")
 def production_config_violations(s: Settings) -> list[str]:
     """List every deploy-misconfiguration in `s`. Empty locally or when clean.
 
-    Guards **production and preview** (`is_deployed`). Preview deploys are public
-    URLs that inherit the project's env vars, so an unguarded preview with
+    Guards every deployed run (`is_deployed`); explicit local/test runs and
+    Vercel development bypass it. Preview URLs inherit the project's env vars, so an unguarded preview with
     `DEV_AUTH_BYPASS=1` was a full authentication bypass on a reachable host.
 
     Each entry names the variable and the fix — this text is the only thing an
@@ -59,14 +59,6 @@ def production_config_violations(s: Settings) -> list[str]:
         violations.append(
             f"CRON_SECRET is unset or shorter than {MIN_CRON_SECRET_LENGTH} chars "
             "— set a random secret matching the Vercel cron caller"
-        )
-
-    # FRONTEND_URL is the CORS allowlist below, so a localhost value in a deploy
-    # both breaks the real origin and trusts a developer machine.
-    if "localhost" in s.FRONTEND_URL or "127.0.0.1" in s.FRONTEND_URL:
-        violations.append(
-            f"FRONTEND_URL points at localhost ({s.FRONTEND_URL}) "
-            "— set the deployed origin; it is the CORS allowlist"
         )
 
     if s.MESSAGE_DELIVERY_MODE not in VALID_DELIVERY_MODES:
@@ -113,6 +105,15 @@ def production_config_violations(s: Settings) -> list[str]:
                 "— set it or fall back to EMAIL_DELIVERY_MODE=dry_run"
             )
 
+    if s.is_production:
+        if "localhost" in s.BASE_URL or "127.0.0.1" in s.BASE_URL:
+            violations.append("BASE_URL points at localhost — set it to the public API origin")
+        if "localhost" in s.FRONTEND_URL or "127.0.0.1" in s.FRONTEND_URL:
+            violations.append(
+                "FRONTEND_URL points at localhost — set it to the public site origin; "
+                "check-in links redirect there"
+            )
+
     return violations
 
 
@@ -121,7 +122,7 @@ def production_config_violations(s: Settings) -> list[str]:
 _violations = production_config_violations(settings)
 if _violations:
     raise RuntimeError(
-        f"Refusing to boot in {settings.VERCEL_ENV} — fix: " + "; ".join(_violations)
+        f"Refusing to boot in {settings.VERCEL_ENV or 'an unlabelled deployment'} — fix: " + "; ".join(_violations)
     )
 
 # Domains whose routes live in one module mount that module's router directly.

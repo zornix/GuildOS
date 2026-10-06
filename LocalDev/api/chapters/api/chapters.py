@@ -51,9 +51,9 @@ async def create_chapter_endpoint(
     except Exception as exc:
         message = str(exc)
         if "chapter_name_taken" in message:
-            raise HTTPException(409, f"A chapter named {body.name!r} already exists")
+            raise HTTPException(409, "A chapter or member with these details already exists.")
         if "officer_email_taken" in message or "members_email_key" in message:
-            raise HTTPException(409, "That email already belongs to a member")
+            raise HTTPException(409, "A chapter or member with these details already exists.")
         raise
 
 

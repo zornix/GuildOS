@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     # Set by Vercel at build/runtime ("production" | "preview" | "development").
     # Empty locally. Drives the production boot guard in api/index.py.
     VERCEL_ENV: str = ""
+    # Explicit local/test runs opt out of deployment guards.
+    APP_ENV: str = ""
     # Outbound message delivery: "dry_run" (rows marked simulated, no network) or
     # "twilio" (real sends; requires the TWILIO_* settings below).
     MESSAGE_DELIVERY_MODE: str = "dry_run"
@@ -51,13 +53,16 @@ class Settings(BaseSettings):
 
     @property
     def is_production(self) -> bool:
-        return self.VERCEL_ENV == "production"
+        return self.VERCEL_ENV == "production" or (not self.VERCEL_ENV and self.APP_ENV == "production")
 
     @property
     def is_deployed(self) -> bool:
-        # Preview deploys are public URLs that inherit env vars; they get the
-        # same config guard and lockdowns as production.
-        return self.VERCEL_ENV in ("production", "preview")
+        # Fail closed (F-007): only explicit local/test runs bypass the guard.
+        if self.VERCEL_ENV in ("production", "preview"):
+            return True
+        if self.VERCEL_ENV == "development":
+            return False
+        return self.APP_ENV not in ("local", "test")
 
     class Config:
         env_file = ".env"

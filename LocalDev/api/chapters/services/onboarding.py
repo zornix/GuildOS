@@ -58,29 +58,30 @@ def create_chapter(
     sms_consent: bool = False,
 ):
     """Create the chapter, its first officer, and the officer's setup code."""
-    result = call_rpc(
-        "ch_create_chapter",
-        {
-            "p_name": name,
-            "p_organization": organization or "",
-            "p_school": school or "",
-            "p_officer_name": officer_name,
-            "p_officer_email": officer_email,
-            "p_officer_phone": officer_phone,
-        },
-        sb=sb,
-    )
-    created = result.data
-    if sms_consent:
-        # Not an RPC param: a seventh argument would create a second
-        # ch_create_chapter overload rather than replace 0156's. Stamping one
-        # flag on a row we just created is not a trust-boundary multi-write.
-        sb.table("members").update({"sms_consent_at": _now_iso()}).eq(
-            "id", created["officer_id"]
-        ).execute()
-    code, expires_at = _issue_setup_code(
-        sb, chapter_id=created["chapter_id"], member_id=created["officer_id"]
-    )
+    with sb.transaction() as tx:
+        result = call_rpc(
+            "ch_create_chapter",
+            {
+                "p_name": name,
+                "p_organization": organization or "",
+                "p_school": school or "",
+                "p_officer_name": officer_name,
+                "p_officer_email": officer_email,
+                "p_officer_phone": officer_phone,
+            },
+            sb=tx,
+        )
+        created = result.data
+        if sms_consent:
+            # Not an RPC param: a seventh argument would create a second
+            # ch_create_chapter overload rather than replace 0156's. Stamping one
+            # flag on a row we just created stays in this transaction.
+            tx.table("members").update({"sms_consent_at": _now_iso()}).eq(
+                "id", created["officer_id"]
+            ).execute()
+        code, expires_at = _issue_setup_code(
+            tx, chapter_id=created["chapter_id"], member_id=created["officer_id"]
+        )
     return {**created, "setup_code": code, "setup_code_expires_at": expires_at}
 
 
@@ -174,14 +175,15 @@ def import_roster(sb, *, chapter_id: str, raw: bytes) -> dict:
     to_insert = [r for r in rows if r["email"] not in owned]
     created = []
     if to_insert:
-        result = call_rpc(
-            "ch_import_roster", {"p_chapter_id": chapter_id, "p_rows": to_insert}, sb=sb
-        )
-        for member in result.data or []:
-            code, _expires = _issue_setup_code(
-                sb, chapter_id=chapter_id, member_id=member["member_id"]
+        with sb.transaction() as tx:
+            result = call_rpc(
+                "ch_import_roster", {"p_chapter_id": chapter_id, "p_rows": to_insert}, sb=tx
             )
-            created.append({"email": member["email"], "setup_code": code})
+            for member in result.data or []:
+                code, _expires = _issue_setup_code(
+                    tx, chapter_id=chapter_id, member_id=member["member_id"]
+                )
+                created.append({"email": member["email"], "setup_code": code})
 
     return {
         "created": created,

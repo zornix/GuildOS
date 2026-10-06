@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export APP_ENV="${APP_ENV:-local}"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOCALDEV_ROOT="$(cd "$SCRIPT_DIR/../../LocalDev" && pwd)"

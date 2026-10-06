@@ -131,3 +131,21 @@ def test_roster_import_emails_every_created_member(sb_client, chapter_id, cursor
         (chapter_id,),
     )
     assert cursor.fetchone()["n"] == 3
+
+
+def test_a_failed_enqueue_raises_inside_a_transaction(monkeypatch):
+    from types import SimpleNamespace
+    from api.auth import notifications
+    from api.auth.api.auth import _generate_setup_code
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("queue unavailable")
+
+    monkeypatch.setattr(notifications, "enqueue", fail)
+    tx = SimpleNamespace(_pool=SimpleNamespace(in_tx=True))
+    with pytest.raises(RuntimeError, match="queue unavailable"):
+        notifications.notify_code(
+            tx, event_type=notifications.SETUP_CODE,
+            chapter_id=str(uuid.uuid4()), member_id=str(uuid.uuid4()),
+            code=_generate_setup_code(), expires_at="2026-10-12T00:00:00Z",
+        )
