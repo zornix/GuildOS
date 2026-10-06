@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Announcement, Member } from '../types';
 import { api, AuthRequiredError, ensureLogin, logout, optionalOfficerCall, EventDto, TaskDto } from '../api';
-import { isOfficerView } from '../lib/session';
 import { loadStartupEvents, loadJobRefresh } from '../lib/app-data';
 import { EMPTY_CONTRIBUTION } from '../lib/contribution';
 import {
@@ -43,9 +42,6 @@ export function useAppData() {
   const { toastMessage, showToast, dismissToast } = useToast();
   const { loading, setLoading, backendDown, setBackendDown, syncApi } = useBackend(showToast);
 
-  // Derived, not stored: useFinance still takes it as a flag.
-  const isOfficer = isOfficerView(permissions);
-
   const roster = useRoster(showToast);
   const { members, setMembers } = roster;
 
@@ -57,7 +53,7 @@ export function useAppData() {
 
   const events = useEvents({ members, syncApi, showToast, refetchJobs });
   const initiatives = useInitiatives({ members, syncApi, refetchJobs });
-  const finance = useFinance({ members, setMembers, currentMemberId, backendDown, showToast });
+  const finance = useFinance({ members, setMembers, currentMemberId, backendDown, setBackendDown, showToast });
   const attendance = useAttendance({
     members,
     setEvents: events.setEvents,
@@ -99,7 +95,10 @@ export function useAppData() {
   // refetchEvents already calls this, hence no call back into it.
   refetchJobsRef.current = async (eventId?: string) => {
     const { taskRows, detail } = await loadJobRefresh(api, eventId);
-    applyJobs(taskRows, members, detail && [detail]);
+    if (taskRows) applyJobs(taskRows, members, detail && [detail]);
+    else if (detail) events.setEvents(evts => evts.map(e => e.id === detail.id ? {
+      ...e, jobCount: detail.job_count || 0, openJobCount: detail.open_job_count || 0
+    } : e));
   };
 
   /** Re-reads the caller's own permission keys. Role edits on yourself change

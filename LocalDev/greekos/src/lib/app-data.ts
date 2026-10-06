@@ -25,8 +25,13 @@ export async function loadStartupEvents(
 export async function loadJobRefresh(
   calls: Pick<typeof api, 'getTasks' | 'getEvent'>, eventId?: string
 ) {
-  const [taskRows, detail] = await Promise.all([
+  const [tasks, event] = await Promise.allSettled([
     calls.getTasks(), eventId ? calls.getEvent(eventId) : undefined
   ]);
-  return { taskRows, detail };
+  if (tasks.status === 'rejected') console.error('Task refresh failed', tasks.reason);
+  if (event.status === 'rejected') console.error('Event refresh failed', event.reason);
+  return {
+    taskRows: tasks.status === 'fulfilled' ? tasks.value : undefined,
+    detail: event.status === 'fulfilled' ? event.value : undefined
+  };
 }
