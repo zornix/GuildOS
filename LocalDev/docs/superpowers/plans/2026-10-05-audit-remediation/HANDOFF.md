@@ -30,7 +30,7 @@ Nothing is pushed. `main` is at `ea7c95d` (+ this handoff) with five streams mer
 | 06 frontend-shell | yes (9 commits) | still exists, delete | none |
 | 07 ci-tooling | yes (4 commits) | still exists, delete | none |
 | 03 treasury-rpcs | **no** | `fix/audit-03-treasury-rpcs`, `/home/mshik/GuildOS-wt/audit-03`, 8 commits, clean | two P0 review findings to fix (below) |
-| 05 finance-tab | **no** | `fix/audit-05-finance-tab`, `/home/mshik/GuildOS-wt/audit-05`, 5 commits + an Opus fix-up agent was mid-flight | check its result (below) |
+| 05 finance-tab | **no** | `fix/audit-05-finance-tab`, `/home/mshik/GuildOS-wt/audit-05`, 15 commits, clean | review fixes done; verify + merge after 03 |
 
 Worktree cleanup for 01/02/04/06/07 was interrupted (a `pkill -f uvicorn` matched the
 shell). Finish it: `git worktree remove --force /home/mshik/GuildOS-wt/audit-0{1,2,4,6,7}`
@@ -68,31 +68,28 @@ worktree, commit (`fix(treasury): …`, no trailers), merge with `--no-ff`.
 Dispatch choice: this is SQL on money → **Grok if available, else Sol**, read-only review
 afterwards by the other one. If both are out, Opus.
 
-### Stream 05 — pick up the fix-up agent's result
+### Stream 05 — fix-up agent finished (Opus, 2026-10-05)
 
-An Opus agent was dispatched (same session) to fix the Grok review findings on
-`/home/mshik/GuildOS-wt/audit-05`; when this handoff was written it had modified
-`LocalDev/api/treasury/api/fines_legacy.py` and `LocalDev/tests/treasury/test_v1_fines.py`
-(adding `remaining_cents` to `GET /api/fines/`) and not yet committed. Its task list, in
-priority order (it was told one commit per item, tests first):
+Worktree `/home/mshik/GuildOS-wt/audit-05`, branch `fix/audit-05-finance-tab`, now 15 commits
+(5 original + 10 fix-ups, one per review item, hashes 8a0af8d … 1ff6722), tree clean.
+Verified by the agent: `npm test` 111/111, lint clean, build ok; backend
+`tests/treasury/test_v1_fines.py` 12 passed. Two other treasury tests fail on that branch only
+because the demo DB already has stream 03's rules; they pass on 03's branch.
 
-1. P0 Mark paid posts the fine's face value even when partly paid; unpaid-fines total sums
-   face values → backend `remaining_cents` on the fines list + frontend uses it.
-2. P1 Balances "Record payment" shortcut pays the standing figure oldest-first → remove it.
-3. P1 `adaptPayments` hardcodes "Dues / Ledger Credit" → show the real method.
-4. P2 `backendDown` does not block the four actions → thread it into useFinance, reject up front.
-5. P2 member reset keyed on first roster name → key on `currentMember?.id`.
-6. P2 dues-run key ignores candidate-list changes → add sorted ids to the key deps.
-7. P2 event-fine retry: "already fined" skip is not an error.
-8. P2 failed refetch after a landed write toasts plain success → say "saved, lists not reloaded".
-9. P2 one node:test for `submitTransaction` with a fake api (key header, pending toast, 403).
-10. P3 `handleIssueFine` requires `amountCents`.
+What changed beyond the original plan:
+- `GET /api/fines/` rows now carry `remaining_cents` (one bulk read from `payment_allocations`;
+  cancelled fine = 0). Mark paid and the unpaid total use it. Backend file touched:
+  `api/treasury/api/fines_legacy.py` (+ its test).
+- Balances "Record payment" shortcut removed. Payments table shows the real method, but
+  `verified_payments` has no `method` column (it is on `payment_submissions`), so rows show "—"
+  until `api/treasury/services/reports.py` joins it → **carry-over for stream 08**.
+- `submitTransaction` moved to `src/lib/transaction.ts` (testable without React) and refuses
+  up front when `backendDown`; a failed reload after a landed write says so in the toast.
+- Event-fine "skipped" is a neutral success toast (server does not say why it skipped).
+- `FinanceModule` takes `currentMemberId` instead of `currentMemberName`.
 
-Next session: `git -C /home/mshik/GuildOS-wt/audit-05 log --oneline main..HEAD` and
-`status --short`. If the agent finished, verify (`npm test && npm run lint && npm run build`
-in `LocalDev/greekos`, plus `python3 -m pytest tests/treasury/test_v1_fines.py -q`) and merge.
-If it died mid-way, finish the uncommitted item or revert it, then dispatch the remaining
-items to **Gemini 3.8 Flash** (frontend, well-specified) with the list above.
+Next session: re-run `npm test && npm run lint && npm run build` in the worktree's greekos
+(cheap), then merge after 03.
 
 Merge note: 05 and 06 both touched `src/App.tsx` and `src/hooks/useAppData.ts`; 06 is on
 main, so expect small conflicts in 05's merge. Keep both sides. After merging 05, delete
@@ -125,7 +122,8 @@ before wave 2 (that was the user's instruction).
   `services/reports.py` read `verified_payments.invoice_id`, always NULL since 0165: stream 08
   deletes them.
 - `GET /api/fines/` rows gain `remaining_cents` (05 fix-up); stream 08's `remaining_by_invoice`
-  can replace that implementation.
+  can replace that implementation. Stream 08 also joins `payment_submissions.method` into the
+  treasury dashboard's `recent_payments` (`services/reports.py`) so the Payments table shows it.
 - Test factories: `member_factory(role="officer")` (tests/treasury and tests/auth conftest) now
   also writes the `member_roles` row. A test that wants a column-only officer sets the column
   with `UPDATE members SET role='officer'`.
