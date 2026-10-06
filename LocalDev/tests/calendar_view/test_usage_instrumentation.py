@@ -36,18 +36,22 @@ def test_track_inserts_row(harness, cursor, chapter_id, user_factory):
     assert rows[0]["metadata"] == {"tab": "treasury"}
 
 
-def test_track_clamps_event_name_and_metadata(harness, cursor, chapter_id, user_factory):
+def test_track_drops_bad_names_and_truncates_metadata(harness, cursor, chapter_id, user_factory):
+    """D13: a name outside the strict pattern is dropped silently; big metadata is truncated."""
     user = user_factory()
-    resp = harness.login(user).post(
+    client = harness.login(user)
+    resp = client.post("/api/usage/track", json={"event_name": "x" * 500, "metadata": {}})
+    assert resp.status_code == 200, resp.text
+    assert _usage_rows(cursor, chapter_id) == []
+
+    resp = client.post(
         "/api/usage/track",
-        json={"event_name": "x" * 500, "metadata": {"blob": "y" * 20000}},
+        json={"event_name": "tab:opened", "metadata": {"blob": "y" * 20000}},
     )
     assert resp.status_code == 200, resp.text
-
     rows = _usage_rows(cursor, chapter_id)
     assert len(rows) == 1
-    assert len(rows[0]["event_name"]) <= 120
-    assert rows[0]["metadata"].get("_truncated") is True
+    assert rows[0]["metadata"] == {"_truncated": True}
 
 
 def test_track_requires_event_name(harness, user_factory):
@@ -55,14 +59,15 @@ def test_track_requires_event_name(harness, user_factory):
     assert resp.status_code == 422
 
 
-def test_usage_events_append_only(harness, cursor, chapter_id, user_factory):
+def test_usage_events_cannot_be_updated_but_can_be_deleted(harness, cursor, chapter_id, user_factory):
+    """D13: rows are immutable but deletable (retention, member cascade)."""
     harness.login(user_factory()).post("/api/usage/track", json={"event_name": "e1"})
     row_id = _usage_rows(cursor, chapter_id, "e1")[0]["id"]
 
     with pytest.raises(psycopg2.Error, match="append-only"):
         cursor.execute("UPDATE usage_events SET event_name = 'tampered' WHERE id = %s", (row_id,))
-    with pytest.raises(psycopg2.Error, match="append-only"):
-        cursor.execute("DELETE FROM usage_events WHERE id = %s", (row_id,))
+    cursor.execute("DELETE FROM usage_events WHERE id = %s", (row_id,))
+    assert _usage_rows(cursor, chapter_id, "e1") == []
 
 
 # ── GET /api/usage/summary ───────────────────────────────────────────────────
