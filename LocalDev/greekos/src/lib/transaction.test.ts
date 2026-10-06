@@ -195,3 +195,13 @@ test('submitTransaction sends the key, waits on a pending adjustment, and never 
   );
   assert.deepEqual(toasts, []);
 });
+
+test('submitTransaction refuses up front while the server is unreachable', async () => {
+  const { deps, calls, toasts } = fakeDeps();
+  await assert.rejects(
+    submitTransaction({ ...deps, backendDown: true }, { kind: 'Invoice', memberId: 'm1', amountCents: 5000, description: 'Dues' }, 'k'),
+    { message: 'Not saved: the server is unreachable.' }
+  );
+  assert.deepEqual(calls, []);
+  assert.deepEqual(toasts, []);
+});

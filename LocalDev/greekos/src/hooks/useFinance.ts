@@ -27,6 +27,7 @@ interface Deps {
   currentMemberId: string;
   currentMemberName: string;
   isOfficer: boolean;
+  backendDown: boolean;
   syncApi: SyncApi;
   showToast: ShowToast;
   enqueueOutbox: EnqueueOutbox;
@@ -34,7 +35,7 @@ interface Deps {
 
 /** Fines, payments, invoices and the officer-recorded transactions. Every
  *  write goes to the server and every number shown afterwards is re-read. */
-export function useFinance({ members, setMembers, currentMemberId, showToast }: Deps) {
+export function useFinance({ members, setMembers, currentMemberId, backendDown, showToast }: Deps) {
   const [fines, setFines] = useState<Fine[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   // No chapter-wide ledger read exists; nothing renders this. Kept only because
@@ -192,7 +193,7 @@ export function useFinance({ members, setMembers, currentMemberId, showToast }: 
   };
 
   const submitTransaction = (draft: TransactionDraft, idempotencyKey: string) =>
-    runTransaction({ api, members, refetch: refetchAfterWrite, showToast }, draft, idempotencyKey);
+    runTransaction({ api, members, backendDown, refetch: refetchAfterWrite, showToast }, draft, idempotencyKey);
 
   /** The command console's "fine NAME $N for REASON" (useAppData) lands here. */
   const handleIssueFine = async (fine: { memberId: string; amountCents?: number; amount?: number; reason: string; relatedEventId?: string }) => {

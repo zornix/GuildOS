@@ -182,6 +182,8 @@ export const finableEvents = (events: ChapterEvent[], today: string): ChapterEve
 export interface TransactionDeps {
   api: Pick<typeof Api, 'recordPayment' | 'issueFines' | 'createInvoice' | 'createAdjustment'>;
   members: Pick<Member, 'id' | 'name'>[];
+  /** The last load failed; a write now would only fail later, so refuse it. */
+  backendDown: boolean;
   /** Re-reads every number on the tab after a write. */
   refetch: () => Promise<unknown>;
   showToast: (message: string) => void;
@@ -191,6 +193,7 @@ export interface TransactionDeps {
  *  and the tab has been re-read; rejects with the message to show inline. */
 export async function submitTransaction(deps: TransactionDeps, draft: TransactionDraft, idempotencyKey: string): Promise<void> {
   const { api } = deps;
+  if (deps.backendDown) throw new Error('Not saved: the server is unreachable.');
   const call = planTransaction(draft);
   const name = deps.members.find(m => m.id === draft.memberId)?.name || 'the member';
   let message: string;

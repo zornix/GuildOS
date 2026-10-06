@@ -59,7 +59,7 @@ export function useAppData() {
 
   const events = useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJobs });
   const initiatives = useInitiatives({ members, syncApi, showToast, refetchJobs });
-  const finance = useFinance({ members, setMembers, currentMemberId, currentMemberName, isOfficer, syncApi, showToast, enqueueOutbox });
+  const finance = useFinance({ members, setMembers, currentMemberId, currentMemberName, isOfficer, backendDown, syncApi, showToast, enqueueOutbox });
   const attendance = useAttendance({
     members,
     setEvents: events.setEvents,
