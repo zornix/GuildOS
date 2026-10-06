@@ -2,16 +2,14 @@ import { useState } from 'react';
 import { PNM } from '../types';
 import { api } from '../api';
 import { adaptRecruits } from '../adapters';
-import { EnqueueOutbox } from './useOutbox';
 import { SyncApi } from './useBackend';
 
 interface Deps {
   syncApi: SyncApi;
-  enqueueOutbox: EnqueueOutbox;
 }
 
 /** Rush pipeline: prospects, votes and bids. */
-export function useRecruitment({ syncApi, enqueueOutbox }: Deps) {
+export function useRecruitment({ syncApi }: Deps) {
   const [pnms, setPnms] = useState<PNM[]>([]);
 
   const refetchPnms = async () => setPnms(adaptRecruits(await api.getRecruits()));
@@ -55,14 +53,6 @@ export function useRecruitment({ syncApi, enqueueOutbox }: Deps) {
     const pnm = pnms.find(p => p.id === pnmId);
     setPnms(prev => prev.map(p => p.id === pnmId ? { ...p, status: 'Bid Extended' } : p));
     syncApi(() => api.setRecruitStage(pnmId, 'bid_extended'), refetchPnms, `Extended chapter membership bid to ${pnm?.name}.`);
-    if (pnm) {
-      enqueueOutbox({
-        type: 'BID_INVITATION',
-        recipient: pnm.name,
-        message: `[GreekOS Bid Alert] Congratulations ${pnm.name}! The Brotherhood has extended you an official Bid for Membership.`,
-        channel: 'SMS'
-      });
-    }
   };
 
   return { pnms, setPnms, handleAddPNM, handleVotePNM, handleExtendBid };

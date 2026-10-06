@@ -21,7 +21,6 @@ import {
 } from '../adapters';
 import { useToast } from './useToast';
 import { useBackend } from './useBackend';
-import { enqueueOutbox } from './useOutbox';
 import { useRoster } from './useRoster';
 import { useEvents } from './useEvents';
 import { useInitiatives } from './useInitiatives';
@@ -59,19 +58,22 @@ export function useAppData() {
   const refetchJobsRef = useRef<() => Promise<void>>(async () => {});
   const refetchJobs = () => refetchJobsRef.current();
 
-  const events = useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJobs });
+  const events = useEvents({ members, syncApi, showToast, refetchJobs });
   const initiatives = useInitiatives({ members, syncApi, refetchJobs });
-  const finance = useFinance({ members, setMembers, currentMemberId, currentMemberName, isOfficer, syncApi, showToast, enqueueOutbox });
+  const finance = useFinance({
+    members, setMembers, currentMemberId, currentMemberName, isOfficer, syncApi, showToast,
+    // ponytail: useFinance (stream 05) still declares this no-op dep; drop it when that hook stops taking it.
+    enqueueOutbox: () => {}
+  });
   const attendance = useAttendance({
     members,
     setEvents: events.setEvents,
     refetchEvents: events.refetchEvents,
     syncApi,
-    showToast,
-    enqueueOutbox
+    showToast
   });
   const tasks = useTasks({ syncApi, refetchJobs });
-  const recruitment = useRecruitment({ syncApi, enqueueOutbox });
+  const recruitment = useRecruitment({ syncApi });
   const contribution = useContribution();
 
   /** Stamp the job rows onto whichever event/initiative owns each one. The chip
@@ -240,7 +242,7 @@ export function useAppData() {
   };
 
   // ----------------------------------------------------
-  // NATURAL LANGUAGE COMMAND EXECUTION
+  // COMMAND CONSOLE EXECUTION
   // ----------------------------------------------------
   const handleExecuteCommand = (cmdResult: {
     type: 'FINE' | 'TASK' | 'EVENT' | 'BID' | 'ANNOUNCEMENT' | 'EXCUSE_APPROVE' | 'ATTENDANCE';
@@ -279,12 +281,6 @@ export function useAppData() {
           });
           await api.sendAnnouncement(created.id);
         }, refetchAnnouncements, 'Dispatched broadcast announcement.');
-        enqueueOutbox({
-          type: 'ANNOUNCEMENT_BLAST',
-          recipient: 'All Brothers',
-          message: `[GreekOS Announcement] ${cmdResult.payload.content}`,
-          channel: 'SMS'
-        });
         break;
       }
       case 'EXCUSE_APPROVE':

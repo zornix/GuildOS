@@ -3,7 +3,6 @@ import { ChapterEvent, EventJob, Member, SecurityAssignment } from '../types';
 import { api } from '../api';
 import { adaptEventDetail, adaptEvents, adaptSecurityAssignment, toEventBody } from '../adapters';
 import { ShowToast } from './useToast';
-import { EnqueueOutbox } from './useOutbox';
 import { SyncApi } from './useBackend';
 import { describeError } from '../lib/sync';
 
@@ -42,12 +41,11 @@ interface Deps {
   members: Member[];
   syncApi: SyncApi;
   showToast: ShowToast;
-  enqueueOutbox: EnqueueOutbox;
   refetchJobs: () => Promise<void>;
 }
 
 /** Chapter events plus their claimable jobs and security shifts. */
-export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJobs }: Deps) {
+export function useEvents({ members, syncApi, showToast, refetchJobs }: Deps) {
   const [events, setEvents] = useState<ChapterEvent[]>([]);
 
   // adaptEvents rebuilds rows with empty jobs, security and leader lists.
@@ -255,16 +253,6 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
           ...e,
           jobs: e.jobs.map(j => {
             if (j.id === jobId) {
-              // Notify outbox
-              j.claimants.forEach(c => {
-                enqueueOutbox({
-                  type: 'JOB_REJECTED',
-                  recipient: c.memberName,
-                  message: `[GreekOS Job Notice] Your job "${j.title}" on event "${e.title}" was returned with feedback: ${reason}`,
-                  channel: 'SMS'
-                });
-              });
-
               return {
                 ...j,
                 status: 'In Progress',
@@ -344,14 +332,7 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
     if (!ev) return;
 
     setEvents(prev => prev.map(e => e.id === eventId ? { ...e, notifiedAt: new Date().toISOString() } : e));
-    // The outbox tab stays a demo surface; the real send is the API call below,
-    // and the refetch replaces the optimistic stamp with last_notified_at.
-    enqueueOutbox({
-      type: 'EVENT_NOTIFY',
-      recipient: 'All Active Chapter Brothers (10)',
-      message: `[GreekOS Announcement] ${ev.title} on ${ev.date} at ${ev.time} (${ev.location}). Open jobs are ready for sign-up!`,
-      channel: 'SMS'
-    });
+    // The refetch replaces the optimistic stamp with last_notified_at.
     syncApi(async () => {
       try {
         // Two-phase confirm: send back the count the preview just resolved.
@@ -399,12 +380,6 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
       return e;
     }));
     syncApi(() => api.assignSecurity(eventId, memberId), () => refetchSecurity(eventId), `Assigned ${memberName} to security shift.`);
-    enqueueOutbox({
-      type: 'SECURITY_ASSIGNED',
-      recipient: memberName,
-      message: `[GreekOS Security] You have been assigned to a security shift.`,
-      channel: 'SMS'
-    });
   };
 
   const handleRequestSecuritySwap = (eventId: string, assignmentId: string, targetMemberId: string, targetMemberName: string) => {
@@ -428,13 +403,6 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
       return e;
     }));
     syncSwap(eventId, () => api.requestSwap(eventId, assignmentId, targetMemberId), `Shift swap request sent to ${targetMemberName}.`);
-
-    enqueueOutbox({
-      type: 'SECURITY_SWAP_REQUEST',
-      recipient: targetMemberName,
-      message: `[GreekOS Swap Request] A brother requested you to cover their security shift. Review in Events tab.`,
-      channel: 'SMS'
-    });
   };
 
   const handleRespondSecuritySwap = (eventId: string, assignmentId: string, accept: boolean) => {

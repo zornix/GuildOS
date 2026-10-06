@@ -3,7 +3,6 @@ import { ChapterEvent, Excuse, Member } from '../types';
 import { api } from '../api';
 import { adaptExcuses } from '../adapters';
 import { ShowToast } from './useToast';
-import { EnqueueOutbox } from './useOutbox';
 import { SyncApi } from './useBackend';
 
 interface Deps {
@@ -12,12 +11,11 @@ interface Deps {
   refetchEvents: () => Promise<void>;
   syncApi: SyncApi;
   showToast: ShowToast;
-  enqueueOutbox: EnqueueOutbox;
 }
 
 /** Roll call, door-code check-in and absence excuses. Attendance is recorded onto
  *  the event rows, so this hook writes into the events state too. */
-export function useAttendance({ members, setEvents, refetchEvents, syncApi, showToast, enqueueOutbox }: Deps) {
+export function useAttendance({ members, setEvents, refetchEvents, syncApi, showToast }: Deps) {
   const [excuses, setExcuses] = useState<Excuse[]>([]);
 
   const refetchExcuses = async () => setExcuses(adaptExcuses(await api.getExcuses(), members));
@@ -54,22 +52,12 @@ export function useAttendance({ members, setEvents, refetchEvents, syncApi, show
   };
 
   const handleReviewExcuse = (excuseId: string, status: 'Approved' | 'Rejected', reviewedBy: string) => {
-    const exc = excuses.find(e => e.id === excuseId);
     setExcuses(prev => prev.map(e => e.id === excuseId ? { ...e, status, decidedBy: reviewedBy } : e));
     syncApi(
       () => api.reviewExcuse(excuseId, status === 'Approved' ? 'approved' : 'denied'),
       refetchExcuses,
       `Excuse marked ${status}.`
     );
-
-    if (exc) {
-      enqueueOutbox({
-        type: 'EXCUSE_DECISION',
-        recipient: exc.memberName,
-        message: `[GreekOS Excuse Decision] Your excuse for "${exc.eventTitle}" was ${status} by ${reviewedBy}.`,
-        channel: 'SMS'
-      });
-    }
   };
 
   /** Door-code check-in. The code identifies the event and the backend checks in

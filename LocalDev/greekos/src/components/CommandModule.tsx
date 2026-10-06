@@ -108,7 +108,7 @@ export default function CommandModule({
             type: 'TASK',
             payload: {
               title: taskTitle,
-              description: `Assigned via GreekOS Natural Command console to ${matchedMember.name}.`,
+              description: `Assigned from the command console to ${matchedMember.name}.`,
               assignedTo: matchedMember.name,
               assignedToId: matchedMember.id,
               dueDate: '2026-07-16',
@@ -154,7 +154,7 @@ export default function CommandModule({
           type: 'EVENT',
           payload: {
             title: eventTitle,
-            description: 'Scheduled via GreekOS Natural Language Command console.',
+            description: 'Scheduled from the command console.',
             date: when.date,
             startTime: when.time,
             endTime,
@@ -273,7 +273,7 @@ export default function CommandModule({
       input: raw,
       timestamp,
       status: 'Error',
-      summary: 'Command syntax not recognized. Try one of the quick templates below.'
+      summary: 'Not a supported command. See the list above.'
     }, ...prev]);
   };
 
@@ -289,7 +289,10 @@ export default function CommandModule({
             </h2>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Type an instruction in plain English. Every command is a real write to the chapter record.
+            Type a command. Supported: fine NAME $AMOUNT for REASON · assign TITLE to NAME · schedule TITLE on DATE at TIME ·
+            extend bid to NAME · send announcement: TEXT · approve excuse for NAME. NAME matches any part of a member's name;
+            DATE is today, tomorrow, a weekday, "July 17" or 2026-07-17; TIME is 8pm, 8:30 pm, 19:00, noon or midnight.
+            Every command writes to the chapter record.
           </p>
         </div>
       </div>

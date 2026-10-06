@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { adaptTasks } from './adapters';
+import { adaptTaskToJob, adaptTasks, groupJobsByParent } from './adapters';
 import type { TaskDto } from './api';
 import type { Member } from './types';
 import { canClaimTask } from './lib/tasks';
@@ -67,4 +67,26 @@ test('claiming requires an identified member and respects the server capacity su
   assert.equal(canClaimTask(task, 'm1'), true);
   const [full] = adaptTasks([row({ claimed_count: 1, claimants: [] })], members);
   assert.equal(canClaimTask(full, 'm1'), false);
+});
+
+test('adaptTaskToJob maps status and claimants; groupJobsByParent drops cancelled and security rows', () => {
+  const membersById = new Map(members.map(m => [m.id, m]));
+  const base = row({ event_id: 'e1', people_needed: 3 });
+  const open = adaptTaskToJob(base, membersById);
+  assert.equal(open.status, 'To Do');
+  assert.equal(open.peopleNeeded, 3);
+  const claimed = adaptTaskToJob({ ...base, status: 'in_progress', claimants: ['m1'], claimed_count: 1 }, membersById);
+  assert.equal(claimed.status, 'In Progress');
+  assert.deepEqual(claimed.claimants.map(c => c.memberName), ['Ryan Cole']);
+  assert.equal(adaptTaskToJob({ ...base, status: 'done_reported' }, membersById).status, 'Done Reported');
+  assert.equal(adaptTaskToJob({ ...base, status: 'approved' }, membersById).status, 'Approved');
+
+  const grouped = groupJobsByParent([
+    base,
+    { ...base, id: 't2', status: 'cancelled' },
+    { ...base, id: 't3', kind: 'security' },
+    { ...base, id: 't4', event_id: null, initiative_id: 'i1' }
+  ], membersById);
+  assert.deepEqual(grouped.byEvent.get('e1')!.map(j => j.id), ['t1']);
+  assert.deepEqual(grouped.byInitiative.get('i1')!.map(j => j.id), ['t4']);
 });
