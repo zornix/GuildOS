@@ -316,7 +316,10 @@ def _dispatch_twilio_row(sb, row: dict, *, chapter_name: str = "") -> str:
     try:
         if not phone:
             raise RuntimeError(f"member {row['member_id']} has no phone")
-        twilio_client.send_sms(phone, f"{body}\n{templates.footer(chapter_name)}")
+        sb.table("message_outbox").update(
+            {"provider_attempted_at": _now_iso()}
+        ).eq("id", row["id"]).execute()
+        sid = twilio_client.send_sms(phone, f"{body}\n{templates.footer(chapter_name)}")
         status = "sent"
     except Exception as exc:
         # A swallowed, unlogged failure is how "flip to twilio" turns into
@@ -329,6 +332,8 @@ def _dispatch_twilio_row(sb, row: dict, *, chapter_name: str = "") -> str:
     patch = {"status": status, "last_error": last_error}
     if status == "sent":
         patch["delivered_at"] = _now_iso()  # only a real send has a delivery time
+        if sid is not None:
+            patch["provider_message_id"] = sid
     sb.table("message_outbox").update(patch).eq("id", row["id"]).execute()
     return status
 

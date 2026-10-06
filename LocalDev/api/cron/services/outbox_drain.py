@@ -12,7 +12,8 @@ goes to Twilio with the consent check, 'email' to api/platform/email.py without
 one. MESSAGE_DELIVERY_MODE governs SMS, EMAIL_DELIVERY_MODE email; either in
 dry_run marks its rows 'simulated'.
 
-This module sweeps the whole table: oldest pending rows first, one batch per run,
+This module sweeps the whole table: oldest pending rows first, small batches within
+a time budget,
 invoked by Vercel Cron every 5 minutes (GET /api/cron/drain-outbox, authenticated
 by CRON_SECRET). It is deliberately cross-chapter — it is a system worker, not a
 tenant-scoped request path, and it runs on the admin client.
@@ -22,12 +23,13 @@ A batch is *claimed* before anything is delivered: `outbox_claim_batch`
 them, under FOR UPDATE SKIP LOCKED, so two overlapping runs — the 5-minute cron
 overtaking a slow batch, or an operator draining one chapter by hand — cannot
 both hold the same row and send the same member two messages (issue #32). The
-claim also requeues rows whose worker died with them (claimed over 15 minutes
-ago) and fails rows past 5 attempts, so nothing is stranded and nothing is
-retried forever.
+claim also requeues unstamped abandoned claims (over 15 minutes old), refunds
+their unused attempts, and parks stamped claims whose delivery outcome is unknown.
+Rows past 5 attempts are failed.
 
-Per row it is total: every claimed row leaves 'sending' for a terminal status
-('sent', 'simulated' or 'failed' with `last_error`), and no single bad row can
+Each attempted row advances to a terminal status ('sent', 'simulated' or 'failed'
+with `last_error`), unless bookkeeping fails. Rows left unattempted when the time
+budget expires stay claimed until the reaper refunds them. No single bad row can
 abort the batch. Terminal rows are never claimed again, so a 'failed' row is a
 signal for an operator, not something the worker keeps hammering.
 
@@ -54,6 +56,8 @@ from api.sms_consent import CONSENT_COLUMNS, has_consent
 logger = logging.getLogger(__name__)
 
 DEFAULT_BATCH_LIMIT = 100
+# ponytail: fixed budget well under the function timeout; make it a setting if the timeout ever changes.
+DRAIN_BUDGET_SECONDS = 45
 
 # Event types whose payload is a live credential (api/auth/notifications.py).
 _SECRET_EVENT_TYPES = (SETUP_CODE, RESET_CODE)
@@ -169,17 +173,28 @@ def _member_email(sb, member_id: str) -> str:
     return (row.get("email") or "").strip()
 
 
-def _close_row(sb, row: dict, *, status: str, last_error: str | None) -> None:
+def _stamp_provider_attempt(sb, row: dict) -> None:
+    """Persist the attempt before calling a provider; ambiguous outcomes are parked."""
+    sb.table("message_outbox").update(
+        {"provider_attempted_at": _now_iso()}
+    ).eq("id", row["id"]).execute()
+
+
+def _close_row(
+    sb, row: dict, *, status: str, last_error: str | None,
+    provider_message_id: str | None = None,
+) -> None:
     """Move a claimed row from 'sending' to its terminal status.
 
     `attempts` is not touched here: outbox_claim_batch increments it when it
-    hands the row over, so an attempt that kills the worker outright still
-    counts against the cap.
+    hands the row over. The reaper refunds claims that never reached a provider.
     """
     patch = {
         "status": status,
         "last_error": last_error[:1000] if last_error else None,
     }
+    if provider_message_id is not None:
+        patch["provider_message_id"] = provider_message_id
     if status == "sent":
         patch["delivered_at"] = _now_iso()
     if status in ("sent", "simulated") and row["event_type"] in _SECRET_EVENT_TYPES:
@@ -225,8 +240,9 @@ def _deliver_sms(sb, row: dict, *, chapter_name: str, payload: dict) -> str:
         _close_row(sb, row, status="failed", last_error="no_consent")
         return "failed"
 
-    twilio_client.send_sms(phone, body)
-    _close_row(sb, row, status="sent", last_error=None)
+    _stamp_provider_attempt(sb, row)
+    sid = twilio_client.send_sms(phone, body)
+    _close_row(sb, row, status="sent", last_error=None, provider_message_id=sid)
     return "sent"
 
 
@@ -245,6 +261,7 @@ def _deliver_email(sb, row: dict, *, chapter_name: str, payload: dict) -> str:
         _close_row(sb, row, status="failed", last_error="no_email")
         return "failed"
 
+    _stamp_provider_attempt(sb, row)
     send_email(address, subject, body)
     _close_row(sb, row, status="sent", last_error=None)
     return "sent"
@@ -276,7 +293,7 @@ def _deliver_row(sb, row: dict, *, names: dict) -> str:
             _close_row(sb, row, status="failed", last_error=detail)
         except Exception:
             # Even the bookkeeping write failed (row vanished, DB blip). The row
-            # stays 'sending' and the claim's reaper requeues it in 15 minutes,
+            # stays 'sending'; the reaper parks stamped rows and refunds unused claims,
             # rather than this killing the batch.
             logger.exception("could not record failure for outbox row %s", row.get("id"))
         return "failed"
@@ -295,21 +312,25 @@ def drain_outbox(
     """
     client = _resolve_sb(sb)
 
-    claimed = (
-        call_rpc(
-            "outbox_claim_batch",
-            {"p_limit": limit, "p_chapter_id": chapter_id},
-            sb=client,
-        ).data
-        or []
-    )
-
+    started = time.monotonic()
     counts = {"processed": 0, "sent": 0, "simulated": 0, "failed": 0}
     names: dict = {}  # chapter_id -> name, for the message footer
-    for row in claimed:
-        status = _deliver_row(client, row, names=names)
-        counts["processed"] += 1
-        counts[status] = counts.get(status, 0) + 1
+    while counts["processed"] < limit:
+        if time.monotonic() - started >= DRAIN_BUDGET_SECONDS:
+            break
+        claimed = call_rpc(
+            "outbox_claim_batch",
+            {"p_limit": min(25, limit - counts["processed"]), "p_chapter_id": chapter_id},
+            sb=client,
+        ).data or []
+        if not claimed:
+            break
+        for row in claimed:
+            if time.monotonic() - started >= DRAIN_BUDGET_SECONDS:
+                break
+            status = _deliver_row(client, row, names=names)
+            counts["processed"] += 1
+            counts[status] = counts.get(status, 0) + 1
 
     if counts["processed"]:
         logger.info("outbox drain: %s", counts)
