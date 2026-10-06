@@ -7,6 +7,7 @@ a payment that still had the direct link counted its cents twice.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import psycopg2
@@ -15,6 +16,7 @@ import pytest
 from api.treasury.core.balance import BalanceEngine
 from api.treasury.services import invoices as inv_svc
 from api.treasury.services import payments as pay_svc
+from api.treasury.services import refunds as ref_svc
 
 _MIGRATION = Path(__file__).resolve().parents[2] / "migrations" / "0165_single_coverage.sql"
 
@@ -92,6 +94,42 @@ def test_reallocate_refuses_a_payment_that_still_has_a_direct_link(cursor, chapt
              member_id, "move to dues"),
         )
     assert _status(cursor, inv_b) == "unpaid"
+
+
+def test_reallocate_cannot_cover_refunded_money(sb_client, cursor, chapter_id, member_id):
+    inv_a = _unpaid_invoice(cursor, chapter_id, member_id, 10000)
+    submission = pay_svc.submit_balance_payment(
+        sb_client, chapter_id=chapter_id, member_id=member_id,
+        claimed_amount_cents=10000, method="cash", proof_ref=None,
+    )
+    vp = pay_svc.verify_payment_v2(
+        sb_client, chapter_id=chapter_id, submission_id=submission["id"], actor_id=member_id,
+    )
+    ref_svc.issue_refund(
+        sb_client, chapter_id=chapter_id, verified_payment_id=vp["id"],
+        amount_cents=4000, reason="partial refund", officer_id=member_id,
+    )
+    inv_b = _unpaid_invoice(cursor, chapter_id, member_id, 10000)
+
+    with pytest.raises(psycopg2.Error, match="exceeds"):
+        cursor.execute(
+            "SELECT tr_reallocate_payment(%s, %s, %s::jsonb, %s, %s)",
+            (chapter_id, vp["id"], json.dumps([{"invoice_id": inv_b, "amount_cents": 10000}]),
+             member_id, "move remaining payment"),
+        )
+    assert _remaining(cursor, inv_a) == 4000
+    assert _remaining(cursor, inv_b) == 10000
+
+    cursor.execute(
+        "SELECT tr_reallocate_payment(%s, %s, %s::jsonb, %s, %s) AS result",
+        (chapter_id, vp["id"], json.dumps([{"invoice_id": inv_b, "amount_cents": 6000}]),
+         member_id, "move remaining payment"),
+    )
+    result = cursor.fetchone()["result"]
+    assert result["allocated_total_cents"] == 6000
+    assert result["leftover_cents"] == 0
+    assert _remaining(cursor, inv_a) == 10000
+    assert _remaining(cursor, inv_b) == 4000
 
 
 def _figures(sb_client, member_id):

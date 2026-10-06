@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import uuid
 
+import psycopg2
 import pytest
 
 from api.treasury.services import invoices as inv_svc
@@ -90,19 +91,99 @@ def test_record_payment_without_invoice_allocates_oldest_first(
     assert _status(cursor, inv_b["id"]) == "partially_paid"
 
 
-def test_record_payment_is_atomic(api, sb_client, cursor, chapter_id, member_factory, officer):
-    member, other = member_factory(), member_factory()
-    others_invoice = _invoice(sb_client, chapter_id, other, 3000)
-
-    resp = _record(api, officer, chapter_id, {
-        "member_id": member, "amount_cents": 3000, "method": "cash",
-        "invoice_id": others_invoice["id"],
-    })
-
-    assert resp.status_code == 404, resp.text
-    assert resp.json()["detail"] != "Not Found"  # our mapping, not a missing route
+def test_record_payment_is_atomic(cursor, chapter_id, member_factory):
+    member = member_factory()
+    key = f"atomic-{uuid.uuid4()}"
+    # Balance submission is valid and does not use the actor. A nonexistent
+    # verifier fails its FK only AFTER that submission has been inserted.
+    with pytest.raises(psycopg2.errors.ForeignKeyViolation) as exc:
+        _record_rpc(cursor, chapter_id, member, str(uuid.uuid4()), key=key)
+    assert "tr_verify_payment_v2" in exc.value.diag.context
+    assert "INSERT INTO verified_payments" in exc.value.diag.context
     assert _count(cursor, "payment_submissions", member) == 0
     assert _count(cursor, "verified_payments", member) == 0
+    cursor.execute("SELECT count(*) AS n FROM idempotency_keys WHERE chapter_id=%s", (chapter_id,))
+    assert cursor.fetchone()["n"] == 0
+
+
+def _record_rpc(cursor, chapter_id, member_id, actor_id, *, amount=3000, method="cash",
+                invoice_id=None, reference=None, key=None):
+    cursor.execute(
+        "SELECT tr_record_payment(%s, %s, %s, %s, %s, %s, %s, %s) AS result",
+        (chapter_id, member_id, amount, method, actor_id, invoice_id, reference, key),
+    )
+    return cursor.fetchone()["result"]
+
+
+def test_record_payment_does_not_replay_another_members_submission(
+    cursor, chapter_id, member_factory, officer
+):
+    member_a, member_b = member_factory(), member_factory()
+    cursor.execute(
+        "SELECT tr_submit_balance_payment(%s, %s, 3000, 'cash', NULL, 'K:submit') AS result",
+        (chapter_id, member_a),
+    )
+    submission_a = cursor.fetchone()["result"]
+
+    result = _record_rpc(cursor, chapter_id, member_b, officer, key="K")
+
+    assert result["member_id"] == member_b
+    assert result["submission_id"] != submission_a["id"]
+    assert _count(cursor, "verified_payments", member_a) == 0
+    assert _count(cursor, "verified_payments", member_b) == 1
+    cursor.execute("SELECT to_jsonb(s) AS submission FROM payment_submissions s WHERE id=%s",
+                   (submission_a["id"],))
+    assert cursor.fetchone()["submission"] == submission_a
+
+
+@pytest.mark.parametrize("changed_field", ["amount", "member_id", "method", "invoice_id", "reference"])
+def test_record_payment_same_key_different_request_is_rejected(
+    sb_client, cursor, chapter_id, member_id, member_factory, officer, changed_field
+):
+    invoice = _invoice(sb_client, chapter_id, member_id, 10000)
+    request = {"amount": 3000, "method": "cash", "invoice_id": invoice["id"], "reference": "first"}
+    first = _record_rpc(cursor, chapter_id, member_id, officer, key="K", **request)
+    target = member_id
+    if changed_field == "member_id":
+        target = member_factory()
+    else:
+        request[changed_field] = {
+            "amount": 4000, "method": "zelle", "invoice_id": None, "reference": "second",
+        }[changed_field]
+
+    with pytest.raises(psycopg2.Error, match="idempotency_key_reused"):
+        _record_rpc(cursor, chapter_id, target, officer, key="K", **request)
+    assert _count(cursor, "verified_payments", member_id) == 1
+    assert _count(cursor, "payment_submissions", member_id) == 1
+    assert _status(cursor, invoice["id"]) == "partially_paid"
+    if target != member_id:
+        assert _count(cursor, "payment_submissions", target) == 0
+    cursor.execute("SELECT amount_cents FROM verified_payments WHERE id=%s", (first["id"],))
+    assert cursor.fetchone()["amount_cents"] == 3000
+
+
+@pytest.mark.parametrize("targeted", [False, True])
+def test_record_payment_same_request_replays_stored_result(
+    sb_client, cursor, chapter_id, member_id, officer, targeted
+):
+    invoice = _invoice(sb_client, chapter_id, member_id, 3000) if targeted else None
+    request = {"invoice_id": invoice["id"] if invoice else None, "reference": "cash at meeting"}
+    first = _record_rpc(cursor, chapter_id, member_id, officer, key="K", **request)
+    second = _record_rpc(cursor, chapter_id, member_id, officer, key="K", **request)
+
+    assert first["_created"] is True
+    assert second == {**first, "_created": False}
+    assert _count(cursor, "verified_payments", member_id) == 1
+    assert _count(cursor, "payment_submissions", member_id) == 1
+    cursor.execute(
+        "SELECT result, request_hash FROM idempotency_keys "
+        "WHERE chapter_id=%s AND operation='record_payment' AND key='K'",
+        (chapter_id,),
+    )
+    stored = cursor.fetchone()
+    assert stored is not None
+    assert stored["result"] == second
+    assert stored["request_hash"] is not None
 
 
 def test_record_payment_against_paid_invoice_is_409(api, sb_client, cursor, chapter_id, member_id, officer):
