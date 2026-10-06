@@ -35,7 +35,7 @@ def _by_task(rows):
 
 
 def test_returns_upcoming_events_matching_single_event_routes(
-    as_member, create_event, user_factory, cursor, monkeypatch, sb_client
+    as_member, create_event, create_job, user_factory, cursor, monkeypatch, sb_client
 ):
     import api.attendance.services.checkin_links as links_svc
 
@@ -43,15 +43,38 @@ def test_returns_upcoming_events_matching_single_event_routes(
     officer = user_factory(role="officer")
     plain = user_factory()
     soon = create_event(officer, title="Soon", date=_day(2))
-    later = create_event(officer, title="Later", date=_day(9))
+    later = create_event(officer, title="Later", date=_day(9), group_with_event_id=soon["id"])
     past = create_event(officer, title="Past", date=_day(-3))
     hidden = create_event(officer, title="Officers only", date=_day(4), audience="officers")
+    cancelled = create_event(officer, title="Cancelled", date=_day(3), group_with_event_id=soon["id"])
+    cancelled_id = cancelled["id"]
+    cursor.execute("UPDATE events SET cancelled = true WHERE id = %s", (cancelled_id,))
+
+    # Spread populated details across events, with excluded rows and send history.
     cursor.execute(
-        "INSERT INTO events (chapter_id, title, date, time, location, cancelled) "
-        "VALUES (%s, 'Cancelled', %s, '19:00', 'Hall', true) RETURNING id",
-        (officer["chapter_id"], _day(3)),
+        "INSERT INTO attendance (chapter_id, event_id, member_id, checked_in) "
+        "VALUES (%s, %s, %s, true), (%s, %s, %s, false), (%s, %s, %s, false)",
+        (officer["chapter_id"], soon["id"], plain["id"],
+         officer["chapter_id"], soon["id"], officer["id"],
+         officer["chapter_id"], later["id"], plain["id"]),
     )
-    cancelled_id = str(cursor.fetchone()["id"])
+    cursor.execute(
+        "INSERT INTO event_organizers (chapter_id, event_id, member_id, source) "
+        "VALUES (%s, %s, %s, 'volunteer')",
+        (officer["chapter_id"], later["id"], plain["id"]),
+    )
+    for status in ("open", "in_progress", "approved", "cancelled"):
+        create_job(event_id=later["id"], status=status)
+    for event_id, timestamp in ((soon["id"], "2026-01-01T12:00:00Z"),
+                                (soon["id"], "2026-01-02T12:00:00Z"),
+                                (later["id"], "2026-01-03T12:00:00Z")):
+        cursor.execute(
+            "INSERT INTO event_notification_sends "
+            "(chapter_id, event_id, sender_id, recipient_count, recipient_member_ids, "
+            "body_snapshot, delivery_mode, status, created_at) "
+            "VALUES (%s, %s, %s, 0, '[]'::jsonb, 'Parity fixture', 'dry_run', 'sent', %s)",
+            (officer["chapter_id"], event_id, officer["id"], timestamp),
+        )
 
     officer_client = as_member(officer["id"])
     task_id = _assign_security(officer_client, soon["id"], plain["id"])
@@ -73,11 +96,24 @@ def test_returns_upcoming_events_matching_single_event_routes(
 
     for row in rows:
         eid = row["event_id"]
-        assert row["detail"] == client.get(f"/api/events/{eid}").json()
+        single = client.get(f"/api/events/{eid}")
+        assert single.status_code == 200, single.text
+        assert row["detail"] == single.json()
         assert _by_task(row["security"]) == _by_task(client.get(f"/api/events/{eid}/security").json())
         assert row["checkin_link"] == client.get(f"/api/events/{eid}/checkin-link").json()
 
     by_id = {r["event_id"]: r for r in rows}
+    soon_detail = by_id[soon["id"]]["detail"]
+    later_detail = by_id[later["id"]]["detail"]
+    assert soon_detail["attendance_count"] == 1
+    assert later_detail["attendance_count"] == 0
+    assert later_detail["organizers"][0]["member_id"] == plain["id"]
+    assert later_detail["job_count"] == 3
+    assert later_detail["open_job_count"] == 2
+    assert soon_detail["last_notified_at"].startswith("2026-01-02T12:00:00")
+    assert later_detail["last_notified_at"].startswith("2026-01-03T12:00:00")
+    assert [e["id"] for e in soon_detail["group_events"]] == [later["id"]]
+    assert [e["id"] for e in later_detail["group_events"]] == [soon["id"]]
     assert by_id[soon["id"]]["security"][0]["pending_swap"]["status"] == "pending"
     link = by_id[soon["id"]]["checkin_link"]
     assert link["active"] is True and "short_code" not in link
@@ -90,6 +126,10 @@ def test_returns_upcoming_events_matching_single_event_routes(
     assert officer_rows[soon["id"]]["checkin_link"] == officer_client.get(
         f"/api/events/{soon['id']}/checkin-link"
     ).json()
+    for eid, row in officer_rows.items():
+        single = officer_client.get(f"/api/events/{eid}")
+        assert single.status_code == 200, single.text
+        assert row["detail"] == single.json()
     assert "short_code" in officer_rows[soon["id"]]["checkin_link"]
 
 
