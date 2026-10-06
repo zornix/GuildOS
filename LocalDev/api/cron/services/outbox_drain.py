@@ -275,10 +275,8 @@ def _deliver_row(sb, row: dict, *, names: dict) -> str:
     """
     try:
         if not row.get("member_id"):
-            # Chapter-wide events (ANNOUNCEMENT_PUBLISHED) have no recipient;
-            # they exist for the in-app feed. Close them out honestly instead of
-            # leaving them pending forever.
-            _close_row(sb, row, status="failed", last_error="no member_id (no recipient)")
+            # Legacy or malformed recipient-less rows cannot be delivered.
+            _close_row(sb, row, status="failed", last_error="no recipient")
             return "failed"
 
         payload = _enrich(sb, row)

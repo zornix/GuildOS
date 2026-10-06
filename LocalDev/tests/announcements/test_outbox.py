@@ -201,3 +201,15 @@ def test_retry_permission_gate(member_factory, as_member, outbox_factory, chapte
     row = outbox_factory(chapter_id, None, status="failed")
     plain = member_factory()
     assert as_member(plain).post(f"/api/announcements/outbox/{row}/retry").status_code == 403
+
+
+def test_in_app_announcement_queues_no_outbox_row(president, as_member, announcement_factory, chapter_id, cursor):
+    announcement = announcement_factory(status="draft")
+    response = as_member(president).post(f"/api/announcements/{announcement}/send")
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "sent"
+    cursor.execute(
+        "SELECT count(*) AS n FROM message_outbox WHERE chapter_id=%s AND event_type='ANNOUNCEMENT_PUBLISHED'",
+        (chapter_id,),
+    )
+    assert cursor.fetchone()["n"] == 0
