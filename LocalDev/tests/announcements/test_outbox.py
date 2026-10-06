@@ -213,3 +213,83 @@ def test_in_app_announcement_queues_no_outbox_row(president, as_member, announce
         (chapter_id,),
     )
     assert cursor.fetchone()["n"] == 0
+
+
+@pytest.mark.parametrize("event_type", ["SETUP_CODE", "RESET_CODE"])
+def test_retry_of_a_code_row_is_refused(
+    event_type, officer, as_member, outbox_factory, chapter_id, sb_client
+):
+    from api.announcements.services import outbox
+    row = outbox_factory(chapter_id, officer, status="failed", event_type=event_type)
+    response = as_member(officer).post(f"/api/announcements/outbox/{row}/retry")
+    assert response.status_code == 409
+    assert response.json()["detail"] == "This message carried a one-time code. Send the member a new code instead."
+    with pytest.raises(outbox.OutboxRowNotRetryable):
+        outbox.retry_outbox_row(sb_client, chapter_id=chapter_id, row_id=row, actor_id=officer)
+
+
+def test_retry_rolls_back_when_the_audit_row_fails(
+    officer, outbox_factory, chapter_id, sb_client, cursor
+):
+    from contextlib import contextmanager
+    from api.announcements.services.outbox import retry_outbox_row
+
+    class FailingAuditClient:
+        def __init__(self, client):
+            self.client = client
+
+        def table(self, name):
+            if name == "audit_logs":
+                raise RuntimeError("audit insert unavailable")
+            return self.client.table(name)
+
+        @contextmanager
+        def transaction(self):
+            with self.client.transaction() as tx:
+                yield FailingAuditClient(tx)
+
+    row = outbox_factory(chapter_id, officer, status="failed")
+    with pytest.raises(RuntimeError, match="audit insert unavailable"):
+        retry_outbox_row(FailingAuditClient(sb_client), chapter_id=chapter_id, row_id=row, actor_id=officer)
+    cursor.execute("SELECT status, attempts FROM message_outbox WHERE id=%s AND chapter_id=%s", (row, chapter_id))
+    assert dict(cursor.fetchone()) == {"status": "failed", "attempts": 5}
+
+
+def test_non_secret_failed_row_keeps_its_payload_and_can_be_retried(
+    officer, outbox_factory, chapter_id, sb_client, cursor
+):
+    from api.announcements.services.outbox import retry_outbox_row
+    row = outbox_factory(chapter_id, officer, status="failed")
+    cursor.execute("UPDATE message_outbox SET provider_attempted_at=now() WHERE id=%s", (row,))
+    retry_outbox_row(sb_client, chapter_id=chapter_id, row_id=row, actor_id=officer)
+    cursor.execute("SELECT payload, provider_attempted_at FROM message_outbox WHERE id=%s AND chapter_id=%s", (row, chapter_id))
+    after = cursor.fetchone()
+    assert after["payload"] == {"body": "Chapter meeting at 7pm."}
+    assert after["provider_attempted_at"] is None
+
+
+def test_retry_refuses_a_row_that_left_failed_after_it_was_read(
+    officer, outbox_factory, chapter_id, sb_client, cursor
+):
+    """The drain may claim the row between retry's read and its write."""
+    from contextlib import contextmanager
+    from api.announcements.services.outbox import OutboxRowNotFailed, retry_outbox_row
+
+    row = outbox_factory(chapter_id, officer, status="failed")
+
+    class RacingClient:
+        def table(self, name):
+            return sb_client.table(name)
+
+        @contextmanager
+        def transaction(self):
+            cursor.execute("UPDATE message_outbox SET status='sending' WHERE id=%s", (row,))
+            with sb_client.transaction() as tx:
+                yield tx
+
+    with pytest.raises(OutboxRowNotFailed):
+        retry_outbox_row(RacingClient(), chapter_id=chapter_id, row_id=row, actor_id=officer)
+    cursor.execute("SELECT status FROM message_outbox WHERE id=%s", (row,))
+    assert cursor.fetchone()["status"] == "sending"
+    cursor.execute("SELECT count(*) AS n FROM audit_logs WHERE target_id=%s AND action='OUTBOX_RETRIED'", (row,))
+    assert cursor.fetchone()["n"] == 0

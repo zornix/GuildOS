@@ -197,12 +197,28 @@ def _close_row(
         patch["provider_message_id"] = provider_message_id
     if status == "sent":
         patch["delivered_at"] = _now_iso()
-    if status in ("sent", "simulated") and row["event_type"] in _SECRET_EVENT_TYPES:
-        # The payload is a live credential; once the mail is out there is no
-        # reason to keep it. A 'failed' row keeps its payload so Retry can still
-        # render it. `payload` is NOT NULL, hence {} rather than NULL.
+    if row["event_type"] in _SECRET_EVENT_TYPES:
+        # A finished row must not retain a live credential, including failures.
+        # Officers issue a fresh code instead of retrying. payload is NOT NULL.
         patch["payload"] = {}
     sb.table("message_outbox").update(patch).eq("id", row["id"]).execute()
+    if status in ("sent", "simulated") and row.get("target_table") in (
+        "announcement_sms_sends", "event_notification_sends"
+    ):
+        # The message is delivered; a bookkeeping failure here must not re-mark it failed.
+        try:
+            remaining = (
+                sb.table("message_outbox").select("id", count="exact")
+                .eq("chapter_id", row["chapter_id"])
+                .eq("target_table", row["target_table"]).eq("target_id", row["target_id"])
+                .in_("status", ["failed", "pending", "sending"]).limit(0).execute()
+            )
+            if remaining.count == 0:
+                sb.table(row["target_table"]).update({"status": "sent"}).eq(
+                    "id", row["target_id"]
+                ).eq("chapter_id", row["chapter_id"]).execute()
+        except Exception:
+            logger.exception("could not reconcile parent send log for outbox row %s", row.get("id"))
 
 
 def _chapter_name(sb, chapter_id, cache: dict) -> str:
