@@ -149,7 +149,19 @@ def member_factory(cursor, chapter_id):
             """,
             (chapter or chapter_id, f"Member {uuid.uuid4().hex[:8]}", f"{uuid.uuid4()}@test.local", role),
         )
-        return str(cursor.fetchone()["id"])
+        member_id = str(cursor.fetchone()["id"])
+        if role == "officer":
+            # Since 0162 the members.role column is display-only; an officer is a
+            # member_roles row, which is what rbac_assign_role writes alongside it.
+            cursor.execute(
+                """
+                INSERT INTO member_roles (chapter_id, member_id, role_key)
+                VALUES (%s, %s, 'officer')
+                ON CONFLICT (member_id, role_key, chapter_id) DO NOTHING
+                """,
+                (chapter or chapter_id, member_id),
+            )
+        return member_id
 
     return _make
 
