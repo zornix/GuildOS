@@ -14,6 +14,13 @@ import pytest
 from tests.tasks.conftest import commit_task, uncommit_task
 
 
+@pytest.fixture(autouse=True)
+def _server_clock_chapter(cursor, chapter_id):
+    # Existing factories store server-clock dates/times; keep those cases in UTC.
+    # The local-time regression below explicitly selects the chapter's default zone.
+    cursor.execute("UPDATE chapters SET timezone='UTC' WHERE id=%s", (chapter_id,))
+
+
 # ── commit ────────────────────────────────────────────────────────────────────
 
 
@@ -316,3 +323,31 @@ def test_commit_rejects_task_from_other_chapter(cursor, chapter_id, member_id, t
 
     with pytest.raises(Exception, match="not found"):
         commit_task(cursor, chapter_id, foreign_task, member_id)
+
+
+@pytest.mark.parametrize('parent', ['event','initiative'])
+def test_unclaim_lock_uses_chapter_timezone(cursor, chapter_id, member_id, task_factory,
+                                           event_factory, initiative_factory, parent):
+    cursor.execute("UPDATE chapters SET timezone='America/Los_Angeles' WHERE id=%s", (chapter_id,))
+    for hours in (40,30):
+        if parent == 'event':
+            parent_id = event_factory(hours_from_now=hours)
+            task = task_factory(event_id=parent_id)
+            table = 'events'
+        else:
+            parent_id = initiative_factory(hours_from_now=hours)
+            task = task_factory(initiative_id=parent_id)
+            table = 'initiatives'
+        cursor.execute(
+            f"UPDATE {table} SET date=((now()+%s*interval '1 hour') AT TIME ZONE 'America/Los_Angeles')::date, "
+            "time=((now()+%s*interval '1 hour') AT TIME ZONE 'America/Los_Angeles')::time WHERE id=%s",
+            (hours,hours,parent_id),
+        )
+        commit_task(cursor, chapter_id, task, member_id)
+        if hours == 40:
+            result = uncommit_task(cursor, chapter_id, task, member_id)
+            assert result['commitment']['status'] == 'uncommitted'
+            assert 39.9 < float(result['hours_before_event']) < 40.1
+        else:
+            with pytest.raises(psycopg2.Error, match='unclaim_locked'):
+                uncommit_task(cursor, chapter_id, task, member_id)

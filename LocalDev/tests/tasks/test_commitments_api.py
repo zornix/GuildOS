@@ -15,6 +15,23 @@ from tests.tasks.conftest import commit_task, uncommit_task
 
 
 @pytest.fixture
+def event_factory(cursor, chapter_id):
+    """Store event date/time in the chapter timezone, using the DB clock."""
+    def _make(*, hours_from_now: float) -> str:
+        cursor.execute(
+            """INSERT INTO events (chapter_id, title, date, time, location)
+               SELECT id, 'Commitment API event', start::date, start::time, 'Test Hall'
+               FROM (SELECT id, (now() + %s * interval '1 hour')
+                     AT TIME ZONE timezone AS start FROM chapters WHERE id=%s) c
+               RETURNING id""",
+            (hours_from_now, chapter_id),
+        )
+        return str(cursor.fetchone()["id"])
+
+    return _make
+
+
+@pytest.fixture
 def harness(sb_client, monkeypatch):
     """App with the tasks router; all DB access redirected to the test DB."""
     import api.rbac.services.permissions as rbac_permissions

@@ -14,6 +14,7 @@ harness); `api`/`assign_role`/`make_user` come from the treasury helpers.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from api.memberadmin.core.engagement import load_member_engagement
 from api.memberadmin.services.scoring import compute_engagement_scores
@@ -26,7 +27,7 @@ from tests.treasury.test_v1_helpers import api, assign_role, make_user  # noqa: 
 
 def _make_required_event(cursor, chapter_id, *, hours_ago: float = 30) -> str:
     """A required event in the past so the loader's fine query path runs."""
-    start = datetime.now(timezone.utc) - timedelta(hours=hours_ago)
+    start = (datetime.now(timezone.utc) - timedelta(hours=hours_ago)).astimezone(ZoneInfo("America/Los_Angeles"))
     cursor.execute(
         """INSERT INTO events (chapter_id, title, description, date, time, location, required, fine_amount)
            VALUES (%s, 'Chapter Meeting', '', %s, %s, 'Hall', true, 0) RETURNING id""",
