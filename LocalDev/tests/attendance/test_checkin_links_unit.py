@@ -7,6 +7,7 @@ and the chapter filter on the kill/list queries.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -76,6 +77,10 @@ class FakeClient:
         self.queries: list[FakeQuery] = []
         self.inserted: list[dict] = []
 
+    @contextmanager
+    def transaction(self):
+        yield self
+
     def table(self, name):
         return FakeQuery(self, name)
 
@@ -109,7 +114,7 @@ def use_client(monkeypatch):
 def unique_violation():
     from psycopg2 import errors
 
-    return errors.UniqueViolation("duplicate key value violates unique constraint")
+    return errors.UniqueViolation('duplicate key value violates unique constraint "checkin_links_short_code_key"')
 
 
 # ── _is_duplicate_code ────────────────────────────────────────────────────────
@@ -215,12 +220,12 @@ def test_session_bound_to_another_link_does_not_govern():
     assert svc._session_for_link(client, _link()) is None
 
 
-def test_ambiguous_multiple_unbound_sessions_resolve_to_none():
-    client = FakeClient(sessions=[
+async def test_ambiguous_multiple_unbound_sessions_invalidate_the_link(use_client):
+    use_client(FakeClient(link=_valid_link(), sessions=[
         {"id": "s-1", "event_id": "ev-1", "checkin_link_id": None, "closes_at": None},
         {"id": "s-2", "event_id": "ev-1", "checkin_link_id": None, "closes_at": None},
-    ])
-    assert svc._session_for_link(client, _link()) is None
+    ]))
+    assert await svc.validate_checkin_link("A7x9Kp") is None
 
 
 def test_no_sessions_at_all_resolve_to_none():
@@ -326,3 +331,123 @@ def test_naive_datetime_is_treated_as_utc():
 
 def test_iso_string_with_z_suffix_parses():
     assert svc._as_datetime("2026-03-01T12:00:00Z") == datetime(2026, 3, 1, 12, 0, tzinfo=timezone.utc)
+
+
+@pytest.mark.parametrize("closed", [False, True])
+async def test_two_sessions_bound_to_one_link_is_invalid_even_before_close(use_client, closed):
+    closes_at = NOW - timedelta(minutes=1) if closed else None
+    use_client(FakeClient(link=_valid_link(), sessions=[
+        {"id": "s-1", "event_id": "ev-1", "checkin_link_id": "link-1", "closes_at": closes_at},
+        {"id": "s-2", "event_id": "ev-1", "checkin_link_id": "link-1", "closes_at": closes_at},
+    ]))
+    assert await svc.validate_checkin_link("A7x9Kp") is None
+
+
+async def test_link_with_no_session_at_all_is_valid_until_ttl(use_client):
+    use_client(FakeClient(link=_valid_link(), sessions=[]))
+    assert await svc.validate_checkin_link("A7x9Kp") is not None
+
+
+def test_several_open_unbound_sessions_are_not_bound():
+    client = FakeClient(sessions=[
+        {"id": "s-1", "event_id": "ev-1", "checkin_link_id": None, "closes_at": None},
+        {"id": "s-2", "event_id": "ev-1", "checkin_link_id": None, "closes_at": None},
+    ])
+    svc._bind_open_sessions(client, "ev-1", "link-1", NOW)
+    assert not any(q.op == "update" for q in client.queries)
+
+
+async def test_failed_link_insert_keeps_the_old_link_active(attendance_app, cursor, event_factory, chapter_id, member_factory, monkeypatch):
+    event = event_factory(chapter_id)
+    actor = member_factory(role="officer")
+    old_link = await svc.create_checkin_link(event, actor)
+    # short_code is TEXT, so force a NOT NULL violation instead of a length error.
+    monkeypatch.setattr(svc, "generate_short_code", lambda: None)
+    with pytest.raises(HTTPException) as exc:
+        await svc.create_checkin_link(event, actor)
+    assert exc.value.status_code == 500
+    cursor.execute("SELECT active FROM checkin_links WHERE event_id = %s AND short_code = %s", (event, old_link["short_code"]))
+    assert cursor.fetchone()["active"] is True
+
+
+async def test_link_session_does_not_double_bind(attendance_app, sb_client, cursor, event_factory, chapter_id, member_factory, session_factory):
+    from api.attendance.services.sessions import create_session
+    event = event_factory(chapter_id)
+    actor = member_factory(role="officer")
+    manual = session_factory(chapter_id, event, mode="manual")
+    session = await create_session(sb_client, chapter_id=chapter_id, event_id=event, mode="short_link", closes_at=None, actor_id=actor)
+    cursor.execute("SELECT id FROM attendance_sessions WHERE event_id = %s AND checkin_link_id = %s", (event, session["checkin_link_id"]))
+    assert [str(row["id"]) for row in cursor.fetchall()] == [session["id"]]
+    cursor.execute("SELECT checkin_link_id FROM attendance_sessions WHERE id = %s", (manual,))
+    assert cursor.fetchone()["checkin_link_id"] is None
+    assert await svc.validate_checkin_link(session["checkin_link"]["short_code"]) is not None
+
+
+async def test_failed_session_insert_leaves_no_link(attendance_app, sb_client, cursor, event_factory, chapter_id, member_factory, monkeypatch):
+    from api.attendance.services.sessions import create_session
+    from api.platform.postgres import _TableAccessor
+    import psycopg2
+    event = event_factory(chapter_id)
+    actor = member_factory(role="officer")
+    original_insert = _TableAccessor.insert
+
+    def invalid_session_insert(query, data):
+        if query._table == "attendance_sessions":
+            data = {**data, "mode": "invalid"}
+        return original_insert(query, data)
+
+    monkeypatch.setattr(_TableAccessor, "insert", invalid_session_insert)
+    with pytest.raises(psycopg2.errors.CheckViolation):
+        await create_session(sb_client, chapter_id=chapter_id, event_id=event, mode="short_link", closes_at=None, actor_id=actor)
+    cursor.execute("SELECT id FROM checkin_links WHERE event_id = %s", (event,))
+    assert cursor.fetchall() == []
+    cursor.execute("SELECT linked_attendance_session_id FROM events WHERE id = %s", (event,))
+    assert cursor.fetchone()["linked_attendance_session_id"] is None
+
+
+def test_one_active_link_per_event_is_enforced_by_the_database(cursor, event_factory, chapter_id, checkin_link_factory):
+    import psycopg2
+    event = event_factory(chapter_id)
+    checkin_link_factory(event)
+    with pytest.raises(psycopg2.errors.UniqueViolation):
+        checkin_link_factory(event)
+
+
+async def test_active_link_collision_returns_conflict_without_retry(use_client):
+    from types import SimpleNamespace
+    from psycopg2 import errors
+    error = errors.UniqueViolation("duplicate key")
+    # psycopg2's diag is read-only; use the same structured error surface.
+    class ActiveLinkCollision(Exception):
+        pgcode = "23505"
+        diag = SimpleNamespace(constraint_name="uq_checkin_links_one_active_per_event")
+    client = use_client(FakeClient(insert_errors=[ActiveLinkCollision(), error]))
+    with pytest.raises(HTTPException) as exc:
+        await svc.create_checkin_link("ev-1", "officer-1")
+    assert exc.value.status_code == 409
+    assert len([q for q in client.queries if q.op == "insert"]) == 1
+
+
+async def test_unknown_unique_constraint_is_not_retried(use_client):
+    client = use_client(FakeClient(insert_errors=[Exception('duplicate key value violates unique constraint "unrelated_key"')]))
+    with pytest.raises(HTTPException) as exc:
+        await svc.create_checkin_link("ev-1", "officer-1")
+    assert exc.value.status_code == 500
+    assert len([q for q in client.queries if q.op == "insert"]) == 1
+
+
+async def test_code_collision_retries_the_whole_transaction(attendance_app, cursor, chapter_id, event_factory, member_factory, monkeypatch):
+    import uuid
+    actor = member_factory(role="officer")
+    first_event = event_factory(chapter_id)
+    second_event = event_factory(chapter_id)
+    existing = await svc.create_checkin_link(first_event, actor)
+    previous = await svc.create_checkin_link(second_event, actor)
+    codes = iter([existing["short_code"], uuid.uuid4().hex[:6]])
+    monkeypatch.setattr(svc, "generate_short_code", lambda: next(codes))
+    replacement = await svc.create_checkin_link(second_event, actor)
+    cursor.execute("SELECT id, active FROM checkin_links WHERE event_id = %s", (second_event,))
+    states = {str(row["id"]): row["active"] for row in cursor.fetchall()}
+    assert states == {previous["id"]: False, replacement["id"]: True}
+    cursor.execute("SELECT active FROM checkin_links WHERE id = %s", (existing["id"],))
+    assert cursor.fetchone()["active"] is True

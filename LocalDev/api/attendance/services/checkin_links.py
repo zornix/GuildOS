@@ -85,8 +85,12 @@ def _as_datetime(value) -> datetime | None:
     return None
 
 
+class AmbiguousSession(Exception):
+    """More than one attendance session could govern this link."""
+
+
 def _session_for_link(sb, link: dict) -> dict | None:
-    """The attendance session governing this link, or None when it is ambiguous.
+    """The attendance session governing this link; ambiguity raises.
 
     The relation lives on the session side -- attendance_sessions.checkin_link_id
     -> checkin_links.id (0084); a link row carries no session_id. So:
@@ -96,8 +100,7 @@ def _session_for_link(sb, link: dict) -> dict | None:
       2. otherwise, if the event has exactly one *still-open* session bound to no
          link at all, it governs (links created before create_checkin_link
          started binding the event's open session to them);
-      3. otherwise None -- ambiguous, and a guess here would either kill a valid
-         link or honor the wrong window.
+      3. ambiguous → the link is invalid; no session → TTL alone governs.
 
     The fallback ignores sessions bound to a *different* link, and sessions that
     have already closed: neither has any claim on a link created after it. An
@@ -121,7 +124,7 @@ def _session_for_link(sb, link: dict) -> dict | None:
         if len(bound) == 1:
             return bound[0]
         if bound:
-            return None
+            raise AmbiguousSession
 
     now = datetime.now(timezone.utc)
     unbound = [
@@ -130,6 +133,8 @@ def _session_for_link(sb, link: dict) -> dict | None:
     ]
     if len(unbound) == 1:
         return unbound[0]
+    if len(unbound) > 1:
+        raise AmbiguousSession
     return None
 
 
@@ -139,15 +144,12 @@ def _is_closed(session: dict, now: datetime) -> bool:
 
 
 def _bind_open_sessions(sb, event_id: str, link_id: str, now: datetime) -> None:
-    """Point the event's still-open unbound sessions at the link just created.
+    """Bind the link only when exactly one open unbound session exists.
 
     Without this, a link made through POST /events/{id}/checkin-link records no
     session at all and _session_for_link has to guess which window governs it.
     Closed sessions are left alone -- binding one would hand the new link the
     dead window it was generated to replace.
-
-    (One-row-at-a-time because the query builder has no IS NULL filter and these
-    are single-row, non-financial updates -- an event has one open session.)
     """
     rows = (
         sb.table("attendance_sessions")
@@ -155,65 +157,63 @@ def _bind_open_sessions(sb, event_id: str, link_id: str, now: datetime) -> None:
         .eq("event_id", event_id)
         .execute()
     ).data or []
-    for row in rows:
-        if row.get("checkin_link_id") or _is_closed(row, now):
-            continue
+    unbound = [row for row in rows if not row.get("checkin_link_id") and not _is_closed(row, now)]
+    if len(unbound) == 1:
         sb.table("attendance_sessions") \
             .update({"checkin_link_id": link_id}) \
-            .eq("id", row["id"]) \
+            .eq("id", unbound[0]["id"]) \
             .execute()
 
 
-async def create_checkin_link(event_id: str, created_by: str) -> dict:
-    """
-    Create a new short-lived check-in link for an event.
-    Deactivates any existing active link for the same event, and binds the
-    event's still-open unbound sessions to the new link so the closes_at gate
-    knows which window governs it.
-    """
-    sb = get_db()
-    now = datetime.now(timezone.utc)
-    expires_at = now + timedelta(minutes=settings.CHECKIN_LINK_TTL_MINUTES)
-
-    sb.table("checkin_links") \
-        .update({"active": False}) \
-        .eq("event_id", event_id) \
-        .eq("active", True) \
-        .execute()
-
-    for _ in range(5):
+async def create_checkin_link(event_id: str, created_by: str, *, sb=None, bind_sessions: bool = True) -> dict:
+    """Rotate a link atomically, optionally within the caller's transaction."""
+    def create(tx):
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(minutes=settings.CHECKIN_LINK_TTL_MINUTES)
+        tx.table("checkin_links") \
+            .update({"active": False}) \
+            .eq("event_id", event_id) \
+            .eq("active", True) \
+            .execute()
         code = generate_short_code()
-        try:
-            inserted = unwrap_row(sb.table("checkin_links").insert({
-                "event_id": event_id,
-                "short_code": code,
-                "created_by": created_by,
-                "expires_at": expires_at.isoformat(),
-                "active": True,
-            }).execute()) or {}
-        except Exception as exc:
-            if _is_duplicate_code(exc):
-                continue
-            logger.exception("check-in link insert failed for event %s", event_id)
-            raise HTTPException(500, "Could not generate check-in code") from exc
-
-        # Outside the retry try/except on purpose: the link exists now, and a
-        # binding failure must not be mistaken for a code collision.
-        if inserted.get("id"):
-            _bind_open_sessions(sb, event_id, inserted["id"], now)
-
+        inserted = unwrap_row(tx.table("checkin_links").insert({
+            "event_id": event_id,
+            "short_code": code,
+            "created_by": created_by,
+            "expires_at": expires_at.isoformat(),
+            "active": True,
+        }).execute()) or {}
+        if bind_sessions and inserted.get("id"):
+            _bind_open_sessions(tx, event_id, inserted["id"], now)
         return {
+            "id": inserted.get("id"),
             "short_code": code,
             "url": f"{settings.BASE_URL}/c/{code}",
             "expires_at": expires_at.isoformat(),
             "event_id": event_id,
         }
 
-    logger.error(
-        "check-in code generation exhausted 5 attempts for event %s -- a collision "
-        "rate this high means the code space or the table is wrong",
-        event_id,
-    )
+    if sb is not None:
+        return create(sb)
+
+    client = get_db()
+    for _ in range(5):
+        try:
+            with client.transaction() as tx:
+                return create(tx)
+        except Exception as exc:
+            constraint = getattr(getattr(exc, "diag", None), "constraint_name", "") or ""
+            if _is_duplicate_code(exc):
+                if constraint == "uq_checkin_links_one_active_per_event":
+                    raise HTTPException(409, "A check-in code was just created for this event. Refresh to see it.") from exc
+                if constraint == "checkin_links_short_code_key" or (
+                    not constraint and "checkin_links_short_code_key" in str(exc)
+                ):
+                    continue
+            logger.error("check-in link creation failed for event %s", event_id)
+            raise HTTPException(500, "Could not generate check-in code") from exc
+
+    logger.error("check-in code generation exhausted 5 attempts for event %s", event_id)
     raise HTTPException(500, "Could not generate check-in code")
 
 
@@ -245,7 +245,10 @@ async def validate_checkin_link(short_code: str) -> dict | None:
     if not link:
         return None
 
-    session = _session_for_link(sb, link)
+    try:
+        session = _session_for_link(sb, link)
+    except AmbiguousSession:
+        return None
     if session:
         closes_at = _as_datetime(session.get("closes_at"))
         if closes_at is not None and now > closes_at:
