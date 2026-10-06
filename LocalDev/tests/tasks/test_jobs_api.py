@@ -191,3 +191,48 @@ def test_create_event_job_without_supervisor_organizer_or_tasks_assign_is_403(
     client = harness.login(actor, chapter_id, role="member")
     resp = client.post("/api/tasks/", json={"title": "Order decorations", "event_id": event_id})
     assert resp.status_code == 403
+
+
+def test_create_task_is_atomic(sb_client, cursor, chapter_id, member_id):
+    from api.tasks.services.tasks import create_task
+    with pytest.raises(Exception):
+        create_task(sb_client, chapter_id=chapter_id, title='Atomic job', description=None,
+                    assigned_member_id=None, group_id=None, required=False, due_at=None,
+                    actor_id=member_id, people_needed=-1)
+    cursor.execute("SELECT id FROM tasks WHERE chapter_id=%s AND title='Atomic job'", (chapter_id,))
+    assert cursor.fetchall() == []
+
+
+def test_unowned_job_status_needs_review_permission(harness, chapter_id, member_id, task_factory, event_factory):
+    task_id = task_factory(event_id=event_factory(hours_from_now=48))
+    response = harness.login(member_id, chapter_id).post(f'/api/tasks/{task_id}/status', json={'status':'in_progress'})
+    assert response.status_code == 403
+
+
+def test_committed_member_can_update_their_job(harness, cursor, chapter_id, member_id, task_factory, event_factory):
+    task_id = task_factory(event_id=event_factory(hours_from_now=48))
+    commit_task(cursor, chapter_id, task_id, member_id)
+    response = harness.login(member_id, chapter_id).post(f'/api/tasks/{task_id}/status', json={'status':'in_progress'})
+    assert response.status_code == 200, response.text
+
+
+@pytest.mark.parametrize('status,target,detail', [
+    ('approved','open','cannot change status'),
+    ('cancelled','open','cannot change status'),
+    ('done_reported','in_progress','approve or reject'),
+    ('open','done','report and approve'),
+])
+def test_illegal_job_status_returns_409(harness, chapter_id, member_factory, task_factory, event_factory, status, target, detail):
+    reviewer = member_factory(role='officer')
+    task_id = task_factory(event_id=event_factory(hours_from_now=48), status=status)
+    response = harness.login(reviewer, chapter_id).post(f'/api/tasks/{task_id}/status', json={'status':target})
+    assert response.status_code == 409, response.text
+    assert detail in response.json()['detail']
+
+
+def test_security_job_status_change_is_a_client_error(harness, cursor, chapter_id, member_factory, task_factory, event_factory):
+    reviewer = member_factory(role='officer')
+    task_id = task_factory(event_id=event_factory(hours_from_now=48))
+    cursor.execute("UPDATE tasks SET kind='security' WHERE id=%s", (task_id,))
+    response = harness.login(reviewer, chapter_id).post(f'/api/tasks/{task_id}/status', json={'status':'in_progress'})
+    assert response.status_code == 400, response.text

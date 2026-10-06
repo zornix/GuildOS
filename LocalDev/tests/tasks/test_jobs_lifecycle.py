@@ -288,3 +288,31 @@ def test_audit_written_for_every_transition(cursor, chapter_id, member_factory, 
     )
     actions = {r["action"] for r in cursor.fetchall()}
     assert {"COMMIT_TASK", "JOB_REPORTED", "JOB_REJECTED", "JOB_APPROVED"} <= actions
+
+
+@pytest.mark.parametrize('status,prefix', [('approved','task_closed'), ('cancelled','task_closed'), ('done_reported','task_in_review')])
+def test_closed_or_reported_task_cannot_be_reopened(cursor, chapter_id, task_factory, status, prefix):
+    task_id = task_factory(status=status)
+    with pytest.raises(Exception, match=prefix):
+        cursor.execute('SELECT tk_update_task_status(%s,%s,%s,%s)', (chapter_id,task_id,'open',None))
+
+
+def test_job_cannot_be_set_done_directly(cursor, chapter_id, task_factory, event_factory):
+    task_id = task_factory(event_id=event_factory(hours_from_now=48))
+    with pytest.raises(Exception, match='report and approve'):
+        cursor.execute('SELECT tk_update_task_status(%s,%s,%s,%s)', (chapter_id,task_id,'done',None))
+
+
+def test_standalone_task_can_toggle_open_and_done(cursor, chapter_id, task_factory):
+    task_id = task_factory()
+    for status in ('done','open'):
+        cursor.execute('SELECT tk_update_task_status(%s,%s,%s,%s) AS r', (chapter_id,task_id,status,None))
+        assert cursor.fetchone()['r']['status'] == status
+
+
+def test_status_idempotency_replay_precedes_transition_guard(cursor, chapter_id, task_factory):
+    task_id = task_factory()
+    cursor.execute("SELECT tk_update_task_status(%s,%s,'cancelled',NULL,'close-once') AS r", (chapter_id,task_id))
+    result = cursor.fetchone()['r']
+    cursor.execute("SELECT tk_update_task_status(%s,%s,'cancelled',NULL,'close-once') AS r", (chapter_id,task_id))
+    assert cursor.fetchone()['r'] == result
