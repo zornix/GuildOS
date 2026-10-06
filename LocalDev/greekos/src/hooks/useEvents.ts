@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ChapterEvent, EventJob, Member, SecurityAssignment } from '../types';
 import { api } from '../api';
-import { adaptEventDetail, adaptEvents, adaptSecurityAssignment, toEventBody } from '../adapters';
+import { adaptCheckInLink, adaptEventDetail, adaptEvents, adaptSecurityAssignment, toEventBody } from '../adapters';
 import { ShowToast } from './useToast';
 import { SyncApi } from './useBackend';
 import { describeError } from '../lib/sync';
@@ -80,8 +80,7 @@ export function useEvents({ members, syncApi, showToast, refetchJobs }: Deps) {
     setEvents(prev => prev.map(e => e.id === eventId ? {
       ...e,
       ...adaptEventDetail(detail, members),
-      checkInToken: link.short_code,
-      checkInLinkActive: !!link.short_code
+      ...adaptCheckInLink(link)
     } : e));
   };
 

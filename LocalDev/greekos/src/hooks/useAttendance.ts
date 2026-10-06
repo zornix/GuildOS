@@ -66,7 +66,7 @@ export function useAttendance({ members, setEvents, refetchEvents, syncApi, show
     try {
       const res = await api.checkInWithCode(code.trim());
       await refetchEvents();
-      return { ok: true, message: `Checked in for ${res.event_title}.` };
+      return { ok: true, message: `Checked in to ${res.event_title}.` };
     } catch (err) {
       const msg = (err as Error).message;
       if (msg.includes('(410)')) return { ok: false, message: 'That door code has expired or is not valid.' };

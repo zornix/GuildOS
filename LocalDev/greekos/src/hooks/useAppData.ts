@@ -6,6 +6,7 @@ import { isOfficerView } from '../lib/session';
 import { EMPTY_CONTRIBUTION } from '../lib/contribution';
 import {
   adaptAnnouncements,
+  adaptCheckInLink,
   adaptContribution,
   adaptEventDetail,
   adaptEvents,
@@ -182,8 +183,7 @@ export function useAppData() {
               securityByEvent.set(e.id, rows.map(row => adaptSecurityAssignment(row, membersById)));
               detailByEvent.set(e.id, {
                 ...adaptEventDetail(detail, rosterRows),
-                checkInToken: link.short_code,
-                checkInLinkActive: !!link.short_code
+                ...adaptCheckInLink(link)
               });
             } catch (err) {
               console.error(`Upcoming-event load failed for event ${e.id}`, err);

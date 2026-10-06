@@ -27,6 +27,12 @@ export function syncOutcome({ backendDown, outcome, successMessage, errorMessage
   return { toast: successMessage ?? null, rollback: false };
 }
 
+/** The server's own detail from an api.ts error (`METHOD /path failed (NNN): detail`), else the fallback. */
+export function serverMessage(err: unknown, fallback: string): string {
+  const match = /failed \(\d{3}\): (.+)$/s.exec((err as { message?: string } | undefined)?.message ?? '');
+  return match?.[1].trim() || fallback;
+}
+
 /** Generic copy for an error the caller did not translate. */
 export function describeError(err: unknown): string {
   return (err as { status?: number } | undefined)?.status === 403 ? FORBIDDEN_MESSAGE : REFUSED_MESSAGE;

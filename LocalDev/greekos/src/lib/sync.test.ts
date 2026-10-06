@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { FORBIDDEN_MESSAGE, REFUSED_MESSAGE, UNREACHABLE_MESSAGE, describeError, syncOutcome } from './sync';
+import { FORBIDDEN_MESSAGE, REFUSED_MESSAGE, UNREACHABLE_MESSAGE, describeError, serverMessage, syncOutcome } from './sync';
 
 test('backend down: the user is told nothing was saved and the optimistic row is rolled back', () => {
   const out = syncOutcome({ backendDown: true, outcome: 'ok', successMessage: 'Created event' });
@@ -27,4 +27,13 @@ test('describeError keeps the permission copy for a 403 and the refusal copy oth
   assert.equal(describeError(Object.assign(new Error('x'), { status: 403 })), FORBIDDEN_MESSAGE);
   assert.equal(describeError(Object.assign(new Error('x'), { status: 409 })), REFUSED_MESSAGE);
   assert.equal(describeError(undefined), REFUSED_MESSAGE);
+});
+
+test("serverMessage shows the server's detail from an api.ts error, or the fallback", () => {
+  const err = Object.assign(new Error('POST /api/rbac/members/m1/roles failed (403): Only an admin can grant or revoke that role'), { status: 403 });
+  assert.equal(serverMessage(err, 'Could not change that role.'), 'Only an admin can grant or revoke that role');
+  const conflict = new Error('DELETE /api/rbac/members/m1/roles/admin failed (409): The chapter must keep at least one admin. Make someone else an admin first.');
+  assert.equal(serverMessage(conflict, 'x'), 'The chapter must keep at least one admin. Make someone else an admin first.');
+  assert.equal(serverMessage(new TypeError('Failed to fetch'), 'Could not change that role.'), 'Could not change that role.');
+  assert.equal(serverMessage(undefined, 'fallback'), 'fallback');
 });

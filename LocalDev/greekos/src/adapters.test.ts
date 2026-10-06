@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { adaptTaskToJob, adaptTasks, groupJobsByParent } from './adapters';
+import { adaptCheckInLink, adaptTaskToJob, adaptTasks, groupJobsByParent } from './adapters';
 import type { TaskDto } from './api';
 import type { Member } from './types';
 import { canClaimTask } from './lib/tasks';
@@ -89,4 +89,16 @@ test('adaptTaskToJob maps status and claimants; groupJobsByParent drops cancelle
   ], membersById);
   assert.deepEqual(grouped.byEvent.get('e1')!.map(j => j.id), ['t1']);
   assert.deepEqual(grouped.byInitiative.get('i1')!.map(j => j.id), ['t4']);
+});
+
+test('a code-less check-in link (member view) still reads as an open door; {} is closed', () => {
+  assert.deepEqual(
+    adaptCheckInLink({ event_id: 'e1', active: true, expires_at: '2026-09-20T20:00:00Z' }),
+    { checkInLinkActive: true, checkInToken: undefined }
+  );
+  assert.deepEqual(
+    adaptCheckInLink({ short_code: 'A7x9Kp', url: 'http://h/c/A7x9Kp', expires_at: '2026-09-20T20:00:00Z' }),
+    { checkInLinkActive: true, checkInToken: 'A7x9Kp' }
+  );
+  assert.deepEqual(adaptCheckInLink({}), { checkInLinkActive: false, checkInToken: undefined });
 });
