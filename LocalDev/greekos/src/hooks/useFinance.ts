@@ -1,6 +1,6 @@
 import { useState, type Dispatch, type SetStateAction } from 'react';
 import { Fine, LedgerEntry, Member, Payment } from '../types';
-import { api, optionalOfficerCall, type IssueFinesResultDto, type MemberTreasuryDashboardDto } from '../api';
+import { api, optionalOfficerCall, type MemberTreasuryDashboardDto } from '../api';
 import { adaptFines, adaptMembers, adaptPayments } from '../adapters';
 import { formatMoney } from '../formatters';
 import { adaptMemberBalance } from '../lib/balance';
@@ -16,7 +16,7 @@ import {
   planProof,
   toBase64
 } from '../lib/dues';
-import { TransactionDraft, planTransaction } from '../lib/transaction';
+import { TransactionDraft, submitTransaction as runTransaction } from '../lib/transaction';
 import { ShowToast } from './useToast';
 import { EnqueueOutbox } from './useOutbox';
 import { SyncApi } from './useBackend';
@@ -191,42 +191,8 @@ export function useFinance({ members, setMembers, currentMemberId, showToast }: 
     for (const r of results) if (r.status === 'rejected') console.error('Refresh after transaction failed', r.reason);
   };
 
-  /** The four officer transactions (D1). Resolves after the server has the row
-   *  and the tab has been re-read; rejects with the message to show inline. */
-  const submitTransaction = async (draft: TransactionDraft, idempotencyKey: string) => {
-    const call = planTransaction(draft);
-    const name = members.find(m => m.id === draft.memberId)?.name || 'the member';
-    let message: string;
-    switch (call.call) {
-      case 'recordPayment':
-        await api.recordPayment(call.body, idempotencyKey);
-        message = `Recorded ${formatMoney(call.body.amount_cents)} payment from ${name}.`;
-        break;
-      case 'issueEventFine': {
-        const result = await api.issueFines(call.eventId, call.memberIds) as IssueFinesResultDto;
-        if (!result.issued_member_ids.includes(draft.memberId)) {
-          throw new Error(`No fine for ${name}: they were present, excused, or already fined for that event.`);
-        }
-        message = `Assessed ${formatMoney(result.flat_fine_cents)} fine to ${name}.`;
-        break;
-      }
-      case 'createInvoice':
-        await api.createInvoice(call.body, idempotencyKey);
-        message = call.body.source === 'fine'
-          ? `Assessed ${formatMoney(call.body.amount_cents)} fine to ${name}.`
-          : `Invoiced ${formatMoney(call.body.amount_cents)} to ${name}.`;
-        break;
-      case 'createAdjustment': {
-        const adjustment = await api.createAdjustment(call.body, idempotencyKey);
-        message = adjustment.status === 'pending'
-          ? `Adjustment of ${formatMoney(Math.abs(adjustment.delta_cents))} needs a second sign-off before it applies.`
-          : 'Adjustment recorded.';
-        break;
-      }
-    }
-    await refetchAfterWrite();
-    showToast(message);
-  };
+  const submitTransaction = (draft: TransactionDraft, idempotencyKey: string) =>
+    runTransaction({ api, members, refetch: refetchAfterWrite, showToast }, draft, idempotencyKey);
 
   /** The command console's "fine NAME $N for REASON" (useAppData) lands here. */
   const handleIssueFine = async (fine: { memberId: string; amountCents?: number; amount?: number; reason: string; relatedEventId?: string }) => {

@@ -6,6 +6,7 @@ import {
   draftFromForm,
   planTransaction,
   previewTransaction,
+  submitTransaction,
   TransactionForm
 } from './transaction';
 
@@ -153,4 +154,44 @@ test('a free-form fine, an invoice and an adjustment all need words', () => {
   assert.throws(() => planTransaction({ kind: 'Invoice', memberId: 'm1', amountCents: 100, description: '' }), /description/i);
   assert.throws(() => planTransaction({ kind: 'Adjustment', memberId: 'm1', deltaCents: 100, reason: '' }), /reason/i);
   assert.throws(() => planTransaction({ kind: 'Payment', memberId: '', amountCents: 100, method: 'cash' }), /member/i);
+});
+
+/** A fake of the four api calls: records what was sent, answers like the server. */
+function fakeDeps() {
+  const calls: { call: string; args: unknown[] }[] = [];
+  const toasts: string[] = [];
+  const record = (call: string, result: unknown) => async (...args: unknown[]) => { calls.push({ call, args }); return result; };
+  const api = {
+    recordPayment: record('recordPayment', {}),
+    createInvoice: record('createInvoice', {}),
+    issueFines: record('issueFines', { event_id: 'e1', flat_fine_cents: 2500, issued_member_ids: ['m1'], skipped_member_ids: [] }),
+    createAdjustment: async (body: { delta_cents: number }, key: string) => {
+      calls.push({ call: 'createAdjustment', args: [body, key] });
+      return { id: 'a1', member_id: 'm1', kind: 'manual_correction', delta_cents: body.delta_cents, reason: 'fix', status: 'pending' };
+    }
+  };
+  const deps = {
+    api: api as never,
+    members: [{ id: 'm1', name: 'Jake Martinez' }],
+    backendDown: false,
+    refetch: async () => true,
+    showToast: (m: string) => { toasts.push(m); }
+  };
+  return { deps, api, calls, toasts };
+}
+
+test('submitTransaction sends the key, waits on a pending adjustment, and never toasts success on a 403', async () => {
+  const { deps, api, calls, toasts } = fakeDeps();
+  await submitTransaction(deps, { kind: 'Adjustment', memberId: 'm1', deltaCents: 60000, reason: 'fix' }, 'key-1');
+  assert.equal(calls[0].call, 'createAdjustment');
+  assert.equal(calls[0].args[1], 'key-1');
+  assert.deepEqual(toasts, ['Adjustment of $600.00 needs a second sign-off before it applies.']);
+
+  toasts.length = 0;
+  api.recordPayment = async () => { throw Object.assign(new Error('POST /api/treasury/payments/record failed (403): Forbidden'), { status: 403 }); };
+  await assert.rejects(
+    submitTransaction(deps, { kind: 'Payment', memberId: 'm1', amountCents: 5000, method: 'cash' }, 'key-2'),
+    /403/
+  );
+  assert.deepEqual(toasts, []);
 });

@@ -1,4 +1,5 @@
-import type { ChapterEvent } from '../types';
+import type { ChapterEvent, Member } from '../types';
+import type { api as Api, IssueFinesResultDto } from '../api';
 import { formatMoney } from '../formatters';
 
 /** The four things a treasurer records. Same words as the backend ledger. */
@@ -177,3 +178,49 @@ export function draftFromForm(form: TransactionForm): TransactionDraft {
 /** The events a fine can attach to: required, and already happened. */
 export const finableEvents = (events: ChapterEvent[], today: string): ChapterEvent[] =>
   events.filter(e => e.required && e.date <= today);
+
+export interface TransactionDeps {
+  api: Pick<typeof Api, 'recordPayment' | 'issueFines' | 'createInvoice' | 'createAdjustment'>;
+  members: Pick<Member, 'id' | 'name'>[];
+  /** Re-reads every number on the tab after a write. */
+  refetch: () => Promise<unknown>;
+  showToast: (message: string) => void;
+}
+
+/** The four officer transactions (D1). Resolves after the server has the row
+ *  and the tab has been re-read; rejects with the message to show inline. */
+export async function submitTransaction(deps: TransactionDeps, draft: TransactionDraft, idempotencyKey: string): Promise<void> {
+  const { api } = deps;
+  const call = planTransaction(draft);
+  const name = deps.members.find(m => m.id === draft.memberId)?.name || 'the member';
+  let message: string;
+  switch (call.call) {
+    case 'recordPayment':
+      await api.recordPayment(call.body, idempotencyKey);
+      message = `Recorded ${formatMoney(call.body.amount_cents)} payment from ${name}.`;
+      break;
+    case 'issueEventFine': {
+      const result = await api.issueFines(call.eventId, call.memberIds) as IssueFinesResultDto;
+      if (!result.issued_member_ids.includes(draft.memberId)) {
+        throw new Error(`No fine for ${name}: they were present, excused, or already fined for that event.`);
+      }
+      message = `Assessed ${formatMoney(result.flat_fine_cents)} fine to ${name}.`;
+      break;
+    }
+    case 'createInvoice':
+      await api.createInvoice(call.body, idempotencyKey);
+      message = call.body.source === 'fine'
+        ? `Assessed ${formatMoney(call.body.amount_cents)} fine to ${name}.`
+        : `Invoiced ${formatMoney(call.body.amount_cents)} to ${name}.`;
+      break;
+    case 'createAdjustment': {
+      const adjustment = await api.createAdjustment(call.body, idempotencyKey);
+      message = adjustment.status === 'pending'
+        ? `Adjustment of ${formatMoney(Math.abs(adjustment.delta_cents))} needs a second sign-off before it applies.`
+        : 'Adjustment recorded.';
+      break;
+    }
+  }
+  await deps.refetch();
+  deps.showToast(message);
+}
