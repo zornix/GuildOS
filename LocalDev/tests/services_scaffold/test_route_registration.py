@@ -15,7 +15,6 @@ LEGACY_PATHS = [
     "/api/events/{event_id}",
     "/api/events/{event_id}/checkin-link",
     "/api/attendance/checkin/{short_code}",
-    "/api/attendance/checkin/{short_code}/phone",
     "/api/attendance/event/{event_id}",
     "/api/attendance/event/{event_id}/manual/{member_id}",
     "/api/excuses/",
