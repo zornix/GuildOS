@@ -144,7 +144,6 @@ export interface Fine {
   status: 'Unpaid' | 'Paid';
   issuedBy?: string;
   relatedEventId?: string;
-  ledgerRefId?: string;
 }
 
 export interface Payment {
@@ -157,7 +156,6 @@ export interface Payment {
   date: string;
   paymentMethod: 'Card' | 'Venmo' | 'Bank Transfer' | 'Cash' | 'Ledger Credit';
   reference?: string;
-  ledgerRefId?: string;
 }
 
 export interface LedgerEntry {

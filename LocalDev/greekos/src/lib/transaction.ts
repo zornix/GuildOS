@@ -1,3 +1,4 @@
+import type { ChapterEvent } from '../types';
 import { formatMoney } from '../formatters';
 
 /** The four things a treasurer records. Same words as the backend ledger. */
@@ -10,7 +11,13 @@ export interface TransactionForm {
   memberName: string;
   /** Raw input text. Dollars live here and nowhere else. */
   amountDollars: string;
+  /** Reference, reason or description — whichever the kind sends. */
   memo: string;
+  method: PaymentMethod;
+  /** Fine only: the required event it is for; empty for a free-form fine. */
+  eventId?: string;
+  /** Payment only: the invoice it should cover first (D7). */
+  invoiceId?: string;
 }
 
 /** The backend's `method` pattern on payments. */
@@ -84,12 +91,12 @@ export function planTransaction(draft: TransactionDraft): ServerCall {
 export interface TransactionPreview {
   valid: boolean;
   error?: string;
-  /** Absolute cents, what the ledger row shows. */
+  /** Absolute cents, what the server row will show. */
   amountCents: number;
-  /** Signed effect on the balance owed. */
+  /** Signed effect on what the member owes. */
   deltaCents: number;
-  balanceBeforeCents: number;
-  balanceAfterCents: number;
+  /** What the officer confirms. Never a projected balance: the server
+   *  allocates payments and may hold a large adjustment for sign-off. */
   sentence: string;
 }
 
@@ -105,46 +112,68 @@ export function dollarsToCents(input: string): number | null {
 
 const signed = (cents: number) => `${cents < 0 ? '-' : '+'}${formatMoney(Math.abs(cents))}`;
 
-export function previewTransaction(draft: TransactionForm, balanceBeforeCents: number): TransactionPreview {
-  const fail = (error: string): TransactionPreview => ({
-    valid: false, error, amountCents: 0, deltaCents: 0, balanceBeforeCents, balanceAfterCents: balanceBeforeCents, sentence: ''
-  });
-  if (!draft.memberId) return fail('Pick a member');
-  const cents = dollarsToCents(draft.amountDollars);
+export function previewTransaction(form: TransactionForm): TransactionPreview {
+  const fail = (error: string): TransactionPreview => ({ valid: false, error, amountCents: 0, deltaCents: 0, sentence: '' });
+  if (!form.memberId) return fail('Pick a member');
+  const cents = dollarsToCents(form.amountDollars);
   if (cents === null) return fail('Enter a dollar amount like 25 or 12.50');
 
-  const name = draft.memberName;
+  const name = form.memberName;
   let deltaCents: number;
-  let sentenceHead: string;
-  switch (draft.kind) {
+  let sentence: string;
+  switch (form.kind) {
     case 'Payment':
       if (cents <= 0) return fail('Amount must be more than $0.00');
       deltaCents = -cents;
-      sentenceHead = `Credit ${formatMoney(cents)} to ${name}`;
+      sentence = `Credit ${formatMoney(cents)} to ${name} — ${
+        form.invoiceId
+          ? 'pays this invoice first; anything left goes to their oldest open invoice.'
+          : 'pays their oldest open invoice first.'
+      }`;
       break;
     case 'Fine':
       if (cents <= 0) return fail('Amount must be more than $0.00');
       deltaCents = cents;
-      sentenceHead = `Charge ${formatMoney(cents)} fine to ${name}`;
+      sentence = `Charge ${formatMoney(cents)} fine to ${name}.`;
       break;
     case 'Invoice':
       if (cents <= 0) return fail('Amount must be more than $0.00');
       deltaCents = cents;
-      sentenceHead = `Invoice ${formatMoney(cents)} to ${name}`;
+      sentence = `Invoice ${formatMoney(cents)} to ${name}.`;
       break;
     case 'Adjustment':
       if (cents === 0) return fail('Adjustment cannot be $0.00');
       deltaCents = cents;
-      sentenceHead = `Adjust ${name} by ${signed(cents)}`;
+      sentence = `Adjust ${name} by ${signed(cents)}.`;
       break;
   }
-  const balanceAfterCents = Math.max(0, balanceBeforeCents + deltaCents);
-  return {
-    valid: true,
-    amountCents: Math.abs(cents),
-    deltaCents,
-    balanceBeforeCents,
-    balanceAfterCents,
-    sentence: `${sentenceHead} → new balance ${formatMoney(balanceAfterCents)}`
-  };
+  return { valid: true, amountCents: Math.abs(cents), deltaCents, sentence };
 }
+
+/** The form as the cents draft `planTransaction` takes. Throws when the
+ *  amount is not money; `planTransaction` checks everything else. */
+export function draftFromForm(form: TransactionForm): TransactionDraft {
+  const memo = form.memo.trim();
+  const cents = dollarsToCents(form.amountDollars);
+  if (cents === null) throw new Error('Enter a dollar amount like 25 or 12.50');
+  switch (form.kind) {
+    case 'Payment':
+      return {
+        kind: 'Payment', memberId: form.memberId, amountCents: cents, method: form.method,
+        ...(form.invoiceId ? { invoiceId: form.invoiceId } : {}),
+        ...(memo ? { reference: memo } : {})
+      };
+    case 'Fine':
+      return form.eventId
+        ? { kind: 'Fine', memberId: form.memberId, amountCents: EVENT_FINE_CENTS, reason: memo, eventId: form.eventId }
+        : { kind: 'Fine', memberId: form.memberId, amountCents: cents, reason: memo };
+    case 'Invoice':
+      return { kind: 'Invoice', memberId: form.memberId, amountCents: cents, description: memo };
+    case 'Adjustment':
+      return { kind: 'Adjustment', memberId: form.memberId, deltaCents: cents, reason: memo };
+  }
+}
+
+/** The events a fine can attach to: required, and already happened. */
+export const finableEvents = (events: ChapterEvent[], today: string): ChapterEvent[] =>
+  events.filter(e => e.required && e.date <= today);

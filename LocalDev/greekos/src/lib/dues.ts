@@ -6,18 +6,39 @@
 
 import type { OpenInvoiceDto, PaymentSubmissionDto } from '../api';
 import { formatMoney } from '../formatters';
-import { dollarsToCents } from './transaction';
+import { dollarsToCents, type TransactionKind } from './transaction';
 
-/** POST /api/treasury/invoices/bulk. */
+/** POST /api/treasury/invoices and /invoices/bulk. */
 export const INVOICE_CREATE_KEY = 'treasury:invoice:create';
-/** POST /api/treasury/payments/submissions/{id}/verify-v1 | reject-v1, and
- *  GET /api/treasury/payments/submissions. Everyone holding it is the
+/** POST /api/treasury/payments/record, …/submissions/{id}/verify-v1 | reject-v1,
+ *  and GET /api/treasury/payments/submissions. Everyone holding it is the
  *  treasury board. */
 export const PAYMENT_VERIFY_KEY = 'treasury:payment:verify';
 /** POST /api/fines/issue. */
 export const FINES_ISSUE_KEY = 'treasury:fines:issue';
 /** POST /api/treasury/adjustments — the ledger correction rows. */
 export const ADJUSTMENT_CREATE_KEY = 'treasury:adjustment:create';
+
+/** Which Add-transaction kinds a session may record, each by the key its
+ *  endpoint checks. A fine is two endpoints: on an event (FINES_ISSUE_KEY)
+ *  or free-form as a fine invoice (INVOICE_CREATE_KEY). */
+export interface TransactionAccess {
+  kinds: TransactionKind[];
+  eventFines: boolean;
+  freeFormFines: boolean;
+}
+
+export function transactionAccess(permissions: Iterable<string>): TransactionAccess {
+  const keys = new Set(permissions);
+  const eventFines = keys.has(FINES_ISSUE_KEY);
+  const freeFormFines = keys.has(INVOICE_CREATE_KEY);
+  const kinds: TransactionKind[] = [];
+  if (keys.has(PAYMENT_VERIFY_KEY)) kinds.push('Payment');
+  if (eventFines || freeFormFines) kinds.push('Fine');
+  if (freeFormFines) kinds.push('Invoice');
+  if (keys.has(ADJUSTMENT_CREATE_KEY)) kinds.push('Adjustment');
+  return { kinds, eventFines, freeFormFines };
+}
 
 /** The methods the backend's `method` pattern accepts, with member-facing labels. */
 export const PAYMENT_METHODS = [

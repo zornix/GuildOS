@@ -1,10 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  EVENT_FINE_CENTS,
   dollarsToCents,
+  draftFromForm,
   planTransaction,
   previewTransaction,
-  TransactionDraft,
   TransactionForm
 } from './transaction';
 
@@ -21,41 +22,80 @@ test('dollarsToCents parses money without float drift', () => {
 });
 
 const draft = (over: Partial<TransactionForm>): TransactionForm => ({
-  kind: 'Payment', memberId: 'm1', memberName: 'Jake Martinez', amountDollars: '50', memo: '', ...over
+  kind: 'Payment', memberId: 'm1', memberName: 'Jake Martinez', amountDollars: '50', memo: '', method: 'cash', ...over
 });
 
-test('payment credits the balance and cannot go below zero', () => {
-  const p = previewTransaction(draft({ amountDollars: '50' }), 12500);
+test('a payment preview says what it credits and where the server lands it', () => {
+  const p = previewTransaction(draft({ amountDollars: '50' }));
   assert.equal(p.valid, true);
   assert.equal(p.deltaCents, -5000);
-  assert.equal(p.balanceAfterCents, 7500);
-  assert.equal(p.sentence, 'Credit $50.00 to Jake Martinez → new balance $75.00');
-  assert.equal(previewTransaction(draft({ amountDollars: '500' }), 12500).balanceAfterCents, 0);
+  assert.equal(p.sentence, 'Credit $50.00 to Jake Martinez — pays their oldest open invoice first.');
+  assert.equal(
+    previewTransaction(draft({ amountDollars: '25', invoiceId: 'inv1' })).sentence,
+    'Credit $25.00 to Jake Martinez — pays this invoice first; anything left goes to their oldest open invoice.'
+  );
 });
 
-test('fine and invoice charge the balance', () => {
-  const f = previewTransaction(draft({ kind: 'Fine', amountDollars: '25' }), 0);
+test('fine and invoice previews name the charge, never a projected balance', () => {
+  const f = previewTransaction(draft({ kind: 'Fine', amountDollars: '25' }));
   assert.equal(f.deltaCents, 2500);
-  assert.equal(f.sentence, 'Charge $25.00 fine to Jake Martinez → new balance $25.00');
-  const i = previewTransaction(draft({ kind: 'Invoice', amountDollars: '150' }), 2500);
-  assert.equal(i.sentence, 'Invoice $150.00 to Jake Martinez → new balance $175.00');
+  assert.equal(f.sentence, 'Charge $25.00 fine to Jake Martinez.');
+  const i = previewTransaction(draft({ kind: 'Invoice', amountDollars: '150' }));
+  assert.equal(i.sentence, 'Invoice $150.00 to Jake Martinez.');
+  assert.doesNotMatch(f.sentence + i.sentence, /balance/);
 });
 
 test('adjustment keeps the sign the treasurer typed', () => {
-  const down = previewTransaction(draft({ kind: 'Adjustment', amountDollars: '-10' }), 2500);
+  const down = previewTransaction(draft({ kind: 'Adjustment', amountDollars: '-10' }));
   assert.equal(down.deltaCents, -1000);
   assert.equal(down.amountCents, 1000);
-  assert.equal(down.sentence, 'Adjust Jake Martinez by -$10.00 → new balance $15.00');
-  const up = previewTransaction(draft({ kind: 'Adjustment', amountDollars: '10' }), 2500);
-  assert.equal(up.sentence, 'Adjust Jake Martinez by +$10.00 → new balance $35.00');
+  assert.equal(down.sentence, 'Adjust Jake Martinez by -$10.00.');
+  const up = previewTransaction(draft({ kind: 'Adjustment', amountDollars: '10' }));
+  assert.equal(up.sentence, 'Adjust Jake Martinez by +$10.00.');
 });
 
 test('invalid amounts and non-positive charges are rejected with a reason', () => {
-  assert.deepEqual(previewTransaction(draft({ amountDollars: 'x' }), 0).valid, false);
-  assert.equal(previewTransaction(draft({ amountDollars: '0' }), 0).error, 'Amount must be more than $0.00');
-  assert.equal(previewTransaction(draft({ kind: 'Fine', amountDollars: '-5' }), 0).error, 'Amount must be more than $0.00');
-  assert.equal(previewTransaction(draft({ kind: 'Adjustment', amountDollars: '0' }), 0).error, 'Adjustment cannot be $0.00');
-  assert.equal(previewTransaction(draft({ memberId: '' }), 0).error, 'Pick a member');
+  assert.deepEqual(previewTransaction(draft({ amountDollars: 'x' })).valid, false);
+  assert.equal(previewTransaction(draft({ amountDollars: '0' })).error, 'Amount must be more than $0.00');
+  assert.equal(previewTransaction(draft({ kind: 'Fine', amountDollars: '-5' })).error, 'Amount must be more than $0.00');
+  assert.equal(previewTransaction(draft({ kind: 'Adjustment', amountDollars: '0' })).error, 'Adjustment cannot be $0.00');
+  assert.equal(previewTransaction(draft({ memberId: '' })).error, 'Pick a member');
+});
+
+// ── the form becomes a cents draft ───────────────────────────────────────────
+
+test('each kind of form becomes its cents draft, memo landing where the server reads it', () => {
+  assert.deepEqual(
+    draftFromForm(draft({ amountDollars: '12.50', method: 'zelle', memo: 'ref 9', invoiceId: 'inv1' })),
+    { kind: 'Payment', memberId: 'm1', amountCents: 1250, method: 'zelle', invoiceId: 'inv1', reference: 'ref 9' }
+  );
+  assert.deepEqual(
+    draftFromForm(draft({ amountDollars: '12.50' })),
+    { kind: 'Payment', memberId: 'm1', amountCents: 1250, method: 'cash' }
+  );
+  assert.deepEqual(
+    draftFromForm(draft({ kind: 'Fine', amountDollars: '15', memo: 'Late to chapter' })),
+    { kind: 'Fine', memberId: 'm1', amountCents: 1500, reason: 'Late to chapter' }
+  );
+  assert.deepEqual(
+    draftFromForm(draft({ kind: 'Invoice', amountDollars: '250', memo: 'Fall dues' })),
+    { kind: 'Invoice', memberId: 'm1', amountCents: 25000, description: 'Fall dues' }
+  );
+  assert.deepEqual(
+    draftFromForm(draft({ kind: 'Adjustment', amountDollars: '-10', memo: 'Issued in error' })),
+    { kind: 'Adjustment', memberId: 'm1', deltaCents: -1000, reason: 'Issued in error' }
+  );
+});
+
+test('an event fine carries the event and the flat amount, whatever was typed', () => {
+  assert.deepEqual(
+    draftFromForm(draft({ kind: 'Fine', amountDollars: '999', memo: 'ignored', eventId: 'e1' })),
+    { kind: 'Fine', memberId: 'm1', amountCents: EVENT_FINE_CENTS, reason: 'ignored', eventId: 'e1' }
+  );
+});
+
+test('a form without a parsable amount cannot become a draft', () => {
+  assert.throws(() => draftFromForm(draft({ amountDollars: 'lots' })), /dollar amount/);
 });
 
 // ── each kind maps to exactly one server call ────────────────────────────────

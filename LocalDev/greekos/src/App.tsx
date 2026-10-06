@@ -178,11 +178,10 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
             members={roster.members}
             fines={finance.fines}
             payments={finance.payments}
-            ledger={finance.ledger}
+            events={events.events}
             permissions={app.permissions}
             chapterName={app.chapterName}
             currentMemberName={currentMemberName}
-            myBalance={viewedBalance}
             myInvoices={finance.myInvoices}
             pendingProofCentsOf={finance.pendingProofCentsOf}
             submissions={finance.submissions}
@@ -194,11 +193,7 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
             onRejectProof={finance.handleRejectProof}
             onOpenEvidence={finance.openEvidence}
             balanceCentsOf={finance.balanceCentsOf}
-            onRecordPayment={finance.handleRecordPayment}
-            onIssueFine={finance.handleIssueFine}
-            onPostInvoice={finance.handlePostInvoice}
-            onApproveFinePayment={finance.handleApproveFinePayment}
-            onPostLedgerCorrection={finance.handlePostLedgerCorrection}
+            onSubmitTransaction={finance.submitTransaction}
           />
         </Fragment>
       )}

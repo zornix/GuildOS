@@ -5,22 +5,20 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import FinanceModule, { treasuryAbilities } from './FinanceModule';
 import { isOfficerView } from '../lib/session';
 
-const noop = () => {};
 const asyncNoop = async () => {};
 
 function treasury(permissions: string[]) {
   return renderToStaticMarkup(createElement(FinanceModule, {
-    members: [], fines: [], payments: [], ledger: [],
+    members: [], fines: [], payments: [], events: [],
     permissions: new Set(permissions),
     chapterName: 'Alpha', currentMemberName: 'Treasurer',
-    myBalance: null, myInvoices: [],
+    myInvoices: [],
     pendingProofCentsOf: () => 0, submissions: [], queueLoading: false,
     onRefreshQueue: asyncNoop, onCreateDuesRun: asyncNoop, onSubmitProof: asyncNoop,
     onVerifyProof: asyncNoop, onRejectProof: asyncNoop,
     onOpenEvidence: async () => '',
     balanceCentsOf: () => 0,
-    onRecordPayment: noop, onIssueFine: noop, onPostInvoice: noop,
-    onApproveFinePayment: noop, onPostLedgerCorrection: noop
+    onSubmitTransaction: asyncNoop
   }));
 }
 
@@ -41,14 +39,21 @@ test('a treasurer without standing:view_all still gets the treasury officer cont
   assert.match(html, /New dues run/);
   assert.match(html, /Add transaction/);
   assert.match(html, /Proof queue/);
-  assert.doesNotMatch(html, /Pay balance/);
+  // No server read backs a chapter-wide ledger, so nothing pretends to be one.
+  assert.doesNotMatch(html, /Chapter ledger|demo/i);
 });
 
-test('a member with no treasury key sees only their own payment controls', () => {
+test('a member with no treasury key pays through their invoices and sees no officer control', () => {
   const abilities = treasuryAbilities(new Set(['standing:view_all']));
   assert.equal(abilities.isTreasuryOfficer, false);
 
   const html = treasury(['standing:view_all']);
-  assert.match(html, /Pay balance/);
-  assert.doesNotMatch(html, /New dues run|Add transaction|Proof queue/);
+  assert.match(html, /My invoices/);
+  assert.doesNotMatch(html, /New dues run|Add transaction|Proof queue|Pay balance|Mark paid/i);
+});
+
+test('holding only the verify key offers Add transaction (payments) but not a dues run', () => {
+  const html = treasury(['treasury:payment:verify']);
+  assert.match(html, /Add transaction/);
+  assert.doesNotMatch(html, /New dues run/);
 });

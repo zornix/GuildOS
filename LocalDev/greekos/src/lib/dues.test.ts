@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import type { OpenInvoiceDto } from '../api';
 import { can } from './session';
 import {
+  ADJUSTMENT_CREATE_KEY,
+  FINES_ISSUE_KEY,
   INVOICE_CREATE_KEY,
   PAYMENT_VERIFY_KEY,
   adaptInvoice,
@@ -11,7 +13,8 @@ import {
   invoiceTitle,
   planDuesRun,
   planProof,
-  rejectionReasonValid
+  rejectionReasonValid,
+  transactionAccess
 } from './dues';
 
 const invoiceDto = (over: Partial<OpenInvoiceDto> = {}): OpenInvoiceDto => ({
@@ -212,4 +215,18 @@ test('the dues-run and verify controls gate on the endpoints own keys', () => {
   // Holding one key never implies the other.
   assert.equal(can(new Set([PAYMENT_VERIFY_KEY]), INVOICE_CREATE_KEY), false);
   assert.equal(can(new Set([INVOICE_CREATE_KEY]), PAYMENT_VERIFY_KEY), false);
+});
+
+test('each transaction kind is offered only to a holder of the key its endpoint checks', () => {
+  assert.deepEqual(transactionAccess([]), { kinds: [], eventFines: false, freeFormFines: false });
+  assert.deepEqual(transactionAccess([PAYMENT_VERIFY_KEY]).kinds, ['Payment']);
+  assert.deepEqual(transactionAccess([FINES_ISSUE_KEY]), { kinds: ['Fine'], eventFines: true, freeFormFines: false });
+  assert.deepEqual(transactionAccess([INVOICE_CREATE_KEY]), { kinds: ['Fine', 'Invoice'], eventFines: false, freeFormFines: true });
+  assert.deepEqual(transactionAccess([ADJUSTMENT_CREATE_KEY]).kinds, ['Adjustment']);
+  assert.deepEqual(
+    transactionAccess([PAYMENT_VERIFY_KEY, FINES_ISSUE_KEY, INVOICE_CREATE_KEY, ADJUSTMENT_CREATE_KEY]).kinds,
+    ['Payment', 'Fine', 'Invoice', 'Adjustment']
+  );
+  // An officer-shaped session without treasury keys records nothing.
+  assert.deepEqual(transactionAccess(['standing:view_all', 'events:create']).kinds, []);
 });

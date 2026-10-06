@@ -355,6 +355,15 @@ export interface FineDto {
   event_date: string | null;
 }
 
+/** POST /api/fines/issue — who got the flat fine and who was skipped
+ *  (present, excused, or already fined for that event). */
+export interface IssueFinesResultDto {
+  event_id: string;
+  flat_fine_cents: number;
+  issued_member_ids: string[];
+  skipped_member_ids: string[];
+}
+
 export interface VerifiedPaymentDto {
   id: string;
   member_id: string;
