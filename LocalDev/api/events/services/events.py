@@ -646,7 +646,7 @@ def add_supervisor(sb, *, actor: dict, event_id: str, member_id: str,
     if not officer_rows:
         raise NotEligible("Co-supervisor must hold an officer role")
 
-    call_rpc(
+    result = call_rpc(
         "ev_add_supervisor",
         {
             "p_chapter_id": chapter_id,
@@ -659,7 +659,8 @@ def add_supervisor(sb, *, actor: dict, event_id: str, member_id: str,
         sb=sb,
     )
     notify_role_assigned(
-        sb, chapter_id=chapter_id, event=event, member_id=member_id, role="supervisor"
+        sb, chapter_id=chapter_id, event=event, member_id=member_id, role="supervisor",
+        assignment_id=str(result.data.get("id") or result.data["created_at"])
     )
     _decorate_counts(event, len(_organizers_for_event(sb, event_id)))
     return _decorate_supervisors(sb, event)
@@ -731,6 +732,7 @@ def add_organizer(sb, *, actor: dict, event_id: str, member_id: str | None = Non
             event=event,
             member_id=target,
             role="organizer",
+            assignment_id=str(result.data.get("id") or result.data["created_at"]),
         )
     return result.data
 

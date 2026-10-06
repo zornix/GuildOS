@@ -104,3 +104,31 @@ def test_add_organizer_writes_audit_log(sb_client, cursor, chapter_id, user_fact
         (chapter_id, ev["id"]),
     )
     assert cursor.fetchone() is not None
+
+
+@pytest.mark.parametrize('role', ['organizer', 'supervisor'])
+def test_reassigned_role_is_notified_again(sb_client, cursor, user_factory, create_event, assign_role, role):
+    actor = user_factory(role='officer')
+    target = user_factory()
+    assign_role(target['id'], 'social_chair')
+    event = create_event(actor)
+    add = getattr(svc, f'add_{role}')
+    remove = getattr(svc, f'remove_{role}')
+    add(sb_client, actor=actor, event_id=event['id'], member_id=target['id'])
+    remove(sb_client, actor=actor, event_id=event['id'], member_id=target['id'])
+    add(sb_client, actor=actor, event_id=event['id'], member_id=target['id'])
+    cursor.execute("SELECT count(*) AS n FROM message_outbox WHERE chapter_id=%s AND target_id=%s AND member_id=%s AND event_type='EVENT_ROLE_ASSIGNED'", (actor['chapter_id'],event['id'],target['id']))
+    assert cursor.fetchone()['n'] == 2
+
+
+@pytest.mark.parametrize('role', ['organizer', 'supervisor'])
+def test_retry_of_one_assignment_notifies_once(sb_client, cursor, user_factory, create_event, assign_role, role):
+    actor = user_factory(role='officer')
+    target = user_factory()
+    assign_role(target['id'], 'social_chair')
+    event = create_event(actor)
+    add = getattr(svc, f'add_{role}')
+    for _ in range(2):
+        add(sb_client, actor=actor, event_id=event['id'], member_id=target['id'], idempotency_key='one-assignment')
+    cursor.execute("SELECT count(*) AS n FROM message_outbox WHERE chapter_id=%s AND target_id=%s AND member_id=%s AND event_type='EVENT_ROLE_ASSIGNED'", (actor['chapter_id'],event['id'],target['id']))
+    assert cursor.fetchone()['n'] == 1
