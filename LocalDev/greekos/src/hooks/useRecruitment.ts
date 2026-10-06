@@ -41,8 +41,8 @@ export function useRecruitment({ syncApi }: Deps) {
       if (p.id === pnmId) {
         return {
           ...p,
-          votesFor: type === 'up' ? p.votesFor + 1 : p.votesFor,
-          votesAgainst: type === 'down' ? p.votesAgainst + 1 : p.votesAgainst
+          votesFor: type === 'up' ? (p.votesFor ?? 0) + 1 : p.votesFor,
+          votesAgainst: type === 'down' ? (p.votesAgainst ?? 0) + 1 : p.votesAgainst
         };
       }
       return p;

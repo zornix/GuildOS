@@ -136,8 +136,8 @@ export default function RecruitmentModule({
       {/* PNM Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredPNMs.map(pnm => {
-          const totalVotes = pnm.votesFor + pnm.votesAgainst;
-          const approvalPct = totalVotes > 0 ? Math.round((pnm.votesFor / totalVotes) * 100) : 0;
+          const totalVotes = (pnm.votesFor ?? 0) + (pnm.votesAgainst ?? 0);
+          const approvalPct = totalVotes > 0 ? Math.round(((pnm.votesFor ?? 0) / totalVotes) * 100) : 0;
 
           return (
             <Card key={pnm.id} className="p-5 hover:border-gold transition-all space-y-4">
