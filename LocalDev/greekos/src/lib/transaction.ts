@@ -184,8 +184,8 @@ export interface TransactionDeps {
   members: Pick<Member, 'id' | 'name'>[];
   /** The last load failed; a write now would only fail later, so refuse it. */
   backendDown: boolean;
-  /** Re-reads every number on the tab after a write. */
-  refetch: () => Promise<unknown>;
+  /** Re-reads every number on the tab after a write; false if any read failed. */
+  refetch: () => Promise<boolean>;
   showToast: (message: string) => void;
 }
 
@@ -224,6 +224,6 @@ export async function submitTransaction(deps: TransactionDeps, draft: Transactio
       break;
     }
   }
-  await deps.refetch();
-  deps.showToast(message);
+  const reloaded = await deps.refetch();
+  deps.showToast(reloaded ? message : `${message} Saved, but the lists could not be reloaded. Refresh the page.`);
 }

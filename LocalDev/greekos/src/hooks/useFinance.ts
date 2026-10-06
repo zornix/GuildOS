@@ -180,7 +180,8 @@ export function useFinance({ members, setMembers, currentMemberId, backendDown, 
   const balanceCentsOf = (memberId: string) => members.find(m => m.id === memberId)?.duesBalanceCents ?? 0;
 
   /** Every number on the tab after a write. The write already landed, so a
-   *  failed re-read is logged, never shown as a failed transaction. */
+   *  failed re-read is never shown as a failed transaction; false says the
+   *  lists on screen are stale. */
   const refetchAfterWrite = async () => {
     const results = await Promise.allSettled([
       refetchFines(),
@@ -190,6 +191,7 @@ export function useFinance({ members, setMembers, currentMemberId, backendDown, 
       optionalOfficerCall(refreshQueue(), undefined)
     ]);
     for (const r of results) if (r.status === 'rejected') console.error('Refresh after transaction failed', r.reason);
+    return results.every(r => r.status === 'fulfilled');
   };
 
   const submitTransaction = (draft: TransactionDraft, idempotencyKey: string) =>

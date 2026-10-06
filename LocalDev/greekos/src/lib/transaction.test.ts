@@ -205,3 +205,9 @@ test('submitTransaction refuses up front while the server is unreachable', async
   assert.deepEqual(calls, []);
   assert.deepEqual(toasts, []);
 });
+
+test('a saved transaction whose refetch fails says it saved but the lists did not reload', async () => {
+  const { deps, toasts } = fakeDeps();
+  await submitTransaction({ ...deps, refetch: async () => false }, { kind: 'Invoice', memberId: 'm1', amountCents: 5000, description: 'Dues' }, 'k');
+  assert.deepEqual(toasts, ['Invoiced $50.00 to Jake Martinez. Saved, but the lists could not be reloaded. Refresh the page.']);
+});
