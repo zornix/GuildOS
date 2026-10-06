@@ -162,3 +162,49 @@ def test_bootstrap_path_is_rate_limited(client, create_body, cleanup):
         _created(res, cleanup)
 
     assert client.post("/api/chapters", json=create_body()).status_code == 429
+
+
+def test_chapter_creation_rolls_back_when_the_code_cannot_be_issued(
+    auth_sb, create_body, cleanup, cursor, monkeypatch
+):
+    from api.chapters.services import onboarding
+
+    body = create_body()
+    body["sms_consent"] = True
+    cleanup["emails"].append(body["officer_email"])
+    real_issue = onboarding._issue_setup_code
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("code issuance unavailable")
+
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(onboarding, "_issue_setup_code", fail)
+            with pytest.raises(RuntimeError, match="code issuance unavailable"):
+                onboarding.create_chapter(auth_sb, **body)
+        cursor.execute("SELECT id FROM chapters WHERE name = %s", (body["name"],))
+        assert cursor.fetchone() is None
+        cursor.execute("SELECT id FROM members WHERE email = %s", (body["officer_email"],))
+        assert cursor.fetchone() is None
+        assert onboarding._issue_setup_code is real_issue
+        created = onboarding.create_chapter(auth_sb, **body)
+        cleanup["chapters"].append(created["chapter_id"])
+    finally:
+        # Clean up the deliberately reproduced partial chapter, even on red.
+        cursor.execute("SELECT id FROM chapters WHERE name = %s", (body["name"],))
+        row = cursor.fetchone()
+        if row and str(row["id"]) not in cleanup["chapters"]:
+            cleanup["chapters"].append(str(row["id"]))
+
+
+def test_signup_conflicts_have_identical_generic_response(client, create_body, cleanup):
+    body = create_body()
+    _created(client.post("/api/chapters", json=body), cleanup)
+    email_conflict = client.post(
+        "/api/chapters", json=create_body(officer_email=body["officer_email"])
+    )
+    name_conflict = client.post("/api/chapters", json=create_body(name=body["name"]))
+    expected = {"detail": "A chapter or member with these details already exists."}
+    assert email_conflict.status_code == name_conflict.status_code == 409
+    assert email_conflict.json() == expected
+    assert name_conflict.json() == expected

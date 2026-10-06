@@ -241,3 +241,35 @@ def test_plain_member_cannot_import(upload, csv_bytes, unique, member_factory):
     res = upload(csv_bytes([line]), member=member_factory(role="member"))
 
     assert res.status_code == 403
+
+
+def test_roster_import_rolls_back_when_a_code_cannot_be_issued(
+    auth_sb, chapter_id, csv_bytes, unique, cleanup, cursor, monkeypatch
+):
+    from api.chapters.services import onboarding
+
+    lines, emails = zip(*[_row(unique) for _ in range(5)])
+    cleanup["emails"] += list(emails)
+    real_issue = onboarding._issue_setup_code
+    calls = 0
+
+    def fail_third(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 3:
+            raise RuntimeError("code issuance unavailable")
+        return real_issue(*args, **kwargs)
+
+    monkeypatch.setattr(onboarding, "_issue_setup_code", fail_third)
+    with pytest.raises(RuntimeError, match="code issuance unavailable"):
+        onboarding.import_roster(auth_sb, chapter_id=chapter_id, raw=csv_bytes(lines))
+    cursor.execute(
+        "SELECT id FROM members WHERE chapter_id = %s AND email = ANY(%s)",
+        (chapter_id, list(emails)),
+    )
+    assert cursor.fetchall() == []
+    cursor.execute(
+        "SELECT id FROM message_outbox WHERE chapter_id = %s AND event_type = 'SETUP_CODE'",
+        (chapter_id,),
+    )
+    assert cursor.fetchall() == []
