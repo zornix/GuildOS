@@ -326,6 +326,7 @@ def drain_outbox(
     """
     client = _resolve_sb(sb)
 
+    started_at = _now_iso()
     started = time.monotonic()
     counts = {"processed": 0, "sent": 0, "simulated": 0, "failed": 0}
     names: dict = {}  # chapter_id -> name, for the message footer
@@ -346,6 +347,26 @@ def drain_outbox(
             counts["processed"] += 1
             counts[status] = counts.get(status, 0) + 1
 
-    if counts["processed"]:
+    if chapter_id is None:
+        try:
+            oldest = (
+                client.table("message_outbox").select("created_at")
+                .eq("status", "pending").order("created_at").limit(1).execute()
+            ).data or []
+            finished = datetime.now(timezone.utc)
+            age = None
+            if oldest:
+                created = oldest[0]["created_at"]
+                if isinstance(created, str):
+                    created = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                age = max(0, int((finished - created).total_seconds()))
+            client.table("cron_heartbeats").upsert(
+                {"job": "drain-outbox", "last_started_at": started_at,
+                 "last_finished_at": finished.isoformat(), "last_counts": counts,
+                 "oldest_pending_seconds": age}, on_conflict="job"
+            ).execute()
+        except Exception:
+            logger.exception("could not record outbox drain heartbeat")
+    if chapter_id is None or counts["processed"]:
         logger.info("outbox drain: %s", counts)
     return counts

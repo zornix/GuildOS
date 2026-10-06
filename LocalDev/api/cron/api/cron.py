@@ -2,9 +2,9 @@
 
 Vercel Cron issues **GET** requests only, and attaches
 `Authorization: Bearer $CRON_SECRET` automatically when that env var is set — so
-GET is the scheduled entrypoint for the outbox drain. POST is registered on the
-same handler purely for manual/ops invocation (curl, a runbook step); it carries
-the identical auth dependency.
+GET is the scheduled entrypoint for the outbox drain. POST has its own handler
+for manual/ops invocation (curl, a runbook step); both share the drain helper
+and the identical auth dependency.
 
 The schedule itself lives in the project-root vercel.json `crons` block. It used
 to live in api/vercel.json, which Vercel never reads (GTMLarpChecklist 3.6).
@@ -35,11 +35,17 @@ async def cron_process_fines():
     }
 
 
-@router.api_route("/drain-outbox", methods=["GET", "POST"])
-async def cron_drain_outbox():
-    """Deliver pending message_outbox rows (checklist 2.1).
-
-    GET is the Vercel Cron entrypoint (crons only issue GET); POST is the manual
-    ops path. Returns {processed, sent, simulated, failed} for this batch.
-    """
+async def _drain_outbox():
     return await asyncio.to_thread(drain_outbox)
+
+
+@router.get("/drain-outbox")
+async def cron_drain_outbox_scheduled():
+    """Deliver queued messages from the authenticated scheduled job."""
+    return await _drain_outbox()
+
+
+@router.post("/drain-outbox")
+async def cron_drain_outbox_manual():
+    """Deliver queued messages on an authenticated operator request."""
+    return await _drain_outbox()
