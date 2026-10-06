@@ -997,7 +997,6 @@ export default function EventsModule({
                     <option value="Brotherhood">Brotherhood</option>
                     <option value="Social">Social</option>
                     <option value="Recruitment">Recruitment</option>
-                    <option value="Pledge Education">Pledge Education</option>
                   </select>
                 </div>
               </div>

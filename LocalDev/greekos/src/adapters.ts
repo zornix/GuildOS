@@ -99,7 +99,6 @@ const EVENT_TYPES: EventType[] = [
   'Brotherhood',
   'Social',
   'Recruitment',
-  'Pledge Education',
   'Community Service'
 ];
 

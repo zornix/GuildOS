@@ -53,7 +53,6 @@ export type EventType =
   | 'Brotherhood' 
   | 'Social' 
   | 'Recruitment' 
-  | 'Pledge Education' 
   | 'Community Service';
 
 export type JobStatus = 'To Do' | 'In Progress' | 'Done Reported' | 'Approved' | 'Rejected';
