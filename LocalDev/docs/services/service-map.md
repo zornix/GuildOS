@@ -19,7 +19,6 @@ frozen — check `fratos/lib/api-client.ts` before changing one.
 | `/api/fines` | `api/treasury` (`api/fines_legacy.py`) | fines → treasury via `FineToInvoice` (float→cents boundary) |
 | `/api/treasury` | `api/treasury` | pattern source |
 | `/api/tasks` | `api/tasks` | tasks, jobs, commitments, approvals |
-| `/api/operations` | `api/tasks` (`api/operations.py`) | event-prep template engine — see below |
 | `/api/announcements` | `api/announcements` | |
 | `/api/standing` | `api/memberadmin` | `api.memberadmin.api.standing` mounted at its own prefix |
 | `/api/memberadmin` | `api/memberadmin` | scores |
@@ -43,12 +42,10 @@ events ──(linked_announcement_id)────────▶ announcements
 events ──(linked_budget_id)──────────────▶ treasury budgets   [column exists, no budgets table yet]
 
 attendance.signals.list_unexcused_absences ──▶ standing (reason code UNEXCUSED_ABSENCES)
-attendance ──(unexcused absence)──▶ fines/treasury via FineToInvoice  [existing path, unchanged]
+attendance ──(officer issues fines)──▶ treasury via tr_issue_event_fines; present/excused voids open fines
 
 treasury (unpaid invoices) ──▶ standing (UNPAID_FINES / HIGH_UNPAID_BALANCE)
 treasury (balance owed)    ──▶ announcements audience "members_with_balance"
-
-tasks.tasks.incomplete_required_tasks ──▶ standing (INCOMPLETE_REQUIRED_TASKS, reason-only)
 
 initiatives ──(jobs reuse tk_* machinery)──▶ tasks   [approval authority is initiative_chairs]
 calendar ──(read-only aggregate)──▶ events + initiatives
@@ -72,10 +69,10 @@ response). `INCOMPLETE_REQUIRED_TASKS` is currently reason-only — it never
 changes the status until the chapter decides the policy (see TODO in
 `standing_rules.py`).
 
-## The operations engine is not the NL controller
+## The operations engine is gone
 
-`api/tasks/api/operations.py` + `api/tasks/services/templates.py` are an
-event-prep **template engine** (event templates → roles → task checklists, from
-migration 0003) mounted at `/api/operations`. The NL controller (`api/nl_controller`) is a separate, approval-gated
-command queue. When command execution is eventually implemented it may *call*
-the operations engine, but they are different services.
+The event-prep template engine (`/api/operations`) was unmounted and its two
+modules deleted in the 2026-10 audit remediation (F-053). Its tables from
+migration 0003 (`event_templates`, `event_roles`, `event_tasks`,
+`post_event_reports`) remain. The NL controller (`api/nl_controller`) is a
+separate, approval-gated command queue.

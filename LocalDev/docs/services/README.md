@@ -18,7 +18,7 @@ api/<domain>/
   services/            # business logic; pure where possible, no FastAPI imports
   core/                # domain rules/value objects (e.g. treasury/core/money.py)
   auth.py              # domain permission constants + capability helpers
-  notifications.py     # outbox enqueue helpers (transactional outbox pattern)
+  notifications.py     # outbox enqueue helpers
 ```
 
 Not every domain needs every file — small domains omit what they don't use,
@@ -48,8 +48,8 @@ but is plumbing, not a domain.
 | Initiatives | `api/initiatives/` | Chair-led calendar peer of events (0144); jobs reuse the tasks machinery, authority is `initiative_chairs` |
 | Calendar | `api/calendar/` | Read-only aggregator over events + initiatives — a view, not an entity |
 | Attendance | `api/attendance/` | Check-in, excuses, check-in links, `attendance_sessions` |
-| Tasks | `api/tasks/` | Tasks, jobs, commitments, approvals, and the event-prep template engine (`/api/operations`) |
-| Announcements | `api/announcements/` | Transactional outbox, dry-run delivery |
+| Tasks | `api/tasks/` | Tasks, jobs, commitments, approvals |
+| Announcements | `api/announcements/` | SMS outbox, atomic inline claims, dry-run delivery |
 | Standing | `api/memberadmin/` | Owns standing (reason codes, derived-standing core module); mounted at `/api/memberadmin` and `/api/standing` |
 | Members | `api/members/` | Roster |
 | Auth | `api/auth/` | Login, JWT issue, token versioning |
@@ -67,7 +67,9 @@ but is plumbing, not a domain.
 - **Trust-boundary mutations go through plpgsql RPCs** whose bodies enforce
   tenant guards (`chapter_id`), idempotency (`idempotency_keys`), and write
   `audit_logs` (plus `big_ledger` for anything financial).
-- **Every tenant table carries `chapter_id` and has RLS enabled.**
+- **Runtime tenant guards use the authenticated chapter in routes and RPCs.**
+  The app connects as the table owner and bypasses RLS; migration 0171 revokes
+  public-schema privileges from Supabase API roles.
 - **Permission checks use `api/rbac/auth.require_permission(...)` or
   `api/rbac/services/permissions.has_permission(...)` only.** No inline role
   string comparisons.

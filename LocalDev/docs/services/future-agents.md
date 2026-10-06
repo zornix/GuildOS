@@ -42,7 +42,8 @@ can be added without restructuring.
   treasurer approval; real delivery providers replace dry-run mode separately.
 
 ### Event-prep orchestrator
-- **Hook:** the operations template engine (`api/services/operations.py`),
+- **Hook:** the template tables from migration 0003 (`event_templates`,
+  `event_roles`, `event_tasks`; their API was removed in 2026-10),
   `events.linked_task_group_id` / `linked_attendance_session_id` /
   `linked_announcement_id`.
 - **Work:** on event creation, propose the standard prep bundle (task group +
