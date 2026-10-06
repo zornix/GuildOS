@@ -226,6 +226,8 @@ async def record_payment(
         )
     except Exception as exc:
         msg = str(exc)
+        if "idempotency_key_reused" in msg:
+            raise HTTPException(409, "Idempotency key was already used with a different request")
         if "not in chapter" in msg or "not found in chapter" in msg or "does not belong" in msg:
             raise HTTPException(404, "Member or invoice not found in this chapter")
         if "cancelled invoice" in msg or "already fully paid" in msg:
