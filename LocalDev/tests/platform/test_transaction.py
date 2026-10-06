@@ -73,3 +73,16 @@ def test_connection_is_clean_after_rollback(sb_client):
     # a plain call after a failed transaction still autocommits
     sb_client.table("chapters").insert({"name": a, "organization": "t", "school": "t"}).execute()
     assert _exists(sb_client, a)
+
+
+def test_nested_transaction_joins_the_outer_one(sb_client):
+    """A helper that opens its own transaction, handed a tx client, must not commit
+    the outer work early or switch the connection back to autocommit."""
+    a, b = _name(), _name()
+    with pytest.raises(RuntimeError):
+        with sb_client.transaction() as tx:
+            with tx.transaction() as inner:
+                inner.table("chapters").insert({"name": a, "organization": "t", "school": "t"}).execute()
+            tx.table("chapters").insert({"name": b, "organization": "t", "school": "t"}).execute()
+            raise RuntimeError("boom")
+    assert not _exists(sb_client, a) and not _exists(sb_client, b)

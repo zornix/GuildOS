@@ -645,7 +645,11 @@ class PostgresClient:
         Yields a client bound to that connection; pass it as `sb` to every helper.
         A helper that calls get_db() itself writes outside the transaction. Never
         catch a database error inside the block and carry on: exit then raises.
+        Called on a transaction client, it joins that transaction.
         """
+        if getattr(self._pool, "in_tx", False):
+            yield self
+            return
         conn = self._pool.getconn()
         try:
             conn.autocommit = False
