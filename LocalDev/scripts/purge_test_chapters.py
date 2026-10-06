@@ -92,9 +92,13 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--older-than-days', type=int, default=2)
     parser.add_argument('--apply', action='store_true', help='delete instead of reporting')
+    parser.add_argument('--batch-size', type=int, default=500,
+                        help='chapters deleted per transaction (one big delete hits the pooler timeout)')
     args = parser.parse_args(argv)
     if args.older_than_days < 0:
         parser.error('--older-than-days must be nonnegative')
+    if args.batch_size < 1:
+        parser.error('--batch-size must be positive')
     url = _database_url()
     require_demo(url, context='purge_test_chapters')  # Before any connection.
     conn = psycopg2.connect(url)
@@ -115,10 +119,16 @@ def main(argv=None):
                             "ORDER BY table_name")
                 tables = [row[0] for row in cur.fetchall()]
                 print_counts('BEFORE' if args.apply else 'DRY RUN', row_counts(cur, tables, ids))
-                if args.apply and ids:
-                    apply_purge(cur, ids)
-                if args.apply:
-                    print_counts('AFTER', row_counts(cur, tables, ids))
+        # ponytail: each batch commits on its own, so a failure leaves earlier batches purged;
+        # rerunning picks up the rest. One transaction for all of them hit statement_timeout.
+        for start in range(0, len(ids) if args.apply else 0, args.batch_size):
+            with conn, conn.cursor() as cur:
+                cur.execute('SET LOCAL statement_timeout = 0')
+                apply_purge(cur, ids[start:start + args.batch_size])
+            print(f'deleted {min(start + args.batch_size, len(ids))}/{len(ids)} chapters', flush=True)
+        if args.apply:
+            with conn, conn.cursor() as cur:
+                print_counts('AFTER', row_counts(cur, tables, ids))
     finally:
         conn.close()
     return 0
