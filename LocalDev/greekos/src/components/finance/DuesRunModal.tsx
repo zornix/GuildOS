@@ -26,7 +26,9 @@ export default function DuesRunModal({ candidates, onSubmit, onClose }: DuesRunM
   // dedupes the second attempt instead of billing the chapter twice; an edit
   // gets a fresh key, so a changed run is never answered with the old result.
   const [runKey, setRunKey] = useState(() => crypto.randomUUID());
-  useEffect(() => { setRunKey(crypto.randomUUID()); }, [title, amountDollars, dueDate, excluded]);
+  // The roster can change under an open modal (a refetch); that is a new run too.
+  const candidateIds = candidates.map(m => m.id).sort().join(',');
+  useEffect(() => { setRunKey(crypto.randomUUID()); }, [title, amountDollars, dueDate, excluded, candidateIds]);
 
   const draft: DuesRunDraft = {
     title,
