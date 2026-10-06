@@ -20,10 +20,11 @@ Reconstruction mirrors exactly how the RPCs append ledger rows:
   over-threshold adjustment has NO ledger row (deviation #12) and is excluded.
 - REFUND_ISSUED — one per ACTIVE refund (−amount).
 
-Deviation #3: migrated historical fines wrote PAYMENT_RECEIVED with
-`source_table='unpaid_invoices'` instead of `'verified_payments'`. The diff keys
-PAYMENT_RECEIVED on (type, amount, member) only — never on source — so that legacy
-source-table difference is not mistaken for drift.
+Deviation #3: migrated historical fines (0012) wrote PAYMENT_RECEIVED with
+`source_table='unpaid_invoices'` and the invoice id instead of the payment id.
+Every entry type, PAYMENT_RECEIVED included, is matched on its source id (F-058);
+such a live row is read as an alias of the verified payment whose 0165-migrated
+allocation covers that invoice, and nothing else is aliased.
 """
 
 from __future__ import annotations
@@ -32,6 +33,9 @@ from collections import Counter
 from dataclasses import dataclass, field
 
 from api.treasury.core.balance import BalanceEngine
+
+# Note 0165 put on the allocation it made from verified_payments.invoice_id.
+_MIGRATED_0165_NOTE = "migrated from verified_payments.invoice_id (0165)"
 
 _BALANCE_FIELDS = (
     "total_owed_cents",
@@ -122,12 +126,29 @@ class RebuildEngine:
         return entries
 
     # ── diff helpers ─────────────────────────────────────────────────────────
+    def _alias_0012_payments(self, chapter_id: str, live: list[dict]) -> list[dict]:
+        """Point 0012-shaped PAYMENT_RECEIVED rows (source = invoice) at their payment."""
+        rows = (
+            self._sb.table("payment_allocations")
+            .select("verified_payment_id,invoice_id,reverses_allocation_id")
+            .eq("chapter_id", chapter_id).eq("note", _MIGRATED_0165_NOTE).execute()
+        ).data or []
+        payment_for = {
+            _norm(r["invoice_id"]): _norm(r["verified_payment_id"])
+            for r in rows
+            if r["reverses_allocation_id"] is None
+        }
+        out = []
+        for e in live:
+            if e["entry_type"] == "PAYMENT_RECEIVED" and e.get("source_table") == "unpaid_invoices":
+                src = _norm(e.get("source_id"))
+                e = {**e, "source_id": payment_for.get(src, src)}
+            out.append(e)
+        return out
+
     @staticmethod
     def _ledger_key(entry: dict):
-        # PAYMENT_RECEIVED is matched without source (deviation #3); everything
-        # else is matched to its originating operational row.
-        if entry["entry_type"] == "PAYMENT_RECEIVED":
-            return (entry["entry_type"], int(entry["amount_cents"]), _norm(entry.get("member_id")), None)
+        # Every entry is matched to its originating operational row (F-058).
         return (
             entry["entry_type"],
             int(entry["amount_cents"]),
@@ -199,6 +220,7 @@ class RebuildEngine:
             .eq("status", "active").execute()
         ).data or []
 
+        live = self._alias_0012_payments(chapter_id, live)
         ledger_drift = self._diff_ledger(reconstructed, live)
         balance_drift = self._diff_balances(chapter_id)
         chapter_balance_cents = self._engine.chapter_balance(chapter_id).cents
