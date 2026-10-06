@@ -91,6 +91,11 @@ def test_excuse_approval_updates_cache(
         headers={"Authorization": "Bearer x"},
     )
     assert response.status_code == 200, response.text
+    # Batch issuance intentionally skips cache writes. Seed a stale balance so
+    # this test verifies that approving the excuse refreshes an existing cache.
+    engine = BalanceEngine(sb_client)
+    assert engine.member_outstanding(member).cents == 2500
+    engine.recompute_member(member)
     cursor.execute(
         "SELECT outstanding_balance_cents FROM member_finance_accounts WHERE member_id=%s",
         (member,),

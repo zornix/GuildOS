@@ -259,3 +259,29 @@ def bulk_create_invoices(
     for member_id in {inv["member_id"] for inv in invoices}:
         recompute_member_balance(sb, member_id)
     return payload
+
+
+def issue_event_fines(
+    sb, *, chapter_id: str, event_id: str, member_ids: list[str],
+    amount_cents: int, description: str, actor_id: str,
+) -> dict:
+    """Issue an event's invoices atomically, then enqueue their notices."""
+    result = call_rpc(
+        "tr_issue_event_fines",
+        {
+            "p_chapter_id": chapter_id,
+            "p_event_id": event_id,
+            "p_member_ids": member_ids,
+            "p_amount_cents": amount_cents,
+            "p_description": description,
+            "p_actor_id": actor_id,
+        },
+        sb=sb,
+    ).data
+    # Each notice targets its own invoice; the shared notifier dedups by that id.
+    for invoice in result["issued"]:
+        notify_invoice_issued(
+            chapter_id=chapter_id, member_id=invoice["member_id"],
+            invoice_id=invoice["id"], sb=sb,
+        )
+    return result

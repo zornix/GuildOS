@@ -366,3 +366,54 @@ def test_checkin_self_rpc_rejects_cross_chapter(cursor, chapter_id, chapter_fact
     assert cursor.fetchall() == []
     cursor.execute("SELECT id FROM audit_logs WHERE chapter_id = %s AND actor_id = %s", (chapter_id, member))
     assert cursor.fetchall() == []
+
+
+def _event_fine(cursor, chapter, event, member):
+    cursor.execute(
+        """SELECT tr_create_invoice_v2(%s,%s,'fine',2500,'Missed',%s,
+                   NULL,%s,NULL,NULL,%s) AS r""",
+        (chapter, member, member, member, event),
+    )
+    return cursor.fetchone()["r"]["id"]
+
+
+def _pay_fine(cursor, chapter, member, invoice, amount):
+    cursor.execute(
+        "SELECT tr_record_payment(%s,%s,%s,'cash',%s,%s,NULL,NULL) AS r",
+        (chapter, member, amount, member, invoice),
+    )
+    cursor.fetchone()
+
+
+@pytest.mark.parametrize('attendance_status,invoice_status,expected', [
+    ('excused','unpaid','cancelled'),
+    ('present','unpaid','cancelled'),
+    ('excused','partially_paid','cancelled'),
+    ('present','partially_paid','cancelled'),
+    ('excused','paid','paid'),
+    ('present','cancelled','cancelled'),
+    ('absent','unpaid','unpaid'),
+])
+def test_attendance_voids_only_open_fines(cursor, chapter_id, event_factory, member_factory,
+                                         attendance_status, invoice_status, expected):
+    member, actor = member_factory(), member_factory()
+    event = event_factory(chapter_id, required=True)
+    fine = _event_fine(cursor, chapter_id, event, member)
+    if invoice_status in ('partially_paid','paid'):
+        _pay_fine(cursor, chapter_id, member, fine, 1 if invoice_status == 'partially_paid' else 2500)
+    elif invoice_status == 'cancelled':
+        cursor.execute("SELECT tr_void_invoice(%s,%s,%s,'waived',NULL)", (chapter_id,fine,actor))
+    set_attendance(cursor, chapter_id, event, member, attendance_status, actor, reason='sick')
+    cursor.execute('SELECT status FROM unpaid_invoices WHERE id=%s', (fine,))
+    assert cursor.fetchone()['status'] == expected
+
+
+def test_excuse_approval_voids_partially_paid_fine(cursor, chapter_id, event_factory, member_factory, excuse_factory):
+    member, actor = member_factory(), member_factory()
+    event = event_factory(chapter_id, required=True)
+    fine = _event_fine(cursor, chapter_id, event, member)
+    _pay_fine(cursor, chapter_id, member, fine, 1)
+    excuse = excuse_factory(chapter_id, event, member)
+    review_excuse(cursor, chapter_id, excuse, 'approved', actor)
+    cursor.execute('SELECT status FROM unpaid_invoices WHERE id=%s', (fine,))
+    assert cursor.fetchone()['status'] == 'cancelled'

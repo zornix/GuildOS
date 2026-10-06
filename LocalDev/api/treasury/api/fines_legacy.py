@@ -15,13 +15,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from api.attendance.services.signals import list_unexcused_absences
+from api.events.core.timing import chapter_timezone, event_start_utc
+from api.treasury.services import remaining as remaining_svc
 from api.platform.db import get_db
 from api.dependencies import get_current_user
 from api.rbac.auth import require_permission
 from api.rbac.services.permissions import has_permission
 from api.treasury.core.fines import FINE_ISSUE_DELAY_HOURS, FLAT_FINE_CENTS
 from api.treasury.services import invoices as invoice_svc
-from api.treasury.services.fine_processor import process_event_fines
 
 router = APIRouter()
 
@@ -35,23 +36,13 @@ class IssueFinesBody(BaseModel):
     member_ids: list[str] = Field(min_length=1)
 
 
-def _event_start_utc(event: dict) -> datetime:
-    """events.date + events.time → aware UTC datetime (legacy columns are naive)."""
-    date_part = event["date"]
-    time_part = event["time"]
-    if isinstance(date_part, str):
-        date_part = datetime.fromisoformat(date_part).date()
-    if isinstance(time_part, str):
-        time_part = datetime.strptime(time_part[:8], "%H:%M:%S").time()
-    return datetime.combine(date_part, time_part, tzinfo=timezone.utc)
-
-
 def _load_required_event(sb, chapter_id: str, event_id: str) -> dict:
     event = (
         sb.table("events")
         .select("*")
         .eq("id", event_id)
         .eq("chapter_id", chapter_id)
+        .eq("cancelled", False)
         .maybe_single()
         .execute()
     ).data
@@ -101,18 +92,7 @@ def _present_fines(sb, rows: list[dict]) -> list[dict]:
         ).data or []
         events = {str(e["id"]): e for e in ev_rows}
 
-    # Coverage lives only in payment_allocations (net of reversal rows) — one
-    # bulk read instead of tr_invoice_remaining_cents per row.
-    allocs = (
-        sb.table("payment_allocations")
-        .select("invoice_id, amount_cents, reverses_allocation_id")
-        .in_("invoice_id", [str(r["id"]) for r in rows])
-        .execute()
-    ).data or []
-    covered: dict[str, int] = {}
-    for a in allocs:
-        sign = 1 if a["reverses_allocation_id"] is None else -1
-        covered[str(a["invoice_id"])] = covered.get(str(a["invoice_id"]), 0) + sign * int(a["amount_cents"])
+    remaining = remaining_svc.remaining_by_invoice(sb, rows)
 
     presented = []
     for r in rows:
@@ -123,7 +103,7 @@ def _present_fines(sb, rows: list[dict]) -> list[dict]:
                 "amount_cents": int(r["amount_cents"]),
                 "remaining_cents": 0
                 if r["status"] == "cancelled"
-                else max(0, int(r["amount_cents"]) - covered.get(str(r["id"]), 0)),
+                else remaining[r["id"]],
                 "status": r["status"],
                 "reason": r.get("description") or "",
                 "issued_at": r.get("created_at"),
@@ -171,7 +151,7 @@ async def list_missed_members(
     event = _load_required_event(sb, user["chapter_id"], event_id)
     missed = list_unexcused_absences(sb, chapter_id=user["chapter_id"], event_id=event_id)
     fined = _already_fined_ids(sb, event_id)
-    start = _event_start_utc(event)
+    start = event_start_utc(event, chapter_timezone(sb, user["chapter_id"]))
     finable_at = start + timedelta(hours=FINE_ISSUE_DELAY_HOURS)
     return {
         "event_id": event_id,
@@ -195,7 +175,7 @@ async def issue_fines(
     sb = get_db()
     event = _load_required_event(sb, user["chapter_id"], body.event_id)
 
-    start = _event_start_utc(event)
+    start = event_start_utc(event, chapter_timezone(sb, user["chapter_id"]))
     gate = start + timedelta(hours=FINE_ISSUE_DELAY_HOURS)
     now = datetime.now(timezone.utc)
     if now < gate:
@@ -209,27 +189,19 @@ async def issue_fines(
         str(m["member_id"])
         for m in list_unexcused_absences(sb, chapter_id=user["chapter_id"], event_id=body.event_id)
     }
-    fined = _already_fined_ids(sb, body.event_id)
-
-    tdb = get_db()
-    issued, skipped = [], []
-    for member_id in dict.fromkeys(body.member_ids):  # de-dup, keep order
-        if member_id in fined or member_id not in unexcused:
+    eligible, skipped = [], []
+    for member_id in dict.fromkeys(body.member_ids):
+        if member_id not in unexcused:
             skipped.append(member_id)
-            continue
-        invoice = invoice_svc.create_invoice_v2(
-            tdb,
-            chapter_id=user["chapter_id"],
-            member_id=member_id,
-            kind="fine",
-            amount_cents=FLAT_FINE_CENTS,
-            description=f"Missed {event['title']} (unexcused)",
-            actor_id=user["id"],
-            issued_by=user["id"],
-            idempotency_key=f"fine:{body.event_id}:{member_id}",
-            source_event_id=body.event_id,
-        )
-        issued.append(invoice)
+        else:
+            eligible.append(member_id)
+    result = invoice_svc.issue_event_fines(
+        sb, chapter_id=user["chapter_id"], event_id=body.event_id,
+        member_ids=eligible, amount_cents=FLAT_FINE_CENTS,
+        description=f"Missed {event['title']} (unexcused)", actor_id=user["id"],
+    )
+    issued = result["issued"]
+    skipped.extend(result["skipped_member_ids"])
 
     return {
         "event_id": body.event_id,
@@ -264,48 +236,28 @@ async def waive_fine(
         raise HTTPException(404, f"Fine not found or not waivable: {exc}")
 
 
-@router.post("/process-event/{event_id}")
-async def process_fines_for_event(
-    event_id: str,
-    officer=Depends(require_permission("treasury:fines:issue")),
-):
-    """A fines:issue holder manually triggers fine processing for one event."""
-    sb = get_db()
-    event = (
-        sb.table("events")
-        .select("id, chapter_id, required")
-        .eq("id", event_id)
-        .eq("chapter_id", officer["chapter_id"])
-        .single()
-        .execute()
-    )
-    if not event.data:
-        raise HTTPException(404, "Event not found")
-    if not event.data["required"]:
-        raise HTTPException(400, "Event is not required — no fines to process")
-
-    invoices = await process_event_fines(event_id)
-    return {"event_id": event_id, "fines_issued": len(invoices)}
-
-
 @router.get("/summary")
 async def fine_summary(officer=Depends(require_permission("treasury:audit:view"))):
     """Aggregate fine stats for the chapter, in cents."""
     sb = get_db()
     invoices = (
         sb.table("unpaid_invoices")
-        .select("amount_cents, status")
+        .select("id, amount_cents, status")
         .eq("chapter_id", officer["chapter_id"])
         .eq("kind", "fine")
         .execute()
     ).data
 
+    remaining = remaining_svc.remaining_by_invoice(
+        sb, [inv for inv in invoices if inv["status"] in ("unpaid", "partially_paid")]
+    )
     summary = {"total_unpaid_cents": 0, "total_paid_cents": 0, "total_cancelled_cents": 0, "count_unpaid": 0}
     for inv in invoices:
         amt = inv["amount_cents"]
         if inv["status"] in ("unpaid", "partially_paid"):
-            summary["total_unpaid_cents"] += amt
-            summary["count_unpaid"] += 1
+            owed = remaining[inv["id"]]
+            summary["total_unpaid_cents"] += owed
+            summary["count_unpaid"] += int(owed > 0)
         elif inv["status"] == "paid":
             summary["total_paid_cents"] += amt
         elif inv["status"] == "cancelled":

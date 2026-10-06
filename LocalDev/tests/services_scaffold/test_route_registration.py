@@ -21,7 +21,6 @@ LEGACY_PATHS = [
     "/api/excuses/{excuse_id}/review",
     "/api/fines/",
     "/api/fines/{invoice_id}/waive",
-    "/api/fines/process-event/{event_id}",
     "/api/members/",
     "/api/members/{member_id}/role",
     "/api/standing/",
