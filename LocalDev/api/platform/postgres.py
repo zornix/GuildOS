@@ -116,7 +116,7 @@ class QueryBuilder:
     _is_single: bool = False
     _payload: dict | None = None
     _on_conflict: str | None = None
-    _ignore_conflict: str | None = None
+    _ignore_conflict: str | bool | None = None
     _chain_select: str | None = None
     _limit_n: int | None = None
     _offset_n: int | None = None
@@ -365,7 +365,9 @@ class QueryBuilder:
         vals = [self._adapt_value(r[c]) for r in rows for c in cols]
         col_str = ", ".join(f'"{c}"' for c in cols)
         sql = f'INSERT INTO "{self._table}" ({col_str}) VALUES {", ".join([row_sql] * len(rows))}'
-        if self._ignore_conflict:
+        if self._ignore_conflict is True:
+            sql += " ON CONFLICT DO NOTHING"
+        elif self._ignore_conflict:
             # Rows that hit the conflict are skipped and absent from RETURNING.
             conflict = ", ".join(_ident(c.strip()) for c in self._ignore_conflict.split(","))
             sql += f" ON CONFLICT ({conflict}) DO NOTHING"
@@ -504,7 +506,7 @@ class _TableAccessor:
         qb = QueryBuilder(_pool=self._pool, _table=self._table)
         return qb.select(cols, count=count)
 
-    def insert(self, data: dict | list[dict], *, ignore_conflict: str | None = None) -> QueryBuilder:
+    def insert(self, data: dict | list[dict], *, ignore_conflict: str | bool | None = None) -> QueryBuilder:
         return QueryBuilder(
             _pool=self._pool, _table=self._table, _op="insert", _payload=data,
             _ignore_conflict=ignore_conflict,
@@ -652,6 +654,7 @@ class PostgresClient:
             yield self
             return
         conn = self._pool.getconn()
+        tx = None
         try:
             conn.autocommit = False
             tx = PostgresClient.__new__(PostgresClient)
@@ -668,10 +671,13 @@ class PostgresClient:
                 conn.rollback()
                 raise
         finally:
-            tx._pool.release()
-            if not conn.closed:
-                conn.autocommit = True
-            self._pool.putconn(conn)
+            try:
+                if tx is not None:
+                    tx._pool.release()
+                    if not conn.closed:
+                        conn.autocommit = True
+            finally:
+                self._pool.putconn(conn)
 
     def close(self) -> None:
         self._pool.closeall()

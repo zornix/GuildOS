@@ -260,7 +260,7 @@ async def generate_checkin_link(event_id: str, officer=Depends(require_permissio
     sb = get_db()
     event = (
         sb.table("events")
-        .select("id")
+        .select("id, cancelled")
         .eq("id", event_id)
         .eq("chapter_id", officer["chapter_id"])
         .single()
@@ -268,6 +268,8 @@ async def generate_checkin_link(event_id: str, officer=Depends(require_permissio
     )
     if not event.data:
         raise HTTPException(404, "Event not found")
+    if event.data.get("cancelled"):
+        raise HTTPException(409, "Event is cancelled")
 
     link = await create_checkin_link(event_id, officer["id"])
     return link
