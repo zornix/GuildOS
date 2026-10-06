@@ -6,8 +6,9 @@ Open tasks are volunteered for; uncommit is always allowed but logged
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import datetime, timedelta, timezone
 
+from api.events.core.timing import chapter_timezone, has_started
 from api.platform.rpc import call_rpc
 
 
@@ -107,15 +108,17 @@ def _past_event_ids(sb, *, chapter_id: str, event_ids: list[str]) -> set[str]:
     """Of `event_ids`, the ones that have already happened (chapter-scoped)."""
     if not event_ids:
         return set()
+    now = datetime.now(timezone.utc)
+    tz = chapter_timezone(sb, chapter_id)
     rows = (
         sb.table("events")
-        .select("id")
+        .select("id, date, time")
         .eq("chapter_id", chapter_id)
         .in_("id", event_ids)
-        .lte("date", date.today().isoformat())
+        .lte("date", (now + timedelta(days=1)).date().isoformat())
         .execute()
     ).data or []
-    return {str(r["id"]) for r in rows}
+    return {str(r["id"]) for r in rows if has_started(r, tz, now)}
 
 
 def _event_role_counts(sb, *, chapter_id: str, member_id: str) -> tuple[int, int]:
@@ -123,9 +126,9 @@ def _event_role_counts(sb, *, chapter_id: str, member_id: str) -> tuple[int, int
 
     Both are computed on read from the join tables the events domain writes:
     `event_organizers` (0100) and `event_supervisors` (0141). Events have no
-    completion status, so "happened" is date <= today; a signup for next month
-    is a plan, not an attribution. Rows are counted per event (both tables are
-    UNIQUE on (event_id, member_id), so a row is one event).
+    completion status, so "happened" means started in the chapter timezone;
+    a signup for next month is a plan, not an attribution. Rows are counted per
+    event (both tables are UNIQUE on (event_id, member_id), so a row is one event).
     """
     organizer_rows = (
         sb.table("event_organizers")
