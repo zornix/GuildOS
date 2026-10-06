@@ -27,6 +27,8 @@ def _map_domain_errors():
         yield
     except svc.InitiativeNotFound as exc:
         raise HTTPException(404, str(exc) or "Initiative not found")
+    except svc.MemberNotInChapter:
+        raise HTTPException(404, "Member not found")
     except svc.NotPermitted as exc:
         raise HTTPException(403, str(exc))
     except svc.ChairRuleViolation as exc:

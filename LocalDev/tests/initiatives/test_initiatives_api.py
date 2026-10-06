@@ -135,3 +135,61 @@ def test_remove_last_chair_is_409(as_member, member_factory, assign_role, chapte
 
     resp = client.delete(f"/api/initiatives/{created['id']}/chairs/{chair}")
     assert resp.status_code == 409
+
+
+def test_add_chair_cross_chapter_member_is_404(
+    as_member, member_factory, assign_role, chapter_id, cursor
+):
+    chair = member_factory()
+    assign_role(chair, "risk_chair")
+    client = as_member(chair)
+    created = client.post(
+        "/api/initiatives/",
+        json={"title": "Cross Chapter Chair Test", "date": "2026-07-25", "time": "18:00"},
+    ).json()
+
+    cursor.execute(
+        "INSERT INTO chapters (name, organization, school) VALUES ('other-chair', 'o', 's') RETURNING id"
+    )
+    other_chapter = str(cursor.fetchone()["id"])
+    cursor.execute(
+        "INSERT INTO members (chapter_id, name, email, role, status) "
+        "VALUES (%s, 'Foreign Member', %s, 'member', 'active') RETURNING id",
+        (other_chapter, f"{uuid.uuid4()}@test.local"),
+    )
+    foreign_member = str(cursor.fetchone()["id"])
+
+    resp = client.post(
+        f"/api/initiatives/{created['id']}/chairs", json={"member_id": foreign_member}
+    )
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Member not found"
+
+
+def test_create_with_cross_chapter_chair_is_404(
+    as_member, member_factory, assign_role, chapter_id, cursor
+):
+    chair = member_factory()
+    assign_role(chair, "risk_chair")
+    cursor.execute(
+        "INSERT INTO chapters (name, organization, school) VALUES ('other-create', 'o', 's') RETURNING id"
+    )
+    other_chapter = str(cursor.fetchone()["id"])
+    cursor.execute(
+        "INSERT INTO members (chapter_id, name, email, role, status) "
+        "VALUES (%s, 'Foreign Chair', %s, 'member', 'active') RETURNING id",
+        (other_chapter, f"{uuid.uuid4()}@test.local"),
+    )
+    foreign_member = str(cursor.fetchone()["id"])
+
+    resp = as_member(chair).post(
+        "/api/initiatives/",
+        json={
+            "title": "Cross Chapter Create",
+            "date": "2026-07-25",
+            "time": "18:00",
+            "chair_member_ids": [foreign_member],
+        },
+    )
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Member not found"
