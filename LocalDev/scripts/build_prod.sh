@@ -34,10 +34,13 @@ for entry in "${KEEP[@]}"; do
     fi
 done
 rsync -a --exclude='__pycache__' "$SOURCE/api/" "$STAGING/api/"
-rsync -a --exclude='node_modules' --exclude='dist' --exclude='.env*' "$SOURCE/greekos/" "$STAGING/fratos/"
+rsync -a --exclude='node_modules' --exclude='dist' --include='.env.example' --exclude='.env*' "$SOURCE/greekos/" "$STAGING/fratos/"
+if [[ -f "$TARGET/fratos/vercel.json" ]]; then
+    cp -a -- "$TARGET/fratos/vercel.json" "$STAGING/fratos/"
+fi
 rsync -a "$SOURCE/migrations/" "$STAGING/migrations/"
 mkdir -p "$STAGING/scripts"
-for entry in migrate_db.py db_guard.py migration_checksums.py check_prod_status.py; do
+for entry in migrate_db.py db_guard.py migration_checksums.py check_prod_status.py set_officer_password.py; do
     cp -a -- "$SOURCE/scripts/$entry" "$STAGING/scripts/"
 done
 python3 - "$SOURCE" "$STAGING" <<'PY'
@@ -51,6 +54,12 @@ old = json.loads(path.read_text()) if path.exists() else {}
 config['git'] = dict(old.get('git', {}), deploymentEnabled=False)
 if old != config:
     path.write_text(json.dumps(config, indent=2) + '\n')
+path = staging / 'fratos/vercel.json'
+if path.exists():
+    old = json.loads(path.read_text())
+    config = dict(old, git=dict(old.get('git', {}), deploymentEnabled=False))
+    if old != config:
+        path.write_text(json.dumps(config, indent=2) + '\n')
 PY
 if $CHECK; then
     result=0

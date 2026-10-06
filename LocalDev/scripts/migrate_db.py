@@ -99,6 +99,22 @@ def _applied(cur) -> dict[str, str | None]:
     return {row[0]: row[1] for row in cur.fetchall()}
 
 
+def _applied_readonly(cur) -> dict[str, str | None]:
+    """Read production history without creating its table or checksum column."""
+    cur.execute("SELECT to_regclass('schema_migrations')")
+    if cur.fetchone()[0] is None:
+        return {}
+    cur.execute("""SELECT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = current_schema() AND table_name = 'schema_migrations'
+          AND column_name = 'checksum'
+    )""")
+    if cur.fetchone()[0]:
+        return _applied(cur)
+    cur.execute("SELECT name, NULL FROM schema_migrations")
+    return {row[0]: row[1] for row in cur.fetchall()}
+
+
 def unknown_applied(applied: set[str], files: list[str]) -> list[str]:
     """Names recorded in the database that this checkout does not contain."""
     return sorted(applied - set(files))
@@ -148,12 +164,13 @@ def main() -> None:
     try:
         conn.autocommit = False
 
-        with conn.cursor() as cur:
-            _ensure_migrations_table(cur)
-        conn.commit()
+        if not args.prod:
+            with conn.cursor() as cur:
+                _ensure_migrations_table(cur)
+            conn.commit()
 
         with conn.cursor() as cur:
-            applied = _applied(cur)
+            applied = _applied_readonly(cur) if args.prod else _applied(cur)
 
         checksums = {f.name: hashlib.sha256(f.read_bytes()).hexdigest() for f in files}
 
@@ -176,19 +193,7 @@ def main() -> None:
                 print("refusing to migrate a database with an unknown history", file=sys.stderr)
                 sys.exit(1)
 
-        # Rows applied before checksums existed: record the file as it is now.
-        with conn.cursor() as cur:
-            for name, digest in applied.items():
-                if digest is None and name in checksums:
-                    cur.execute("UPDATE schema_migrations SET checksum = %s WHERE name = %s",
-                                (checksums[name], name))
-        conn.commit()
-
         pending = [f for f in files if f.name not in applied]
-        if not pending:
-            print("schema_migrations: already up to date")
-            return
-
         if args.prod:
             print(f"target: {redact(url)} (PROD)")
             print(f"pending migrations ({len(pending)}):")
@@ -203,6 +208,23 @@ def main() -> None:
                 if not confirmation_matches(typed, url):
                     print("error: confirmation mismatch — nothing applied", file=sys.stderr)
                     sys.exit(1)
+
+        if args.prod:
+            with conn.cursor() as cur:
+                _ensure_migrations_table(cur)
+            conn.commit()
+
+        # Rows applied before checksums existed: record the file as it is now.
+        with conn.cursor() as cur:
+            for name, digest in applied.items():
+                if digest is None and name in checksums:
+                    cur.execute("UPDATE schema_migrations SET checksum = %s WHERE name = %s",
+                                (checksums[name], name))
+        conn.commit()
+
+        if not pending:
+            print("schema_migrations: already up to date")
+            return
 
         for path in pending:
             sql = _read_sql(path)
