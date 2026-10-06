@@ -4,6 +4,20 @@ Read `00-README.md` first (rules, contracts, decisions, runbook). This file says
 wave 1 actually stands and what the next session does first. Model rules below override
 the README's per-stream model column.
 
+## Update, session 2 (2026-10-05): wave 1 is DONE
+
+- 03 fix-up by Sol (`gpt-6.1-sol`; Cursor/Grok was out of usage): migration
+  `0205_treasury_review_fixes.sql` (reallocation capped at paid − active refunds;
+  `record_payment` idempotency op with request hash, inner keys `record:<key>:…`), plus the P2
+  tests. Diff checked against 0165/0170 predecessors; no second CLI review.
+- 03 and 05 merged; 05's leftovers removed (dead `useFinance` deps, `ledger`, `EnqueueOutbox`,
+  `LedgerEntry`). Checksums recorded, demo DB migrated.
+- Full suite on main: 1144 passed + 2 permission tests fixed (they reused one user dict across
+  two "requests" and hit the per-request `_rbac` cache). Frontend: 134 tests, lint, build ok.
+- All wave 1 branches and worktrees deleted. Nothing pushed.
+- Next: check in with the user before wave 2. Use Sol = `gpt-6.1-sol` wherever this file says
+  Sol/Luna/Grok.
+
 ## Model rules (user directive 2026-10-05)
 
 - **Every Claude subagent runs on Opus** (`model: "opus"`), never Fable, even where a plan
