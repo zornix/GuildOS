@@ -42,12 +42,10 @@ events ──(linked_announcement_id)────────▶ announcements
 events ──(linked_budget_id)──────────────▶ treasury budgets   [column exists, no budgets table yet]
 
 attendance.signals.list_unexcused_absences ──▶ standing (reason code UNEXCUSED_ABSENCES)
-attendance ──(unexcused absence)──▶ fines/treasury via FineToInvoice  [existing path, unchanged]
+attendance ──(officer issues fines)──▶ treasury via tr_issue_event_fines; present/excused voids open fines
 
 treasury (unpaid invoices) ──▶ standing (UNPAID_FINES / HIGH_UNPAID_BALANCE)
 treasury (balance owed)    ──▶ announcements audience "members_with_balance"
-
-tasks.tasks.incomplete_required_tasks ──▶ standing (INCOMPLETE_REQUIRED_TASKS, reason-only)
 
 initiatives ──(jobs reuse tk_* machinery)──▶ tasks   [approval authority is initiative_chairs]
 calendar ──(read-only aggregate)──▶ events + initiatives
