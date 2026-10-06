@@ -60,8 +60,9 @@ async def verify_payment(
     user=Depends(require_permission(PAYMENT_REVIEW)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
+    # Frozen URL; same behaviour as /verify-v1 (coverage only via allocations, F-029).
     sb = get_db()
-    return svc.verify_payment(
+    return svc.verify_payment_v2(
         sb,
         chapter_id=user["chapter_id"],
         submission_id=submission_id,

@@ -1,8 +1,9 @@
 """Payment review service — verify / reject submissions, receipts, orphan sweep.
 
 Verification is the highest-stakes operation in Treasury: it is delegated to the
-`tr_verify_payment` RPC (one atomic txn) which is the ONLY path that creates a
-verified payment, its immutable receipt, and the PAYMENT_RECEIVED ledger entry.
+`tr_verify_payment_v2` RPC (one atomic txn; the v1 `tr_verify_payment` now delegates
+to it) which is the ONLY path that creates a verified payment, its immutable
+receipt, and the PAYMENT_RECEIVED ledger entry.
 The service refreshes the member's cached balance afterwards and fires exactly one
 approval notification (never on an idempotent replay).
 """
