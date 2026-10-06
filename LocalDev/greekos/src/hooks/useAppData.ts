@@ -11,7 +11,6 @@ import {
   adaptInitiatives,
   adaptMembers,
   adaptPayments,
-  adaptRecruits,
   adaptTasks,
   groupJobsByParent
 } from '../adapters';
@@ -23,7 +22,6 @@ import { useInitiatives } from './useInitiatives';
 import { useFinance } from './useFinance';
 import { useAttendance } from './useAttendance';
 import { useTasks } from './useTasks';
-import { useRecruitment } from './useRecruitment';
 import { useContribution } from './useContribution';
 
 /** Composes the domain hooks, runs the single initial backend load, and owns the
@@ -62,7 +60,6 @@ export function useAppData() {
     showToast
   });
   const tasks = useTasks({ syncApi, refetchJobs });
-  const recruitment = useRecruitment({ syncApi });
   const contribution = useContribution();
 
   /** Stamp the job rows onto whichever event/initiative owns each one. The chip
@@ -134,7 +131,7 @@ export function useAppData() {
         const permissionSet = new Set(perms.permissions);
         const rosterRows = adaptMembers(memberRows, standingRows, scoreRows);
 
-        const [eventRows, excuseRows, fineRows, treasury, taskRows, annRows, recruitRows, initRows, contributionRow, myTreasuryRow] =
+        const [eventRows, excuseRows, fineRows, treasury, taskRows, annRows, initRows, contributionRow, myTreasuryRow] =
           await Promise.all([
             api.getEvents(),
             api.getExcuses(),
@@ -142,7 +139,6 @@ export function useAppData() {
             optionalOfficerCall(api.getTreasuryDashboard(), null),
             api.getTasks(),
             api.getAnnouncements(),
-            optionalOfficerCall(api.getRecruits(), []),
             api.getInitiatives(),
             // Lifetime contribution counts. A failure here empties the "My
             // record" panel rather than failing the whole load.
@@ -180,7 +176,6 @@ export function useAppData() {
         finance.setFines(adaptFines(fineRows, rosterRows));
         finance.setPayments(adaptPayments(treasury?.recent_payments || [], rosterRows));
         setAnnouncements(adaptAnnouncements(annRows, rosterRows));
-        recruitment.setPnms(adaptRecruits(recruitRows));
         initiatives.setInitiatives(adaptInitiatives(initRows, rosterRows));
         // Queued after both setters above, so it restamps the freshly adapted rows.
         applyJobs(taskRows, rosterRows, eventRows, {
@@ -213,7 +208,7 @@ export function useAppData() {
   // COMMAND CONSOLE EXECUTION
   // ----------------------------------------------------
   const handleExecuteCommand = (cmdResult: {
-    type: 'FINE' | 'TASK' | 'EVENT' | 'BID' | 'ANNOUNCEMENT' | 'EXCUSE_APPROVE' | 'ATTENDANCE';
+    type: 'FINE' | 'TASK' | 'EVENT' | 'ANNOUNCEMENT' | 'EXCUSE_APPROVE' | 'ATTENDANCE';
     payload: any;
     summary: string;
   }) => {
@@ -226,12 +221,6 @@ export function useAppData() {
         break;
       case 'EVENT':
         events.handleAddEvent(cmdResult.payload);
-        break;
-      case 'BID':
-        const targetPnm = recruitment.pnms.find(p => p.name.toLowerCase().includes(cmdResult.payload.pnmName.toLowerCase()));
-        if (targetPnm) {
-          recruitment.handleExtendBid(targetPnm.id);
-        }
         break;
       case 'ANNOUNCEMENT': {
         // The backend keeps a calendar slot separate from the send time, so a
@@ -283,7 +272,6 @@ export function useAppData() {
     finance,
     attendance,
     tasks,
-    recruitment,
     refreshOwnPermissions,
     handleDeleteAnnouncement,
     handleExecuteCommand
