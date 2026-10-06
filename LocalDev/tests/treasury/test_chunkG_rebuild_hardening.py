@@ -251,6 +251,57 @@ def test_rebuild_flags_a_ledger_entry_with_no_operational_backing(
     assert not report.is_clean
 
 
+# ── F-058: PAYMENT_RECEIVED is matched to its source ─────────────────────────
+def test_missing_and_stray_payment_rows_do_not_cancel_out(sb_client, cursor, chapter_id, member_id):
+    vps = []
+    for _ in range(2):
+        sub = pay_svc.submit_balance_payment(
+            sb_client, chapter_id=chapter_id, member_id=member_id,
+            claimed_amount_cents=2500, method="venmo", proof_ref=None,
+        )
+        vps.append(pay_svc.verify_payment_v2(
+            sb_client, chapter_id=chapter_id, submission_id=sub["id"], actor_id=member_id,
+        ))
+    # Hole: payment A's ledger row invalidated. Orphan: a same-amount row pointing nowhere.
+    cursor.execute(
+        "UPDATE big_ledger SET status='invalidated' WHERE chapter_id=%s AND source_id=%s",
+        (chapter_id, vps[0]["id"]),
+    )
+    cursor.execute(
+        "INSERT INTO big_ledger (chapter_id, entry_type, amount_cents, member_id, "
+        "source_table, source_id, status) "
+        "VALUES (%s,'PAYMENT_RECEIVED',2500,%s,'verified_payments',%s,'active')",
+        (chapter_id, member_id, str(uuid.uuid4())),
+    )
+
+    report = RebuildEngine(sb_client).rebuild(chapter_id)
+
+    assert not report.is_clean
+    assert {d["kind"] for d in report.ledger_drift} == {"missing", "extra"}
+
+
+def test_migrated_0012_payment_row_still_matches_its_payment(sb_client, cursor, chapter_id, member_id):
+    """0012 wrote PAYMENT_RECEIVED with source unpaid_invoices/<invoice id>; 0165
+    moved the payment's coverage into an allocation. Rebuild must treat them as one."""
+    from tests.treasury.test_single_coverage import _legacy_paid_invoice, _run_0165_data
+
+    invoice_id, _vp = _legacy_paid_invoice(cursor, chapter_id, member_id, 2500)
+    for entry_type in ("INVOICE_CREATED", "PAYMENT_RECEIVED"):
+        cursor.execute(
+            "INSERT INTO big_ledger (chapter_id, entry_type, amount_cents, member_id, "
+            "source_table, source_id, status) "
+            "VALUES (%s,%s,2500,%s,'unpaid_invoices',%s,'active')",
+            (chapter_id, entry_type, member_id, invoice_id),
+        )
+    _run_0165_data(cursor)
+    BalanceEngine(sb_client).recompute_member(member_id)
+
+    report = RebuildEngine(sb_client).rebuild(chapter_id)
+
+    assert report.ledger_drift == []
+    assert report.is_clean
+
+
 # ── Slice 12 hardening: durable notification outbox ──────────────────────────
 def test_notification_persists_pending_row_in_dry_run(sb_client, cursor, chapter_id, member_id):
     from api.treasury.notifications import notify_payment_approved

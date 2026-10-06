@@ -90,7 +90,16 @@ def test_receipt_is_complete_after_verify(sb_client, cursor, chapter_id, member_
     assert str(receipt["verified_payment_id"]) == str(vp["id"])
     assert str(receipt["member_id"]) == str(member_id)
     assert receipt["amount_cents"] == 5000
-    assert str(receipt["invoice_id"]) == str(submission["invoice_id"])
+    # F-029: coverage lives only in payment_allocations, not on the receipt/payment.
+    assert receipt["invoice_id"] is None
+    cursor.execute(
+        "SELECT invoice_id, amount_cents FROM payment_allocations WHERE verified_payment_id=%s",
+        (vp["id"],),
+    )
+    allocs = cursor.fetchall()
+    assert [(str(a["invoice_id"]), a["amount_cents"]) for a in allocs] == [
+        (str(submission["invoice_id"]), 5000)
+    ]
     assert str(receipt["issued_by"]) == str(member_id)
     assert receipt["issued_at"] is not None
 

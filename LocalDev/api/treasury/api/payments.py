@@ -39,6 +39,14 @@ class BalanceSubmissionCreate(BaseModel):
     proof_ref: str | None = None
 
 
+class RecordPaymentBody(BaseModel):
+    member_id: str
+    amount_cents: int = Field(gt=0)
+    method: str = Field(pattern="^(venmo|zelle|cash|bank_transfer|check)$")
+    invoice_id: str | None = None
+    reference: str | None = None
+
+
 class EvidenceCreate(BaseModel):
     content_type: str = Field(min_length=1)
     data_base64: str = Field(min_length=1)
@@ -60,8 +68,9 @@ async def verify_payment(
     user=Depends(require_permission(PAYMENT_REVIEW)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
+    # Frozen URL; same behaviour as /verify-v1 (coverage only via allocations, F-029).
     sb = get_db()
-    return svc.verify_payment(
+    return svc.verify_payment_v2(
         sb,
         chapter_id=user["chapter_id"],
         submission_id=submission_id,
@@ -181,6 +190,35 @@ async def verify_payment_v1(
         actor_id=user["id"],
         idempotency_key=idempotency_key,
     )
+
+
+@router.post("/payments/record")
+async def record_payment(
+    body: RecordPaymentBody,
+    user=Depends(require_permission(PAYMENT_REVIEW)),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
+    """Officer records a payment for a member: submit + verify in one step (D1)."""
+    sb = get_db()
+    try:
+        return svc.record_payment(
+            sb,
+            chapter_id=user["chapter_id"],
+            member_id=body.member_id,
+            amount_cents=body.amount_cents,
+            method=body.method,
+            actor_id=user["id"],
+            invoice_id=body.invoice_id,
+            reference=body.reference,
+            idempotency_key=idempotency_key,
+        )
+    except Exception as exc:
+        msg = str(exc)
+        if "not in chapter" in msg or "not found in chapter" in msg or "does not belong" in msg:
+            raise HTTPException(404, "Member or invoice not found in this chapter")
+        if "cancelled invoice" in msg or "already fully paid" in msg:
+            raise HTTPException(409, "That invoice is cancelled or already paid")
+        raise
 
 
 @router.post("/payments/submissions/{submission_id}/reject-v1")
