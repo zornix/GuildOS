@@ -29,7 +29,6 @@ LEGACY_PATHS = [
     "/api/checkin-links/active",
     "/c/{short_code}",
     "/api/treasury/invoices",
-    "/api/operations/templates",
 ]
 
 NEW_PATHS = [
@@ -58,3 +57,7 @@ def test_new_domain_paths_registered():
     paths = _paths()
     missing = [p for p in NEW_PATHS if p not in paths]
     assert not missing, f"new domain paths not mounted: {missing}"
+
+
+def test_operations_api_is_unmounted():
+    assert not any(path.startswith("/api/operations") for path in _paths())

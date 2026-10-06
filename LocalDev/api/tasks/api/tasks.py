@@ -85,18 +85,32 @@ async def update_task_status(
     if not task:
         raise HTTPException(404, "Task not found")
 
-    resource = {"owner_member_id": task.get("assigned_member_id")}
-    if not has_permission(user, TASKS_COMPLETE, resource=resource, sb=sb):
+    committed = bool((
+        sb.table("task_commitments").select("id")
+        .eq("chapter_id", user["chapter_id"]).eq("task_id", task_id)
+        .eq("member_id", user["id"]).eq("status", "active").execute()
+    ).data)
+    owns_task = task.get("assigned_member_id") == user["id"] or committed
+    if not has_permission(user, TASKS_COMPLETE, sb=sb) or not (
+        owns_task or has_permission(user, "tasks:review", sb=sb)
+    ):
         raise HTTPException(403, "Missing permission: tasks:complete (or tasks:review for others' tasks)")
 
-    return svc.update_task_status(
-        sb,
-        chapter_id=user["chapter_id"],
-        task_id=task_id,
-        status=body.status,
-        actor_id=user["id"],
-        idempotency_key=idempotency_key,
-    )
+    try:
+        return svc.update_task_status(
+            sb,
+            chapter_id=user["chapter_id"],
+            task_id=task_id,
+            status=body.status,
+            actor_id=user["id"],
+            idempotency_key=idempotency_key,
+        )
+    except Exception as exc:
+        message = str(exc)
+        for prefix in ("task_closed:", "task_in_review:", "job_needs_review:"):
+            if prefix in message:
+                raise HTTPException(409, message.split(prefix, 1)[1].splitlines()[0].strip()) from exc
+        raise _rpc_http_error(exc) from exc
 
 
 def _manageable_task_or_error(sb, *, user: dict, task_id: str) -> dict:

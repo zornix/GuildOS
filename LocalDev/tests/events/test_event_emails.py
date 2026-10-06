@@ -95,6 +95,7 @@ def test_role_assignment_emails_the_assigned_member(
         event=event_row,
         member_id=member,
         role="supervisor",
+        assignment_id="assignment",
     )
 
     rows = outbox_for("EVENT_ROLE_ASSIGNED", str(event_row["id"]))
@@ -116,6 +117,7 @@ def test_the_two_roles_are_separate_messages(
             event=event_row,
             member_id=member,
             role=role,
+            assignment_id="assignment",
         )
 
     rows = outbox_for("EVENT_ROLE_ASSIGNED", str(event_row["id"]))

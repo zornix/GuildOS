@@ -30,11 +30,12 @@ EVENT_ROLE_ASSIGNED = "EVENT_ROLE_ASSIGNED"
 
 
 def _enqueue(sb, **kwargs) -> dict | None:
-    """Queue one event email. A notification failure never fails the write that
-    produced it — the event exists whether or not the mail was queued."""
+    """Queue one email; transaction failures must roll back the producer."""
     try:
         return enqueue(sb, channel="email", target_table="events", **kwargs)
     except Exception:
+        if getattr(getattr(sb, "_pool", None), "in_tx", False):
+            raise
         logger.warning("could not enqueue %s", kwargs.get("event_type"), exc_info=True)
         return None
 
@@ -74,12 +75,14 @@ def notify_event_created(sb, *, chapter_id: str, event: dict) -> int:
             payload=payload,
         )
     except Exception:
+        if getattr(getattr(sb, "_pool", None), "in_tx", False):
+            raise
         logger.warning("could not enqueue %s", EVENT_CREATED, exc_info=True)
         return 0
 
 
 def notify_role_assigned(
-    sb, *, chapter_id: str, event: dict, member_id: str, role: str
+    sb, *, chapter_id: str, event: dict, member_id: str, role: str, assignment_id: str
 ) -> dict | None:
     """EVENT_ROLE_ASSIGNED for one member. `role` is 'organizer'|'supervisor'."""
     event_id = event["id"]
@@ -89,7 +92,7 @@ def notify_role_assigned(
         chapter_id=chapter_id,
         member_id=member_id,
         target_id=event_id,
-        dedup_key=f"{EVENT_ROLE_ASSIGNED}:{event_id}:{member_id}:{role}",
+        dedup_key=f"{EVENT_ROLE_ASSIGNED}:{event_id}:{member_id}:{role}:{assignment_id}",
         payload={
             "title": event.get("title"),
             "date": str(event.get("date") or ""),

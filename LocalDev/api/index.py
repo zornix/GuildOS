@@ -139,7 +139,6 @@ from api.calendar.api.calendar import router as calendar_router
 from api.instrumentation.api.usage import router as usage_router
 from api.initiatives.api.initiatives import router as initiatives_router
 from api.contribution.api.records import router as contribution_router
-from api.tasks.api.operations import router as operations_router
 from api.treasury.api.fines_legacy import router as fines_router
 
 # MemberAdmin owns standing; /api/standing stays its own mount for the frontend.
@@ -199,7 +198,6 @@ app.include_router(memberadmin_router, prefix="/api/memberadmin", tags=["MemberA
 app.include_router(treasury_router, prefix="/api/treasury", tags=["Treasury"])
 app.include_router(rbac_router, prefix="/api/rbac", tags=["RBAC"])
 app.include_router(tasks_router, prefix="/api/tasks", tags=["Tasks"])
-app.include_router(operations_router, prefix="/api/operations", tags=["Operations"])
 app.include_router(announcements_router, prefix="/api/announcements", tags=["Announcements"])
 app.include_router(twilio_inbound_router, prefix="/api/twilio", tags=["Twilio"])
 app.include_router(recruitment_router, prefix="/api/recruitment", tags=["Recruitment"])
