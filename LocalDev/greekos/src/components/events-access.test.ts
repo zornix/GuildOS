@@ -11,7 +11,7 @@ const noop = () => {};
 
 const member: Member = {
   id: 'm1', name: 'Test Brother', email: 'brother@example.test', phone: '',
-  role: 'Active Member', status: 'Active', pledgeClass: 'Fall 2026', major: 'Economics',
+  role: 'Active Member', status: 'Active', memberClass: 'Fall 2026', major: 'Economics',
   gpa: 3.4, standing: 'Good Standing', attendanceRate: 100,
   duesBalance: 0, duesBalanceCents: 0, securityHoursServed: 0
 };

@@ -1,7 +1,7 @@
 import type { CheckInLinkDto } from './api';
 // Backend DTO -> prototype type mapping. Everything the backend does not send
 // gets an empty default here — nothing is invented. Client-local demo features
-// (GPA, pledge class) stay defaulted.
+// (GPA, class) stay defaulted.
 import {
   AnnouncementDto,
   ContributionDto,
@@ -82,7 +82,7 @@ export function adaptMembers(
       duesBalanceCents: balanceCents,
       duesBalance: balanceCents / 100,
       attendanceRate: s && s.total_required ? Math.round((s.attended / s.total_required) * 100) : 0,
-      pledgeClass: '',
+      memberClass: '',
       securityHoursServed: 0,
       priorSecurityShifts: shiftsById.get(row.id) || 0,
       smsConsent: row.sms_consent === true

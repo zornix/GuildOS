@@ -127,7 +127,7 @@ export default function DuesRunModal({ candidates, onSubmit, onClose }: DuesRunM
                   className="w-4 h-4 shrink-0 accent-[#d4af37]"
                 />
                 <span className="font-semibold text-slate-900 truncate">{m.name}</span>
-                <span className="text-slate-500 truncate ml-auto">{m.pledgeClass}</span>
+                <span className="text-slate-500 truncate ml-auto">{m.memberClass}</span>
               </label>
             ))}
           </div>

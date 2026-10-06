@@ -269,8 +269,8 @@ test('a dues run the server already holds under different details asks for a fre
 test('a dues run pre-checks active members only', () => {
   const m = (id: string, status: Member['status']): Member => ({
     id, name: id, email: '', phone: '', role: 'Active Member', status, standing: 'Good Standing',
-    gpa: 0, duesBalanceCents: 0, duesBalance: 0, attendanceRate: 0, pledgeClass: ''
+    gpa: 0, duesBalanceCents: 0, duesBalance: 0, attendanceRate: 0, memberClass: ''
   });
-  const list = [m('a', 'Active'), m('b', 'Alumni'), m('c', 'Inactive'), m('d', 'Alumni')];
+  const list = [m('a', 'Active'), m('b', 'Alumni'), m('c', 'Inactive'), m('d', 'New candidate')];
   assert.deepEqual(duesRunCandidates(list).map(x => x.id), ['a']);
 });
