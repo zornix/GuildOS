@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import uuid
 
+import psycopg2
 import pytest
 
 from tests.tasks.conftest import commit_task, uncommit_task
@@ -97,6 +98,24 @@ def test_commit_rejects_member_outside_chapter(cursor, chapter_id, member_factor
 
     with pytest.raises(Exception, match="not in chapter"):
         commit_task(cursor, chapter_id, task_id, outsider)
+
+
+def test_commit_rejects_inactive_member(cursor, chapter_id, member_factory, task_factory):
+    member = member_factory()
+    cursor.execute("UPDATE members SET status = 'inactive' WHERE id = %s", (member,))
+    task_id = task_factory()
+
+    with pytest.raises(psycopg2.Error, match="not an active member"):
+        commit_task(cursor, chapter_id, task_id, member)
+
+
+def test_invited_member_can_commit(cursor, chapter_id, member_factory, task_factory):
+    member = member_factory()
+    cursor.execute("UPDATE members SET status = 'invited' WHERE id = %s", (member,))
+    task_id = task_factory()
+
+    result = commit_task(cursor, chapter_id, task_id, member)
+    assert result["commitment"]["status"] == "active"
 
 
 def test_recommit_after_uncommit_is_allowed(cursor, chapter_id, member_id, task_factory):
