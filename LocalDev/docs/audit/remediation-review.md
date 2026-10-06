@@ -1,8 +1,16 @@
 # Remediation review — 2026-10-06
 
+> **Status (2026-10-06, end of day): FIXED.** Every finding below was deduplicated (71
+> bullets → 68 unique issues) and fixed by the plan set at
+> `LocalDev/docs/superpowers/plans/2026-10-06-review-fixes/` (11 streams, 3 waves,
+> migrations 0206–0217; Sol implemented, Opus reviewed each stream, all merged).
+> Final gate: 1426 backend tests, 153 frontend tests, lint, build, ruff — all green.
+> Open follow-ups live in that folder's `RESULTS.md`. The three "needs your decision"
+> items were decided by the user (D-R1..D-R3 in the plan README).
+
 After all 18 remediation streams were merged to `main`, one Opus reviewer per stream checked
 its work against the code on `main` (read-only, adversarial). This file collects every
-reviewer's findings. **Nothing here is fixed yet.**
+reviewer's findings.
 
 Severity: **P0** money/security/data loss · **P1** wrong behaviour · **P2** missing guard or
 weak test · **P3** style or minor.

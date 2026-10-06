@@ -1,11 +1,11 @@
-# Handoff — audit remediation: ALL WAVES DONE, review findings next (updated 2026-10-06, session 3)
+# Handoff — audit remediation: ALL DONE including the final review fixes (2026-10-06)
 
 Read `00-README.md` first (rules, contracts, decisions, runbook). The model rules below override
 the README's model column.
 
 ## Start here (next session)
 
-1. **Read `LocalDev/docs/audit/remediation-review.md`.** A final Opus review of every stream
+1. ~~Review findings~~ **DONE 2026-10-06**: all 68 unique review issues fixed and merged — see `../2026-10-06-review-fixes/RESULTS.md`. Remaining below: golden dataset and the Prod sync.
    found 0 P0, 3 P1, 27 P2, 41 P3. Six audit findings are only partly fixed (F-045, F-064,
    R-06, F-042, F-054, F-041). Nothing in it is fixed yet. Ask the user the three questions
    at its top before fixing (preview `FRONTEND_URL` rule; is prod `DATABASE_URL` still demo;
