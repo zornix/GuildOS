@@ -110,6 +110,14 @@ psql "$SCRATCH_URL" -c "SELECT count(*) FROM chapters;" \
 
 - Last restore drill: _never — run one_
 
+### To verify by hand
+
+- [ ] Supabase plan and backup retention
+- [ ] PITR on or off
+- [ ] Date and duration of the last restore drill
+- [ ] Data API disabled
+
+
 ---
 
 ## 3. Onboarding a chapter
@@ -374,6 +382,12 @@ confirmation reply itself. This webhook exists so *our* database knows too;
 without it the product keeps queueing rows for a member who will never receive
 them and shows an officer no reason why.
 
+### 6.2 Messaging facts
+
+- SMS consent follows the phone number across chapters by design (STOP and START apply to every member row with that number).
+- The scheduled outbox drain claims up to 100 messages per run, every 5 minutes.
+- `/api/health` reports `degraded` when the drain has not finished in 15 minutes.
+
 ---
 
 ## 7. Monitoring
@@ -403,8 +417,8 @@ them and shows an officer no reason why.
 - **backend** — spins up `postgres:16-alpine`, applies all migrations with
   `scripts/migrate_db.py`, then runs `python3 -m pytest`. This is also the only
   routine check that the full migration chain applies cleanly from zero.
-- **frontend** — `npm ci && npm run lint && npm run test:unit && npm run build`
-  in `fratos/`. Playwright e2e is excluded; it needs a live API + DB stack.
+- **frontend** — `npm ci && npm run lint && npm test && npm run build`
+  in `greekos/`. Playwright e2e is excluded; it needs a live API + DB stack.
 
 `.github/workflows/migrate-prod.yml` is manual-dispatch only (§1). It is the
 only workflow that can touch production.
@@ -434,3 +448,11 @@ Complete waves 1–4 and the full suite before the production sync; add the CI
    `FEATURE_SECRETARY_COMMS`, `FEATURE_VP_OPERATIONS`,
    `MESSAGE_WEBHOOK_SECRET`, `SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL`,
    `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `SUPABASE_URL`.
+8. Production may hold event/member pairs with two PAID fines; migration
+   `0199_fine_guards.sql` stops with a clear error until they are refunded by
+   hand (the user decides each refund; the demo DB was cleaned 2026-10-05 with
+   a demo-guarded script kept outside git).
+9. Test chapter cleanup: `scripts/purge_test_chapters.py` (demo only, batches
+   of 500, `--apply`).
+10. Production tree sync: `scripts/build_prod.sh` (`--check` shows Prod drift;
+    syncing Prod needs the user's go-ahead).
