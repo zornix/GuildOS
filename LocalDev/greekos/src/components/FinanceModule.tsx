@@ -370,7 +370,8 @@ export default function FinanceModule({
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-xs text-slate-900">{f.memberName}</span>
                     <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-                      f.status === 'Paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+                      f.status === 'Paid' ? 'bg-emerald-100 text-emerald-800'
+                        : f.status === 'Waived' ? 'bg-slate-100 text-slate-600' : 'bg-red-100 text-red-800'
                     }`}>
                       {f.status}
                     </span>
@@ -383,6 +384,9 @@ export default function FinanceModule({
                   <span className="font-mono font-bold text-sm text-red-600">
                     {formatMoney(f.amountCents)}
                   </span>
+                  {f.status === 'Unpaid' && f.remainingCents < f.amountCents && (
+                    <span className="text-xs text-slate-500">{formatMoney(f.remainingCents)} left</span>
+                  )}
 
                   {canVerifyPayments && f.status === 'Unpaid' && (
                     <button

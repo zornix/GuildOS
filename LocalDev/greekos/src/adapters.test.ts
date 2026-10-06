@@ -152,3 +152,12 @@ test('the bulk upcoming read builds the same maps as the per-event requests did'
   });
   assert.equal(detailByEvent.size, 2);
 });
+
+test('a cancelled fine reads as waived, not paid', () => {
+  const row: FineDto = {
+    id: 'f2', amount_cents: 2500, remaining_cents: 0, status: 'cancelled', reason: 'Late',
+    issued_at: '2026-10-01T00:00:00Z', member_id: 'm1', member_name: 'Jake', event_id: null, event_title: null, event_date: null
+  };
+  assert.equal(adaptFines([row], [])[0].status, 'Waived');
+  assert.equal(adaptFines([{ ...row, status: 'paid' }], [])[0].status, 'Paid');
+});

@@ -244,8 +244,9 @@ export function adaptFines(rows: FineDto[], members: Member[]): Fine[] {
     amount: row.amount_cents / 100,
     reason: row.reason || 'Fine',
     date: day(row.issued_at),
-    // 'cancelled' is a waived fine — no longer owed, so it reads as cleared here.
-    status: row.status === 'unpaid' || row.status === 'partially_paid' ? 'Unpaid' : 'Paid',
+    // 'cancelled' is a waived fine: no longer owed, but nobody paid it either.
+    status: row.status === 'unpaid' || row.status === 'partially_paid' ? 'Unpaid'
+      : row.status === 'cancelled' ? 'Waived' : 'Paid',
     relatedEventId: row.event_id || undefined
   }));
 }

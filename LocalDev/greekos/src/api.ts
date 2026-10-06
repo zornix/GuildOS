@@ -606,6 +606,9 @@ export const api = {
   createEvent: (body: Record<string, unknown>) => request<EventDto>('POST', '/api/events/', body),
   updateEvent: (id: string, body: Record<string, unknown>) =>
     request<EventDto>('PUT', `/api/events/${id}`, body),
+  /** An event with attendance, jobs or fines is cancelled rather than deleted. */
+  deleteEvent: (id: string) =>
+    request<{ deleted: boolean; cancelled: boolean }>('DELETE', `/api/events/${id}`),
 
   /** Self-volunteer: an omitted member_id means the signed-in member. */
   addOrganizer: (eventId: string) =>

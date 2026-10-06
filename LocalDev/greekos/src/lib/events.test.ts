@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { EVENT_FILTER_TYPES, filterEventsByType, liveDoorEvent } from './events';
+import { EVENT_FILTER_TYPES, eventDeleteMessage, filterEventsByType, liveDoorEvent } from './events';
 import type { ChapterEvent } from '../types';
 
 const ev = (over: Partial<ChapterEvent>): ChapterEvent => ({
@@ -32,4 +32,12 @@ test('liveDoorEvent is the earliest upcoming event with an open door code', () =
   const openToday = ev({ id: 'today', date: '2026-09-07', checkInLinkActive: true });
   assert.equal(liveDoorEvent([...list, openToday], '2026-09-07')?.id, 'today');
   assert.equal(liveDoorEvent([ev({ checkInLinkActive: false })], '2026-09-07'), undefined);
+});
+
+test('deleting an event says whether it was deleted or cancelled (D4)', () => {
+  assert.equal(eventDeleteMessage({ deleted: true, cancelled: false }), 'Event deleted.');
+  assert.equal(
+    eventDeleteMessage({ deleted: false, cancelled: true }),
+    'Event cancelled. Its attendance and fines were kept.'
+  );
 });

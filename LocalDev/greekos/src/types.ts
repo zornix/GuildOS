@@ -143,7 +143,7 @@ export interface Fine {
   amount: number;
   reason: string;
   date: string;
-  status: 'Unpaid' | 'Paid';
+  status: 'Unpaid' | 'Paid' | 'Waived';
   issuedBy?: string;
   relatedEventId?: string;
 }

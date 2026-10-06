@@ -5,6 +5,7 @@ import { adaptCheckInLink, adaptEventDetail, adaptEvents, adaptSecurityAssignmen
 import { ShowToast } from './useToast';
 import { SyncApi } from './useBackend';
 import { describeError } from '../lib/sync';
+import { eventDeleteMessage } from '../lib/events';
 
 /** 409 conflict tokens the jobs API raises, mapped to member-facing copy. */
 const JOB_409: Record<string, string> = {
@@ -131,6 +132,12 @@ export function useEvents({ members, syncApi, showToast, refetchJobs }: Deps) {
   const handleUpdateEvent = (updated: ChapterEvent) => {
     setEvents(prev => prev.map(e => e.id === updated.id ? updated : e));
     syncApi(() => api.updateEvent(updated.id, toEventBody(updated)), refetchEvents);
+  };
+
+  /** Either outcome removes the event from the list; the toast says which (D4). */
+  const handleDeleteEvent = (eventId: string) => {
+    setEvents(prev => prev.filter(e => e.id !== eventId));
+    syncApi(async () => showToast(eventDeleteMessage(await api.deleteEvent(eventId))), refetchEvents);
   };
 
   const handleVolunteerOrganizer = (eventId: string, memberName: string) => {
@@ -471,6 +478,7 @@ export function useEvents({ members, syncApi, showToast, refetchJobs }: Deps) {
     handleSelectEvent,
     handleAddEvent,
     handleUpdateEvent,
+    handleDeleteEvent,
     handleVolunteerOrganizer,
     handleClaimJob,
     handleUnclaimJob,

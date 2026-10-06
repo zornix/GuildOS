@@ -17,3 +17,9 @@ export function liveDoorEvent(events: ChapterEvent[], today: string): ChapterEve
     .filter(e => e.checkInLinkActive && e.date >= today)
     .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))[0];
 }
+
+/** DELETE /api/events/{id}: an event with attendance, jobs or fines is
+ *  cancelled instead of deleted (decision D4); either way it leaves the list. */
+export function eventDeleteMessage(result: { deleted: boolean; cancelled: boolean }): string {
+  return result.cancelled ? 'Event cancelled. Its attendance and fines were kept.' : 'Event deleted.';
+}
