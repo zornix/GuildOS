@@ -202,11 +202,13 @@ echo -e "  ${GREEN}Migrations OK${NC}"
 
 # ── 4. Python dependencies ──────────────────────────
 echo "▸ Checking Python dependencies ..."
-REQ_HASH="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' requirements.txt)"
-if [ ! -f .deps-stamp ] || [ "$(cat .deps-stamp)" != "$REQ_HASH" ]; then
-  echo "  Installing Python dependencies (requirements.txt changed) ..."
-  pip install -r requirements.txt -q
-  echo "$REQ_HASH" > .deps-stamp
+REQ_HASH="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read() + repr(sys.argv[2:]).encode()).hexdigest())' requirements.txt "$(python3 -V 2>&1)" "$(command -v python3)" "${VIRTUAL_ENV:-}")"
+# Stamp lives inside the venv so a recreated venv at the same path reinstalls.
+DEPS_STAMP="${VIRTUAL_ENV:-.}/.deps-stamp"
+if [ ! -f "$DEPS_STAMP" ] || [ "$(cat "$DEPS_STAMP")" != "$REQ_HASH" ]; then
+  echo "  Installing Python dependencies (requirements or interpreter changed) ..."
+  python3 -m pip install -r requirements.txt -q
+  echo "$REQ_HASH" > "$DEPS_STAMP"
 fi
 echo -e "  ${GREEN}Python deps OK${NC}"
 
