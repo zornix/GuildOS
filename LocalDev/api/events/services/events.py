@@ -222,6 +222,8 @@ def _decorate_counts(event: dict, organizer_count: int) -> dict:
 
 
 def _can_view(sb, user: dict, event: dict, *, granted: set[str] | None = None) -> bool:
+    if event.get("cancelled"):
+        return False
     if event.get("visibility", "chapter") == "chapter":
         return True
     uid = user["id"]
@@ -267,6 +269,7 @@ def list_events(sb, *, user: dict, upcoming: bool = True) -> list[dict]:
         sb.table("events")
         .select("*")
         .eq("chapter_id", user["chapter_id"])
+        .eq("cancelled", False)
         .order("date", desc=not upcoming)
         .execute()
     ).data or []
@@ -387,6 +390,7 @@ def get_event(sb, *, user: dict, event_id: str) -> dict:
         .select("*")
         .eq("id", event_id)
         .eq("chapter_id", user["chapter_id"])
+        .eq("cancelled", False)
         .maybe_single()
         .execute()
     ).data
@@ -426,6 +430,7 @@ def get_event(sb, *, user: dict, event_id: str) -> dict:
             .select("id, title, date")
             .eq("event_group_id", event["event_group_id"])
             .eq("chapter_id", user["chapter_id"])
+            .eq("cancelled", False)
             .order("date")
             .execute()
         ).data or []
@@ -440,6 +445,7 @@ def _get_event_row(sb, *, chapter_id: str, event_id: str) -> dict:
         .select("*")
         .eq("id", event_id)
         .eq("chapter_id", chapter_id)
+        .eq("cancelled", False)
         .maybe_single()
         .execute()
     ).data

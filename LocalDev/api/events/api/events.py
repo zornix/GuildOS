@@ -25,6 +25,7 @@ from api.events.auth import (
 )
 from api.rbac.auth import require_permission
 from api.platform.db import get_db
+from api.platform.rpc import call_rpc
 from api.events.services import events as svc
 
 from .schemas import (
@@ -139,12 +140,12 @@ async def delete_event(event_id: str, user=Depends(require_permission(EVENT_DELE
     )
     if not event.data:
         raise HTTPException(404, "Event not found")
-    sb.table("events") \
-        .delete() \
-        .eq("id", event_id) \
-        .eq("chapter_id", user["chapter_id"]) \
-        .execute()
-    return {"deleted": True}
+    return call_rpc(
+        "ev_delete_or_cancel_event",
+        {"p_chapter_id": user["chapter_id"], "p_event_id": event_id,
+         "p_actor_id": user["id"]},
+        sb=sb,
+    ).data
 
 
 @router.post("/{event_id}/supervisors")
