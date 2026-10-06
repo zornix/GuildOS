@@ -90,7 +90,7 @@ def enqueue(
     logical event). Producers whose event may legitimately recur (a daily payment
     reminder, a re-issued setup code) pass their own. `payload` defaults to the
     identifying triple; extra keys ride along for the drain's message templates
-    (api/cron/core/templates.py).
+    (api/platform/message_templates.py).
 
     Nothing is dispatched inline: the row stays 'pending' until the drain worker
     picks it up (api/cron/services/outbox_drain.py).
