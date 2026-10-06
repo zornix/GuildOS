@@ -1,14 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Announcement, ChapterEvent, Member, SecurityAssignment } from '../types';
 import { api, AuthRequiredError, ensureLogin, logout, optionalOfficerCall, EventDto, TaskDto } from '../api';
-import { isoDay } from '../formatters';
 import { isOfficerView } from '../lib/session';
 import { EMPTY_CONTRIBUTION } from '../lib/contribution';
 import {
   adaptAnnouncements,
-  adaptCheckInLink,
   adaptContribution,
-  adaptEventDetail,
   adaptEvents,
   adaptExcuses,
   adaptFines,
@@ -16,8 +13,8 @@ import {
   adaptMembers,
   adaptPayments,
   adaptRecruits,
-  adaptSecurityAssignment,
   adaptTasks,
+  adaptUpcomingDetails,
   groupJobsByParent
 } from '../adapters';
 import { useToast } from './useToast';
@@ -56,8 +53,8 @@ export function useAppData() {
   // Jobs live on the same `tasks` table for both parents, so one refetch restamps
   // all three boards. The ref breaks the cycle: the domain hooks call refetchJobs, but
   // it can only be built from the setters those same hooks return.
-  const refetchJobsRef = useRef<() => Promise<void>>(async () => {});
-  const refetchJobs = () => refetchJobsRef.current();
+  const refetchJobsRef = useRef<(eventId?: string) => Promise<void>>(async () => {});
+  const refetchJobs = (eventId?: string) => refetchJobsRef.current(eventId);
 
   const events = useEvents({ members, syncApi, showToast, refetchJobs });
   const initiatives = useInitiatives({ members, syncApi, refetchJobs });
@@ -80,7 +77,7 @@ export function useAppData() {
   const applyJobs = (
     taskRows: TaskDto[], rosterRows: Member[], eventRows?: EventDto[],
     titles = {
-      events: new Map<string, string>((eventRows ?? events.events).map(e => [e.id, e.title])),
+      events: new Map<string, string>([...events.events, ...(eventRows ?? [])].map(e => [e.id, e.title])),
       initiatives: new Map<string, string>(initiatives.initiatives.map(i => [i.id, i.title]))
     }
   ) => {
@@ -98,11 +95,12 @@ export function useAppData() {
     }));
     initiatives.setInitiatives(inits => inits.map(i => ({ ...i, jobs: byInitiative.get(i.id) ?? [] })));
   };
-  // Jobs and the open-job chips come from different endpoints, so both are read
-  // here. refetchEvents already calls this, hence no call back into it.
-  refetchJobsRef.current = async () => {
-    const [taskRows, eventRows] = await Promise.all([api.getTasks(), api.getEvents()]);
-    applyJobs(taskRows, members, eventRows);
+  // A job change touches the job boards and, for an event's job, that one
+  // event's open-job chips, so only those are read (not the whole event list).
+  // refetchEvents already calls this, hence no call back into it.
+  refetchJobsRef.current = async (eventId?: string) => {
+    const [taskRows, detail] = await Promise.all([api.getTasks(), eventId ? api.getEvent(eventId) : undefined]);
+    applyJobs(taskRows, members, detail && [detail]);
   };
 
   /** Re-reads the caller's own permission keys. Role edits on yourself change
@@ -160,32 +158,22 @@ export function useAppData() {
             })
           ]);
 
-        // Security rosters, organizer/supervisor names and the door code are
-        // all per event, so only upcoming events get the extra requests; a
-        // failing one just leaves that event's row with the list data.
+        // Security rosters, organizer/supervisor names and the door code for
+        // every upcoming event arrive in one request. If it fails, the list
+        // still renders from GET /api/events and the officer is told why the
+        // detail fields are blank (no per-event fallback: that is 3N requests).
         const adaptedEvents = adaptEvents(eventRows);
         const membersById = new Map(rosterRows.map(m => [m.id, m]));
-        const today = isoDay();
-        const securityByEvent = new Map<string, SecurityAssignment[]>();
-        const detailByEvent = new Map<string, Partial<ChapterEvent>>();
-        await Promise.all(
-          adaptedEvents.filter(e => e.date >= today).map(async e => {
-            try {
-              const [rows, detail, link] = await Promise.all([
-                api.listSecurity(e.id),
-                api.getEvent(e.id),
-                api.getCheckInLink(e.id)
-              ]);
-              securityByEvent.set(e.id, rows.map(row => adaptSecurityAssignment(row, membersById)));
-              detailByEvent.set(e.id, {
-                ...adaptEventDetail(detail, rosterRows),
-                ...adaptCheckInLink(link)
-              });
-            } catch (err) {
-              console.error(`Upcoming-event load failed for event ${e.id}`, err);
-            }
-          })
-        );
+        let securityByEvent = new Map<string, SecurityAssignment[]>();
+        let detailByEvent = new Map<string, Partial<ChapterEvent>>();
+        try {
+          ({ securityByEvent, detailByEvent } = adaptUpcomingDetails(
+            await api.getUpcomingEventDetails(), rosterRows, membersById
+          ));
+        } catch (err) {
+          console.error('Upcoming event details load failed', err);
+          showToast('Event details could not be loaded.');
+        }
 
         setMembers(rosterRows);
         setPermissions(permissionSet);

@@ -1,7 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { adaptCheckInLink, adaptFines, adaptPayments, adaptTaskToJob, adaptTasks, groupJobsByParent } from './adapters';
-import type { FineDto, TaskDto } from './api';
+import {
+  adaptCheckInLink, adaptEventDetail, adaptFines, adaptPayments, adaptSecurityAssignment, adaptTaskToJob, adaptTasks,
+  adaptUpcomingDetails, groupJobsByParent
+} from './adapters';
+import type { EventDetailDto, FineDto, SecurityAssignmentDto, TaskDto, UpcomingDetailsDto } from './api';
 import type { Member } from './types';
 import { canClaimTask } from './lib/tasks';
 
@@ -119,4 +122,33 @@ test('a payment shows the method the server recorded and no invented type', () =
   assert.equal(venmo.paymentMethod, 'Bank transfer');
   assert.equal(unknown.paymentMethod, '—');
   assert.equal('type' in venmo, false);
+});
+
+test('the bulk upcoming read builds the same maps as the per-event requests did', () => {
+  const roster = [{ id: 'm1', name: 'Ryan Cole' } as Member, { id: 'm2', name: 'Ali Shah' } as Member];
+  const byId = new Map(roster.map(m => [m.id, m]));
+  const detail = (id: string): EventDetailDto => ({
+    id, title: 'Meeting', date: '2026-10-10', time: '19:00:00', location: 'Hall', required: true,
+    attendance_count: 3, supervisors: [{ member_id: 'm1', is_creator: true, name: 'Ryan Cole' }],
+    organizers: [{ id: 'o1', member_id: 'm2', source: 'volunteer', created_at: '2026-10-01T00:00:00Z' }],
+    last_notified_at: null
+  });
+  const shift: SecurityAssignmentDto = {
+    task_id: 't1', event_id: 'e1', member_id: 'm2', status: 'in_progress', rejection_reason: null,
+    pending_swap: { id: 's1', task_id: 't1', event_id: 'e1', requester_member_id: 'm2', target_member_id: 'm1',
+      note: null, status: 'pending', created_at: null }
+  };
+  const dto: UpcomingDetailsDto = { events: [
+    { event_id: 'e1', detail: detail('e1'), security: [shift], checkin_link: {} },
+    { event_id: 'e2', detail: detail('e2'), security: [],
+      checkin_link: { event_id: 'e2', active: true, expires_at: '2026-10-10T20:00:00Z' } }
+  ] };
+  const { securityByEvent, detailByEvent } = adaptUpcomingDetails(dto, roster, byId);
+  assert.deepEqual(securityByEvent.get('e1'), [adaptSecurityAssignment(shift, byId)]);
+  assert.deepEqual(securityByEvent.get('e2'), []);
+  assert.deepEqual(detailByEvent.get('e1'), { ...adaptEventDetail(detail('e1'), roster), ...adaptCheckInLink({}) });
+  assert.deepEqual(detailByEvent.get('e2'), {
+    ...adaptEventDetail(detail('e2'), roster), checkInLinkActive: true, checkInToken: undefined
+  });
+  assert.equal(detailByEvent.size, 2);
 });

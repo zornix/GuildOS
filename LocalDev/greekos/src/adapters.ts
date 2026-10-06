@@ -17,6 +17,7 @@ import {
   SecurityAssignmentDto,
   StandingDto,
   TaskDto,
+  UpcomingDetailsDto,
   VerifiedPaymentDto
 } from './api';
 import {
@@ -169,6 +170,22 @@ export function adaptSecurityAssignment(
       : undefined,
     swapStatus: swap ? 'Pending' : undefined
   };
+}
+
+/** GET /api/events/upcoming-details -> the per-event security shifts and the
+ *  detail-only fields (leaders, counts, door code) keyed by event id. */
+export function adaptUpcomingDetails(
+  dto: UpcomingDetailsDto,
+  members: Member[],
+  membersById: Map<string, Member>
+) {
+  const securityByEvent = new Map<string, SecurityAssignment[]>();
+  const detailByEvent = new Map<string, Partial<ChapterEvent>>();
+  for (const row of dto.events) {
+    securityByEvent.set(row.event_id, row.security.map(s => adaptSecurityAssignment(s, membersById)));
+    detailByEvent.set(row.event_id, { ...adaptEventDetail(row.detail, members), ...adaptCheckInLink(row.checkin_link) });
+  }
+  return { securityByEvent, detailByEvent };
 }
 
 /** ChapterEvent -> EventCreate/EventUpdate body. */
