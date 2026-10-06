@@ -1,88 +1,98 @@
-# Handoff — audit remediation: wave 1 DONE, start wave 2 (updated 2026-10-05, session 2)
+# Handoff — audit remediation: wave 2 DONE, wave 3 next (updated 2026-10-05, session 3)
 
 Read `00-README.md` first (rules, contracts, decisions, runbook). This file says where things
 stand and what a new session does first. The model rules below override the README's model column.
 
 ## Where things stand
 
-- **Wave 1 (streams 01–07) is merged to `main` and green.** Full backend suite: 1146 passed
-  (1144 + 2 permission tests fixed in `c94b703`). Frontend: 134 tests, lint, build ok.
-  Migrations 0162–0175 and 0203–0205 are applied to the demo DB; checksums recorded.
-- All wave 1 branches and worktrees are deleted. **Nothing is pushed.**
-- Stream reports and reviews (gitignored, local): `archive/audit-remediation-2026-10/<id>/`.
-  `WAVE1-STATUS.md` there summarises session 1.
-- Next free migration numbers: wave 2 uses the README ranges 0176–0194; 0203–0205 are taken.
+- **Waves 1 and 2 (streams 01–08, 10–13) are merged to `main` and green.** Full backend suite
+  after the wave 2 merges: 1245 passed, 1 failed (`test_legacy_paths_still_registered`, a
+  cross-stream leftover fixed in `241734b`; that file passes). Ruff clean. Wave 2 did not
+  touch `greekos/`.
+- Migrations applied to the demo DB and checksummed: 0176, 0178–0183, 0186–0188, 0191.
+  Free in the wave 2 ranges: 0177, 0184–0185, 0189–0190, 0192–0194 (do not reuse; wave 3 has
+  its own ranges 0195–0202).
+- All wave 2 branches and worktrees are deleted. **Nothing is pushed.**
+- Stream reports, reviews and files the streams deleted (gitignored, local):
+  `archive/audit-remediation-2026-10/<id>/` (`report.txt`, `review/result.json`, `deleted/`).
+  Full-suite log: `archive/audit-remediation-2026-10/wave2-full-suite.txt`.
+- `migrate_db.py` warns that the demo DB has `0157_dues_run_bulk_due_at.sql` applied: an old
+  rename (that file is now 0158). Harmless; stream 18 can tidy the recorded name.
 
-## Start wave 2 (new session)
+## How wave 2 went (so wave 3 can copy it)
 
-Wave 2 = streams **08, 10, 11, 12, 13** (README table). All run in parallel, each in its own
-worktree via `run-stream.sh <id>` (run_in_background). Then, per stream: read `report.txt`,
-review with the other CLI via `review-stream.sh`, read only `review/result.json`, fix, merge
-`--no-ff` one at a time, run the full suite, delete branch + worktree. Check in with the user
-before wave 3.
+- All five ran on Codex `gpt-6.1-sol` via `run-stream.sh` in 8–15 minutes each; reviews by
+  Gemini 3.8 Flash via `review-stream.sh <id> <plan> agy "Gemini 3.8 Flash (Medium)"` (4–12 min).
+- Orchestrator fixes made on the branches: 0180/0183 revoke PUBLIC on the two new functions
+  (`at_checkin_self`, `ev_delete_or_cancel_event`) — **every new DB function needs
+  `REVOKE ALL … FROM PUBLIC`; put that in each wave 3 dispatch**; cancelled events refuse edits
+  (`_get_event_row` filters `cancelled`); `POST /api/tasks/{id}/status` maps unknown RPC errors
+  through `_rpc_http_error` (security task was a 500); stream 08's calendar switched to
+  `remaining_by_invoice` and the old coverage helpers deleted; two announcement tests now
+  create invoice debt (balances are live, D14).
+- Review findings dismissed with reason: `CREATE OR REPLACE` keeps grants (12); member ids are
+  per chapter so `member_outstanding(member_id)` is chapter-scoped (08); the DB client has no
+  PostgREST 1000-row cap (08); ids come back as strings (D23).
+- Accepted ceiling: inline SMS `dispatch_send` sets the send row's status from the rows it
+  claimed itself; if the cron claimed some in the same second, the send row can say `sent`
+  while those are still in flight (12).
+- Committing: `hunks.py`-style partial staging (`git diff HEAD -- f` split on `@@`, apply
+  chosen hunks with `git apply --cached`). Hunk numbers shift after each partial stage —
+  re-list before every use.
 
-1. Put the carry-overs below into each affected stream's prompt: write that stream's lines
-   to a file and run `EXTRA_FILE=<file> run-stream.sh <id>` (08, 11, 13 have carry-overs).
-   `SETUP_ONLY=1` prints the final prompt without launching.
-2. `run-stream.sh` already maps: 08/10/11/13 → Codex `gpt-6.1-sol`, 12 → Codex (Grok out).
-3. Watch each with a short health check after ~2 min (stderr growing = working).
+## Start wave 3 (needs the user's go-ahead)
+
+Wave 3 = **09, 14, 15**, then **18** (orchestrator, needs the user for anything touching prod).
+
+1. Carry-overs (put into the dispatch prompts via `EXTRA_FILE`):
+   - All: new DB functions get `REVOKE ALL ON FUNCTION … FROM PUBLIC` in the same migration.
+   - All: `member_factory(role="officer")` also writes the `member_roles` row; a column-only
+     officer is `UPDATE members SET role='officer'`.
+   - 09: `GET /api/fines/` computes `remaining_cents` its own way; switch it (and
+     `fine_summary`) to `api/treasury/services/remaining.py::remaining_by_invoice`.
+     `api/events/core/timing.py` has `chapter_timezone`, `event_start_utc`, `has_started`.
+   - 14: templates now live at `api/platform/message_templates.py`; outbox rows have
+     `provider_attempted_at` / `provider_message_id`; the reaper parks stamped rows `failed`.
+   - 15: `DELETE /api/events/{id}` → `{deleted, cancelled}`; cancelled events 404 on read and
+     edit; `GET /api/events/{id}/checkin-link` → `{}` or `{event_id, active, expires_at}` for
+     members; `/c/{code}` → 302 `{FRONTEND_URL}/?checkin=CODE`.
+2. 09 and 14 → `run-stream.sh` (Codex Sol). 15 is frontend: Agent tool, `model: "opus"`,
+   `isolation: worktree`, or Sol if the user prefers no Claude usage.
+
+## Human follow-ups collected so far
+
+- Before the next production deploy: set `BASE_URL` and `FRONTEND_URL` in Vercel to the public
+  origins and make sure `APP_ENV` is not `local`/`test` there — production refuses to boot
+  otherwise (13). `/c/CODE` redirects to `FRONTEND_URL` (10).
+- `LocalDev/.env` still carries nine unused names (ESCALATION_DELAY_MINUTES,
+  FEATURE_SECRETARY_COMMS, FEATURE_VP_OPERATIONS, MESSAGE_WEBHOOK_SECRET, SENDGRID_API_KEY,
+  SENDGRID_FROM_EMAIL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL); delete by
+  hand. `APP_ENV` is already set.
+- Demo DB rows left by wave 1 browser checks (fine for Alex Rivera $7.50, invoice for Chris Park
+  $11.25, adjustment for Ethan Davis −$1.50, one attendance row). Harmless.
 
 ## Model rules (user directive 2026-10-05)
 
 - **Every Claude subagent runs on Opus** (`model: "opus"`), never Fable, even where a plan
-  names Fable. Two Fable frontend agents cost >300k tokens each and ran session 1 out.
-- Prefer the external CLIs for anything that is not the orchestrator's own judgement:
-  **Sol = `codex -m gpt-6.1-sol`** and **Gemini 3.8 Flash** (`agy --model "Gemini 3.8 Flash (Medium)"`).
-  Cursor/Grok ran out of usage in session 2; Luna is not on the user's list. Fall back to
-  Opus only if both CLIs fail.
-- README rows that say Luna or Grok → Sol. Gemini rows unchanged.
-- Keep the orchestrator light: never `cat` whole diffs; read `result.json`, diff DB functions
-  programmatically (see "Tools").
-
-## Carry-overs for wave 2 (put these into the dispatch prompts)
-
-- Outbox contract (01): `enqueue`/`enqueue_many` raise inside a transaction client, but
-  `api/events/notifications.py` (`_enqueue`, `notify_event_created`) and
-  `api/auth/notifications.py` (`notify_code`) still catch and swallow. Streams 11 and 13 must
-  make those wrappers re-raise when `client._pool.in_tx` is set before adopting `transaction()`.
-- `api/treasury/services/member_dashboard.py::_direct_paid_cents` and the payment entry in
-  `services/reports.py` read `verified_payments.invoice_id`, always NULL since 0165: stream 08
-  deletes them.
-- `GET /api/fines/` rows gain `remaining_cents` (05 fix-up); stream 08's `remaining_by_invoice`
-  can replace that implementation. Stream 08 also joins `payment_submissions.method` into the
-  treasury dashboard's `recent_payments` (`services/reports.py`) so the Payments table shows it.
-- Test factories: `member_factory(role="officer")` (tests/treasury and tests/auth conftest) now
-  also writes the `member_roles` row. A test that wants a column-only officer sets the column
-  with `UPDATE members SET role='officer'`.
-- Migration numbers taken outside the README ranges: 0203 (02), 0204 and 0205 (03). Wave 2 keeps 0176–0194 as planned.
-- Usage-cap race in `usage.track` accepted as the planned ponytail ceiling (D13).
-- Demo DB rows left by browser checks: a fine (Alex Rivera, $7.50), an invoice (Chris Park,
-  $11.25), an adjustment (Ethan Davis, −$1.50), one attendance row (Alex Rivera, "Chapter
-  Meeting - March"). Harmless; delete if they bother anyone.
+  names Fable.
+- Prefer the external CLIs: **Sol = `codex -m gpt-6.1-sol`** for implementation and
+  **Gemini 3.8 Flash** (`agy --model "Gemini 3.8 Flash (Medium)"`) for review. Cursor/Grok is
+  out of usage. Fall back to Opus only if both CLIs fail.
+- Keep the orchestrator light: read `report.txt` and `review/result.json`, diff DB functions
+  programmatically (`fndiff`: parse `CREATE OR REPLACE FUNCTION … $$;` blocks from the new
+  migration and the last earlier one defining the same name, `difflib.unified_diff`).
 
 ## Tools
 
-- `review-stream.sh <id> <plan.md> <codex|cursor|agy> [model] [effort]` (this folder):
-  diffs the worktree against main, builds the adversarial prompt, runs the CLI read-only via
-  `../2026-09-30-forensic-audit/run-task.sh`, writes `archive/audit-remediation-2026-10/<id>/review/result.json`.
-  Cursor gets no inline diff (argv limit); it reads `git diff main` itself. Run with `nohup … &`
-  and watch for `review/meta.txt`. Create `archive/audit-remediation-2026-10/<id>/` first.
-- `run-stream.sh <id>` sets up the worktree (copies `.env`) and launches the stream's CLI.
-  Codex streams run `gpt-6.1-sol`; Cursor/Grok streams now go to Codex too.
-- DB function diff against the live predecessor (the pattern used all day):
-  parse `CREATE OR REPLACE FUNCTION name(...)$$;` blocks from the new migration and from the
-  last earlier migration defining the same name, `difflib.unified_diff` them. Expect only the
-  planned hunk.
-- `pytest` refuses to run when the demo DB is behind the checkout's migrations; apply with
-  `bash ../local-dev-scripts/scripts/with-demo-db.sh python3 scripts/migrate_db.py` (plain
-  `python3 scripts/migrate_db.py` now also reads `DATABASE_URL` from `.env`, stream 07).
+- `run-stream.sh <id>` (this folder): worktree + `.env` + headless CLI; `EXTRA_FILE=` appends
+  carry-overs; `SETUP_ONLY=1` prints the prompt.
+- `review-stream.sh <id> <plan.md> <codex|cursor|agy> [model] [effort]`: read-only review,
+  writes `archive/audit-remediation-2026-10/<id>/review/result.json`.
+- `pytest` refuses to run when the demo DB is behind the checkout; apply with
+  `python3 scripts/migrate_db.py` from `LocalDev/`.
 - Never `pkill -f` a pattern that appears in your own command line.
 
 ## Cost notes
 
-Session 1 Claude usage: orchestrator ~400k context (read every diff itself), Opus agents
-01 ≈170k and 03 ≈260k, Fable agents 05 ≈365k and 06 ≈310k. Session 2 (03 fix-up by Sol,
-merges, full suite) used ~120k orchestrator context and no Claude subagents.
-External CLIs are not Claude usage. To spend less Claude: dispatch implementation to
-Sol/Gemini via `run-stream.sh`, review with the other CLI, and keep Opus for the two
-things that need it (orchestrator judgement calls, and streams where a CLI fails twice).
+Session 3 (wave 2): no Claude subagents; orchestrator context stayed small by reading reports,
+review JSON and targeted hunks only.

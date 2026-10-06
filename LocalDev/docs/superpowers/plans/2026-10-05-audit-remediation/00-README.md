@@ -3,7 +3,7 @@
 > **For agentic workers:** you were given this file plus ONE numbered plan. Read "Rules for every agent" and "What to hand back" here, then execute your plan task by task. Everything else in this file is background you may consult. Steps use checkbox (`- [ ]`) syntax.
 
 **Spec:** `LocalDev/docs/audit/2026-09-30-forensic-audit.md` (68 findings `F-…`, 8 residuals `R-…` in Appendix C.4). Each plan names the cards it implements; read those cards before you start.
-**Status (2026-10-05, end of session 1):** wave 1 dispatched; 01, 02, 04, 06, 07 merged to `main`; 03 and 05 on their branches with review fixes pending. **Read `HANDOFF.md` next** (state, model rules: Opus for every Claude agent, prefer Gemini 3.8 Flash / GPT-6 Sol).
+**Status (2026-10-05, end of session 3):** waves 1 and 2 merged to `main` and green; wave 3 (09, 14, 15, 18) next. **Read `HANDOFF.md` next** (state, carry-overs, model rules: Opus for every Claude agent, prefer Gemini 3.8 Flash / GPT-6 Sol).
 **Written:** 2026-10-05 by the orchestrating session (Claude Fable 5.1). Product decisions were made by the user that day and are recorded under "Decisions". They are not open for re-litigation; if one turns out to be impossible, stop and report.
 
 ## Streams
