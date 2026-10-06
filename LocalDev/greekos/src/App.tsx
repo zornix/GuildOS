@@ -12,7 +12,6 @@ import RosterModule from './components/RosterModule';
 import AttendanceModule from './components/AttendanceModule';
 import FinanceModule from './components/FinanceModule';
 import TasksModule from './components/TasksModule';
-import RecruitmentModule from './components/RecruitmentModule';
 import CommandModule from './components/CommandModule';
 import OutboxModule from './components/OutboxModule';
 import EventsBar from './components/EventsBar';
@@ -43,7 +42,7 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const chrome = useEventsChrome();
   const app = useAppData();
-  const { roster, events, initiatives, finance, attendance, tasks, recruitment } = app;
+  const { roster, events, initiatives, finance, attendance, tasks } = app;
   const { currentMemberId, currentMemberName } = app;
   const currentMember = roster.members.find(member => member.id === currentMemberId);
   const viewedBalance = balanceForMember(app.myBalance, currentMember?.id);
@@ -236,16 +235,6 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
           onAddTask={tasks.handleAddTask}
           onToggleTaskStatus={tasks.handleToggleTaskStatus}
           onClaimTask={tasks.handleClaimTask}
-        />
-      )}
-
-      {activeTab === 'recruitment' && (
-        <RecruitmentModule
-          pnms={recruitment.pnms}
-          canUpdate={can(app.permissions, 'recruitment:pipeline:update')}
-          onAddPNM={recruitment.handleAddPNM}
-          onVotePNM={recruitment.handleVotePNM}
-          onExtendBid={recruitment.handleExtendBid}
         />
       )}
 

@@ -4,7 +4,6 @@ import {
   Calendar,
   DollarSign,
   ClipboardList,
-  UserPlus,
   CheckSquare,
   Sparkles,
   Terminal,
@@ -28,7 +27,6 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'finance', label: 'Treasury', icon: DollarSign },
   { id: 'tasks', label: 'Jobs', icon: ClipboardList },
   { id: 'roster', label: 'Roster', icon: Users },
-  { id: 'recruitment', label: 'Recruitment', icon: UserPlus, permission: 'recruitment:pipeline:view' },
   { id: 'outbox', label: 'Outbox', icon: Send, permission: 'announcements:send' },
   { id: 'command', label: 'Command console', icon: Terminal, permission: 'nl_controller:execute' }
 ];

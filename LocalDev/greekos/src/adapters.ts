@@ -12,7 +12,6 @@ import {
   InitiativeDto,
   MemberDto,
   OutboxMessageDto,
-  RecruitDto,
   ScoreDto,
   SecurityAssignmentDto,
   StandingDto,
@@ -34,7 +33,6 @@ import {
   OutboxMessage,
   OutboxStatus,
   Payment,
-  PNM,
   SecurityAssignment,
   Task
 } from './types';
@@ -98,7 +96,6 @@ const EVENT_TYPES: EventType[] = [
   'Philanthropy',
   'Brotherhood',
   'Social',
-  'Recruitment',
   'Community Service'
 ];
 
@@ -369,33 +366,6 @@ export function adaptAnnouncements(rows: AnnouncementDto[], members: Member[]): 
     channels: ['Calendar'],
     calendarDate: day(row.calendar_date) || undefined,
     calendarTime: hhmm(row.calendar_time) || undefined
-  }));
-}
-
-// ----------------------------------------------------
-// RECRUITMENT
-// ----------------------------------------------------
-const RECRUIT_STAGES: Record<string, PNM['status']> = {
-  lead: 'Lead',
-  contacted: 'Contacted',
-  attended_event: 'Invited to House',
-  bid_extended: 'Bid Extended',
-  bid_accepted: 'Bid Accepted',
-  dropped: 'Declined'
-};
-
-export function adaptRecruits(rows: RecruitDto[]): PNM[] {
-  return rows.map(row => ({
-    id: row.id,
-    name: row.name,
-    hometown: '',
-    major: '',
-    phone: row.phone || '',
-    email: row.email || undefined,
-    status: RECRUIT_STAGES[row.stage] || 'Prospect',
-    notes: row.notes || undefined,
-    votesFor: 0,
-    votesAgainst: 0
   }));
 }
 

@@ -533,16 +533,6 @@ export interface OutboxMessageDto {
   error: string | null;
 }
 
-export interface RecruitDto {
-  id: string;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  stage: string;
-  notes: string | null;
-  created_at: string;
-}
-
 export interface InitiativeDto {
   id: string;
   title: string;
@@ -804,11 +794,6 @@ export const api = {
   /** The signed-in member opting themselves in to SMS; also clears any STOP. */
   optInToSms: () => request<void>('POST', '/api/members/me/sms-consent', {}),
 
-  getRecruits: () => request<RecruitDto[]>('GET', '/api/recruitment/recruits'),
-  createRecruit: (body: Record<string, unknown>) =>
-    request<RecruitDto>('POST', '/api/recruitment/recruits', body),
-  setRecruitStage: (id: string, stage: string) =>
-    request<RecruitDto>('POST', `/api/recruitment/recruits/${id}/stage`, { stage }),
 
   getMyContribution: () => request<ContributionDto>('GET', '/api/contribution/me'),
 

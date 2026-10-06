@@ -38,7 +38,6 @@ NEW_PATHS = [
     "/api/tasks/{task_id}/status",
     "/api/announcements/",
     "/api/announcements/{announcement_id}/send",
-    "/api/recruitment/recruits",
     "/api/bylaws/documents",
     "/api/bylaws/query",
     "/api/nl-controller/commands",

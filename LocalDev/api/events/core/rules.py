@@ -19,7 +19,6 @@ DEFAULT_EVENT_TYPES: tuple[str, ...] = (
     "Philanthropy",
     "Brotherhood",
     "Social",
-    "Recruitment",
 )
 
 # API audience values map onto the stored visibility.

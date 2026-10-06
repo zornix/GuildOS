@@ -4,13 +4,12 @@ export type MemberRole =
   | 'Treasurer' 
   | 'Secretary' 
   | 'Risk Manager' 
-  | 'Recruitment Chair' 
+  | 'Rush Chair' 
   | 'Social Chair' 
   | 'Philanthropy Chair' 
   | 'Scholarship Chair' 
   | 'Officer' // backend members.role === 'officer' (no specific title exposed)
   | 'Active Member'
-  | 'New Member Educator'
   | 'Alumni';
 
 export type MemberStanding = 
@@ -28,7 +27,7 @@ export interface Member {
   email: string;
   phone: string;
   role: MemberRole;
-  status: 'Active' | 'New candidate' | 'Alumni' | 'Inactive';
+  status: 'Active' | 'Alumni' | 'Inactive';
   standing: MemberStanding;
   major?: string;
   gpa: number;
@@ -51,7 +50,6 @@ export type EventType =
   | 'Philanthropy' 
   | 'Brotherhood' 
   | 'Social' 
-  | 'Recruitment' 
   | 'Community Service';
 
 export type JobStatus = 'To Do' | 'In Progress' | 'Done Reported' | 'Approved' | 'Rejected';
@@ -192,27 +190,6 @@ export interface Task {
   /** Which event or initiative the job belongs to; absent for a standalone job. */
   parent?: { kind: 'event' | 'initiative'; title: string };
   category?: 'House Chore' | 'Officer Project' | 'Maintenance' | 'Ritual Prep';
-}
-
-export interface PNM {
-  id: string;
-  name: string;
-  hometown: string;
-  highSchoolGPA?: number;
-  gpa?: number;
-  major: string;
-  phone: string;
-  email?: string;
-  year?: string;
-  status: 'Lead' | 'Contacted' | 'Invited to House' | 'Bid Extended' | 'Bid Accepted' | 'Declined' | 'Prospect' | 'Rush Active';
-  rating?: number; // 1-5 stars
-  recommendedBy?: string; // active member name
-  comments?: string[];
-  notes?: string;
-  tags?: string[];
-  votesFor?: number;
-  votesAgainst?: number;
-  eventsAttended?: number;
 }
 
 export interface ChapterRule {

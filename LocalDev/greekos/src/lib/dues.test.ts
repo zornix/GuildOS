@@ -271,6 +271,6 @@ test('a dues run pre-checks active members only', () => {
     id, name: id, email: '', phone: '', role: 'Active Member', status, standing: 'Good Standing',
     gpa: 0, duesBalanceCents: 0, duesBalance: 0, attendanceRate: 0, memberClass: ''
   });
-  const list = [m('a', 'Active'), m('b', 'Alumni'), m('c', 'Inactive'), m('d', 'New candidate')];
+  const list = [m('a', 'Active'), m('b', 'Alumni'), m('c', 'Inactive')];
   assert.deepEqual(duesRunCandidates(list).map(x => x.id), ['a']);
 });
