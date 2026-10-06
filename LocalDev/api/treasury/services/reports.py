@@ -250,7 +250,7 @@ def member_statement(sb, *, member_id: str) -> dict:
                 "id": row["id"],
                 "amount_cents": -int(row["amount_cents"]),  # money in reduces what is owed
                 "occurred_at": row["created_at"],
-                "detail": {"invoice_id": row["invoice_id"]},
+                "detail": {},
             }
         )
 

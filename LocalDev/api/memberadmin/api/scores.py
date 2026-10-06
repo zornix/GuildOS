@@ -5,7 +5,7 @@ from api.memberadmin.services.member_detail import load_member_event_breakdown
 from api.memberadmin.services.scoring import compute_engagement_scores
 from api.rbac.auth import require_permission
 from api.treasury.notifications import enqueue_payment_reminder
-from api.treasury.services.member_dashboard import _direct_paid_cents, _net_allocated_cents
+from api.treasury.services.remaining import remaining_by_invoice
 
 STANDING_VIEW_ALL = "standing:view_all"
 STANDING_REMIND = "standing:remind"
@@ -71,15 +71,8 @@ async def send_reminder(member_id: str, officer=Depends(require_permission(STAND
         .execute()
     ).data or []
 
-    owed = []
-    for inv in open_invoices:
-        remaining = (
-            int(inv["amount_cents"])
-            - _direct_paid_cents(sb, inv["id"])
-            - _net_allocated_cents(sb, inv["id"])
-        )
-        if remaining > 0:
-            owed.append(remaining)
+    remaining = remaining_by_invoice(sb, open_invoices)
+    owed = [c for c in remaining.values() if c > 0]
 
     unpaid_count = len(owed)
     unpaid_total_cents = sum(owed)

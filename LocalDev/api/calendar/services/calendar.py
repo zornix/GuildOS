@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone, timedelta
 
 from api.events.services.events import list_events
-from api.treasury.services.member_dashboard import _direct_paid_cents, _net_allocated_cents
+from api.treasury.services.remaining import remaining_by_invoice
 from api.rbac.services.permissions import get_member_permissions
 
 def get_calendar(
@@ -151,6 +151,7 @@ def get_calendar(
             members_resp = sb.table("members").select("id, name").in_("id", member_ids).execute()
             member_names = {m["id"]: m["name"] for m in (members_resp.data or [])}
 
+    remaining = remaining_by_invoice(sb, invoices)
     for inv in invoices:
         due_at = inv.get("due_at")
         if not due_at:
@@ -163,7 +164,7 @@ def get_calendar(
         due_date_str = due_dt.strftime("%Y-%m-%d")
         is_overdue = due_dt < now
         
-        rem = int(inv["amount_cents"]) - _direct_paid_cents(sb, inv["id"]) - _net_allocated_cents(sb, inv["id"])
+        rem = remaining[inv["id"]]
         
         if is_overdue and inv["member_id"] == member_id:
             days_overdue = (now - due_dt).days
