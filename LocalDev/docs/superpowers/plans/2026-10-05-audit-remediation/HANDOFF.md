@@ -1,23 +1,31 @@
-# Handoff — audit remediation: wave 3 DONE, wave 4 next (updated 2026-10-06, session 3)
+# Handoff — audit remediation: ALL WAVES DONE, review findings next (updated 2026-10-06, session 3)
 
-Read `00-README.md` first (rules, contracts, decisions, runbook). This file says where things
-stand and what a new session does first. The model rules below override the README's model column.
+Read `00-README.md` first (rules, contracts, decisions, runbook). The model rules below override
+the README's model column.
 
-## Where things stand
+## Start here (next session)
 
-- **Waves 1–3 (streams 01–15) and stream 18's code tasks are merged to `main` and green.**
-  Full backend suite on the wave 3 merge: 1298 passed. Frontend: 143 tests, lint, build ok.
-  Ruff clean. Stream 18 (merged after the suite started) adds 9 tests that pass on their own.
-- Migrations applied to the demo DB and checksummed through 0201. Numbers used outside the
-  README ranges: 0199 (09's fine guard; 0195 left unused because 0196–0198 were applied first)
-  and 0201 (09 review fix, in 14's spare range). 0177, 0184–0185, 0189–0190, 0192–0195, 0202
-  stay unused.
-- All branches and worktrees through wave 3 are deleted. **Nothing is pushed.**
-- Stream reports, reviews, deleted files and the demo refund script (gitignored, local):
-  `archive/audit-remediation-2026-10/<id>/`. Suite logs: `wave2-full-suite.txt`,
-  `wave3-full-suite.txt` there. R-08 residue moved to `archive/residue-2026-10/`.
-- `migrate_db.py` warns that the demo DB has `0157_dues_run_bulk_due_at.sql` applied: an old
-  rename (that file is now 0158). Harmless.
+1. **Read `LocalDev/docs/audit/remediation-review.md`.** A final Opus review of every stream
+   found 0 P0, 3 P1, 27 P2, 41 P3. Six audit findings are only partly fixed (F-045, F-064,
+   R-06, F-042, F-054, F-041). Nothing in it is fixed yet. Ask the user the three questions
+   at its top before fixing (preview `FRONTEND_URL` rule; is prod `DATABASE_URL` still demo;
+   does D12 cover supervisors).
+2. Golden dataset: brainstorm paused (section below); resume after the user says so.
+3. Stream 18 Task 4 (sync `Prod/`) still needs the user's go-ahead, AND must first fix review
+   P1 18 (`build_prod.sh` would delete `Prod/fratos/vercel.json`).
+
+## Where things stand (2026-10-06)
+
+- **All 18 streams are merged to `main`.** Full suite on the final merge: 1329 passed.
+  Frontend 143 tests, lint, build ok. Ruff clean. Nothing pushed. All stream branches and
+  worktrees deleted.
+- Demo DB purged of 26,751 old test chapters (stream 18 Task 2, user go-ahead); only Delta Mu
+  and four oddly named one-offs remain besides fresh test chapters.
+- E2E browser testing is GitHub issue #107.
+- **Sol (Codex) hit its usage limit on 2026-10-06**; Opus reviewers/fixers were used instead
+  for stream 16 and the final review. Gemini (agy) still worked.
+
+## Older notes (session 3, before wave 4)
 
 ## Decisions made this session (user)
 
