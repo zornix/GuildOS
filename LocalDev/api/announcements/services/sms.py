@@ -37,7 +37,7 @@ from datetime import datetime, timezone
 
 from api.platform.rpc import call_rpc
 from api.announcements.services import twilio_client
-from api.cron.core import templates
+from api.platform import message_templates as templates
 from api.platform.delivery import delivery_mode
 from api.rbac.services.permissions import is_officer
 from api.sms_consent import CONSENT_COLUMNS, has_consent
