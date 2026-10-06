@@ -34,19 +34,10 @@ export function useBackend(showToast: ShowToast) {
       if (toast) showToast(toast);
     };
 
-    if (backendDown) {
-      // The load already failed, so this mostly fails too; it is still tried in
-      // case the server came back, and the user is told either way.
-      await refetch().catch(() => { /* leave the optimistic row */ });
-      say('error');
-      return false;
-    }
+    // backendDown is not a reason to skip the write: the server may be back, and
+    // if it is not, the failure below is reported as "unreachable".
     try {
       await call();
-      handlers?.onSuccess?.();
-      say('ok');
-      await refetch();
-      return true;
     } catch (err) {
       console.error('Mutation failed', err);
       await refetch().catch(() => { /* leave the optimistic row */ });
@@ -54,6 +45,11 @@ export function useBackend(showToast: ShowToast) {
       else say('error', describeError(err));
       return false;
     }
+    // The write landed. A failed re-read is a stale screen, not a refused save.
+    handlers?.onSuccess?.();
+    say('ok');
+    await refetch().catch(err => console.error('Refresh after save failed', err));
+    return true;
   };
 
   return { loading, setLoading, backendDown, setBackendDown, syncApi };
