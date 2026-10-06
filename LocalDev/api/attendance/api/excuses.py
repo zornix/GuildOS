@@ -124,4 +124,15 @@ async def review_excuse(
     except Exception as exc:
         raise _rpc_http_error(exc) from exc
 
+    # The review already committed; a cache failure must not fail the approval.
+    from api.treasury.core.balance import BalanceEngine
+    import logging
+
+    sb = get_db()
+    logger = logging.getLogger(__name__)
+    try:
+        BalanceEngine(sb).recompute_member(result.data["member_id"])
+    except Exception:
+        logger.exception("Failed to refresh balance after excuse review")
+
     return result.data

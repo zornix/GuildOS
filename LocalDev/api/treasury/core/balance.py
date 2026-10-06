@@ -170,6 +170,42 @@ class BalanceEngine:
             on_conflict="member_id",
         ).execute()
 
+    def outstanding_by_member(self, chapter_id: str) -> dict[str, int]:
+        """Outstanding cents for every member with a money row, in four queries."""
+        invoices = (
+            self._sb.table("unpaid_invoices").select("member_id, amount_cents, status")
+            .eq("chapter_id", chapter_id).execute()
+        ).data or []
+        payments = (
+            self._sb.table("verified_payments").select("member_id, amount_cents")
+            .eq("chapter_id", chapter_id).execute()
+        ).data or []
+        adjustments = (
+            self._sb.table("finance_adjustments").select("member_id, delta_cents")
+            .eq("chapter_id", chapter_id).eq("status", "active").execute()
+        ).data or []
+        refunds = (
+            self._sb.table("refunds").select("member_id, amount_cents")
+            .eq("chapter_id", chapter_id).eq("status", "active").execute()
+        ).data or []
+        current: dict[str, int] = {}
+        for row in invoices:
+            mid = row["member_id"]
+            current[mid] = current.get(mid, 0) + (
+                int(row["amount_cents"]) if row["status"] != "cancelled" else 0
+            )
+        for row in payments:
+            mid = row["member_id"]
+            current[mid] = current.get(mid, 0) - int(row["amount_cents"])
+        for row in adjustments:
+            mid = row["member_id"]
+            if mid is not None:
+                current[mid] = current.get(mid, 0) + int(row["delta_cents"])
+        for row in refunds:
+            mid = row["member_id"]
+            current[mid] = current.get(mid, 0) + int(row["amount_cents"])
+        return {mid: max(0, cents) for mid, cents in current.items()}
+
     def recompute_all(self, chapter_id: str) -> None:
         members = (
             self._sb.table("members").select("id").eq("chapter_id", chapter_id).execute()

@@ -125,16 +125,11 @@ def resolve_recipients(sb, *, chapter_id: str, audience: str) -> dict:
             m for m in members if is_officer(m, keys_by_member.get(m["id"], ()))
         ]
     elif audience == "members_with_balance":
-        accounts = (
-            sb.table("member_finance_accounts")
-            .select("member_id, outstanding_balance_cents")
-            .eq("chapter_id", chapter_id)
-            .execute()
-        ).data or []
+        from api.treasury.core.balance import BalanceEngine
+
         owing = {
-            a["member_id"]
-            for a in accounts
-            if (a.get("outstanding_balance_cents") or 0) > 0
+            mid for mid, cents in BalanceEngine(sb).outstanding_by_member(chapter_id).items()
+            if cents > 0
         }
         members = [m for m in members if m["id"] in owing]
     # default audience 'chapter' = every active member
