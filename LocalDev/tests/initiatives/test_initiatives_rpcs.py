@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import uuid
 
+import psycopg2
 import pytest
 
 from api.initiatives.services import initiatives as svc
@@ -228,3 +229,42 @@ def test_manage_chairs_by_non_chair_is_not_permitted(
 
     with pytest.raises(svc.NotPermitted):
         svc.remove_chair(sb_client, actor=outsider, initiative_id=ini["id"], member_id=actor["id"])
+
+
+def test_remove_chair_waits_for_the_initiative_lock(
+    db_url, cursor, chapter_id, user_factory, member_factory, create_initiative
+):
+    actor = user_factory()
+    co_chair = member_factory()
+    ini = create_initiative(actor, chair_member_ids=[co_chair])
+
+    hold = psycopg2.connect(db_url)
+    hold.autocommit = False
+    try:
+        with hold.cursor() as hcur:
+            hcur.execute("SELECT 1 FROM initiatives WHERE id = %s FOR UPDATE", (ini["id"],))
+        cursor.execute("SET lock_timeout = '500ms'")
+        with pytest.raises(psycopg2.errors.LockNotAvailable):
+            cursor.execute(
+                "SELECT in_remove_chair(%s, %s, %s, %s, NULL)",
+                (chapter_id, ini["id"], co_chair, actor["id"]),
+            )
+    finally:
+        hold.rollback()
+        hold.close()
+        cursor.execute("RESET lock_timeout")
+
+
+def test_add_chair_rejects_inactive_member(
+    cursor, chapter_id, user_factory, member_factory, create_initiative
+):
+    actor = user_factory()
+    ini = create_initiative(actor)
+    target = member_factory()
+    cursor.execute("UPDATE members SET status = 'inactive' WHERE id = %s", (target,))
+
+    with pytest.raises(psycopg2.Error, match="not an active member"):
+        cursor.execute(
+            "SELECT in_add_chair(%s, %s, %s, %s, NULL)",
+            (chapter_id, ini["id"], target, actor["id"]),
+        )
