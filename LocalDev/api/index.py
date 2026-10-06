@@ -108,11 +108,11 @@ def production_config_violations(s: Settings) -> list[str]:
     if s.is_production:
         if "localhost" in s.BASE_URL or "127.0.0.1" in s.BASE_URL:
             violations.append("BASE_URL points at localhost — set it to the public API origin")
-        if "localhost" in s.FRONTEND_URL or "127.0.0.1" in s.FRONTEND_URL:
-            violations.append(
-                "FRONTEND_URL points at localhost — set it to the public site origin; "
-                "check-in links redirect there"
-            )
+    if "localhost" in s.FRONTEND_URL or "127.0.0.1" in s.FRONTEND_URL:
+        violations.append(
+            "FRONTEND_URL points at localhost — set it to the public site origin; "
+            "check-in links redirect there"
+        )
 
     return violations
 
