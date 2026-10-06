@@ -286,6 +286,7 @@ export function adaptTasks(
   // Security shifts live on the event's Security panel, never on the jobs board.
   return rows.filter(row => row.kind !== 'security').map(row => ({
     id: row.id,
+    eventId: row.event_id || undefined,
     title: row.title,
     description: row.description || '',
     assignedTo: row.claimants?.length

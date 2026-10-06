@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Announcement, ChapterEvent, Member, SecurityAssignment } from '../types';
+import { Announcement, Member } from '../types';
 import { api, AuthRequiredError, ensureLogin, logout, optionalOfficerCall, EventDto, TaskDto } from '../api';
 import { isOfficerView } from '../lib/session';
+import { loadStartupEvents, loadJobRefresh } from '../lib/app-data';
 import { EMPTY_CONTRIBUTION } from '../lib/contribution';
 import {
   adaptAnnouncements,
   adaptContribution,
-  adaptEvents,
   adaptExcuses,
   adaptFines,
   adaptInitiatives,
@@ -14,7 +14,6 @@ import {
   adaptPayments,
   adaptRecruits,
   adaptTasks,
-  adaptUpcomingDetails,
   groupJobsByParent
 } from '../adapters';
 import { useToast } from './useToast';
@@ -99,7 +98,7 @@ export function useAppData() {
   // event's open-job chips, so only those are read (not the whole event list).
   // refetchEvents already calls this, hence no call back into it.
   refetchJobsRef.current = async (eventId?: string) => {
-    const [taskRows, detail] = await Promise.all([api.getTasks(), eventId ? api.getEvent(eventId) : undefined]);
+    const { taskRows, detail } = await loadJobRefresh(api, eventId);
     applyJobs(taskRows, members, detail && [detail]);
   };
 
@@ -162,17 +161,10 @@ export function useAppData() {
         // every upcoming event arrive in one request. If it fails, the list
         // still renders from GET /api/events and the officer is told why the
         // detail fields are blank (no per-event fallback: that is 3N requests).
-        const adaptedEvents = adaptEvents(eventRows);
-        const membersById = new Map(rosterRows.map(m => [m.id, m]));
-        let securityByEvent = new Map<string, SecurityAssignment[]>();
-        let detailByEvent = new Map<string, Partial<ChapterEvent>>();
-        try {
-          ({ securityByEvent, detailByEvent } = adaptUpcomingDetails(
-            await api.getUpcomingEventDetails(), rosterRows, membersById
-          ));
-        } catch (err) {
-          console.error('Upcoming event details load failed', err);
-          showToast('Event details could not be loaded.');
+        const { events: adaptedEvents, notice, error } = await loadStartupEvents(eventRows, rosterRows, api);
+        if (notice) {
+          console.error('Upcoming event details load failed', error);
+          showToast(notice);
         }
 
         setMembers(rosterRows);
@@ -184,11 +176,7 @@ export function useAppData() {
         contribution.setRecord(contributionRow);
         setCurrentMemberId(me.id);
         setCurrentMemberName(me.name);
-        events.setEvents(adaptedEvents.map(e => ({
-          ...e,
-          ...(detailByEvent.get(e.id) || {}),
-          securityAssignments: securityByEvent.get(e.id) || e.securityAssignments
-        })));
+        events.setEvents(adaptedEvents);
         attendance.setExcuses(adaptExcuses(excuseRows, rosterRows));
         finance.setFines(adaptFines(fineRows, rosterRows));
         finance.setPayments(adaptPayments(treasury?.recent_payments || [], rosterRows));

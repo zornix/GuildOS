@@ -161,3 +161,10 @@ test('a cancelled fine reads as waived, not paid', () => {
   assert.equal(adaptFines([row], [])[0].status, 'Waived');
   assert.equal(adaptFines([{ ...row, status: 'paid' }], [])[0].status, 'Paid');
 });
+
+test('Tasks board keeps the event id for targeted refreshes', () => {
+  const tasks = adaptTasks([row({ event_id: 'e1' }), row({ initiative_id: 'i1' }), row({})], members);
+  assert.equal(tasks[0].eventId, 'e1');
+  assert.equal(tasks[1].eventId, undefined);
+  assert.equal(tasks[2].eventId, undefined);
+});
