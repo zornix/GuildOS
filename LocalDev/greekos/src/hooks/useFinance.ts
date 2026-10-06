@@ -198,12 +198,12 @@ export function useFinance({ members, setMembers, currentMemberId, backendDown, 
     runTransaction({ api, members, backendDown, refetch: refetchAfterWrite, showToast }, draft, idempotencyKey);
 
   /** The command console's "fine NAME $N for REASON" (useAppData) lands here. */
-  const handleIssueFine = async (fine: { memberId: string; amountCents?: number; amount?: number; reason: string; relatedEventId?: string }) => {
+  const handleIssueFine = async (fine: { memberId: string; amountCents: number; reason: string; relatedEventId?: string }) => {
     try {
       await submitTransaction({
         kind: 'Fine',
         memberId: fine.memberId,
-        amountCents: fine.amountCents ?? Math.round((fine.amount || 0) * 100),
+        amountCents: fine.amountCents,
         reason: fine.reason,
         ...(fine.relatedEventId ? { eventId: fine.relatedEventId } : {})
       }, crypto.randomUUID());
