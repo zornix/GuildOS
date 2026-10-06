@@ -545,16 +545,35 @@ def list_upcoming_details(sb, *, user: dict) -> dict:
         "event_id",
     )
 
-    # Check-in links: same query and gate as GET /{id}/checkin-link.
+    # Match the attendance service's bound-session and legacy unbound gates.
+    # Duplicate this small predicate here to avoid importing a private service helper.
+    now = datetime.now(timezone.utc)
+    sessions = rows("attendance_sessions", "id, event_id, checkin_link_id, closes_at", "event_id", ids)
+
+    def open_link(row: dict) -> bool:
+        event_sessions = [s for s in sessions if str(s["event_id"]) == str(row["event_id"])]
+        bound = [s for s in event_sessions if str(s.get("checkin_link_id") or "") == str(row["id"])]
+        def closed(session: dict) -> bool:
+            value = session.get("closes_at")
+            if isinstance(value, str):
+                value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if value is not None and value.tzinfo is None:
+                value = value.replace(tzinfo=timezone.utc)
+            return value is not None and now > value
+        if bound:
+            return len(bound) == 1 and not closed(bound[0])
+        unbound = [s for s in event_sessions if not s.get("checkin_link_id") and not closed(s)]
+        return len(unbound) <= 1
+
     links = group(
-        (
+        [row for row in (
             sb.table("checkin_links")
-            .select("event_id, short_code, expires_at, active")
+            .select("id, event_id, short_code, expires_at, active")
             .in_("event_id", ids)
             .eq("active", True)
-            .gte("expires_at", datetime.now(timezone.utc).isoformat())
+            .gte("expires_at", now.isoformat())
             .execute()
-        ).data or [],
+        ).data or [] if open_link(row)],
         "event_id",
     )
     can_manage = bool(links) and has_permission(user, CHECKIN_LINK_MANAGE, sb=sb)

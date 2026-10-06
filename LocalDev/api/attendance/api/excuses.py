@@ -21,7 +21,7 @@ async def submit_excuse(event_id: str, body: ExcuseCreate, user=Depends(get_curr
 
     event = (
         sb.table("events")
-        .select("id, chapter_id")
+        .select("id, chapter_id, cancelled")
         .eq("id", event_id)
         .single()
         .execute()
@@ -30,6 +30,8 @@ async def submit_excuse(event_id: str, body: ExcuseCreate, user=Depends(get_curr
         raise HTTPException(404, "Event not found")
     if event.data["chapter_id"] != user["chapter_id"]:
         raise HTTPException(403, "Event does not belong to your chapter")
+    if event.data.get("cancelled"):
+        raise HTTPException(409, "Event is cancelled")
 
     existing = (
         sb.table("excuses")
