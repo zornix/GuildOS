@@ -408,3 +408,29 @@ them and shows an officer no reason why.
 
 `.github/workflows/migrate-prod.yml` is manual-dispatch only (§1). It is the
 only workflow that can touch production.
+
+## Before the next production deploy
+
+This checklist is for the operator. Syncing `Prod/`, migrating production,
+applying the demo purge, and deploying each require explicit user approval.
+Complete waves 1–4 and the full suite before the production sync; add the CI
+`build_prod.sh --check` step only after that sync (decision D22).
+
+1. Read production migration state with
+   `SELECT name FROM schema_migrations ORDER BY 1`. Record the result and date
+   in `LocalDev/docs/ops/prod-migration-state.md`.
+2. Take a Supabase backup and record its time.
+3. Put the production project ref in `scripts/db_guard.py:PROD_PROJECT_REFS`.
+4. If production history contains only the two old `Prod/migrations` files,
+   do not run `migrate:prod`: the runner refuses this history by design. Plan
+   the cut-over separately and test restore-then-migrate on a copy first.
+5. In Vercel, set `BASE_URL` and `FRONTEND_URL` to the public origins; confirm
+   `JWT_SECRET`, `CRON_SECRET`, and `DATABASE_URL`; leave `DEV_AUTH_BYPASS`
+   unset and ensure `APP_ENV` is not `local` or `test`.
+6. In Supabase, confirm the Data API is disabled and record backup retention
+   and PITR status in this runbook's backup section.
+7. Locally, add `APP_ENV=local` to `LocalDev/.env` if absent. Delete the nine
+   unused names from the stream 13 report: `ESCALATION_DELAY_MINUTES`,
+   `FEATURE_SECRETARY_COMMS`, `FEATURE_VP_OPERATIONS`,
+   `MESSAGE_WEBHOOK_SECRET`, `SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL`,
+   `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `SUPABASE_URL`.
