@@ -315,20 +315,32 @@ def _dispatch_twilio_row(sb, row: dict, *, chapter_name: str = "") -> str:
         ).eq("id", row["id"]).execute()
         sid = twilio_client.send_sms(phone, f"{body}\n{templates.footer(chapter_name)}")
         status = "sent"
-    except Exception as exc:
+    except Exception:
         # A swallowed, unlogged failure is how "flip to twilio" turns into
         # "every row failed and nobody was told".
         logger.exception(
             "twilio dispatch failed for message_outbox row %s", row.get("id")
         )
         status = "failed"
-        last_error = f"{type(exc).__name__}: {exc}"[:1000]
+        last_error = "provider call failed"
     patch = {"status": status, "last_error": last_error}
+    if status == "failed":
+        patch["provider_attempted_at"] = None
     if status == "sent":
         patch["delivered_at"] = _now_iso()  # only a real send has a delivery time
         if sid is not None:
             patch["provider_message_id"] = sid
-    sb.table("message_outbox").update(patch).eq("id", row["id"]).execute()
+    try:
+        sb.table("message_outbox").update(patch).eq("id", row["id"]).execute()
+    except Exception:
+        if status != "sent":
+            raise
+        logger.exception("could not close delivered message_outbox row %s", row.get("id"))
+        # Keep the attempt stamp so Retry finishes bookkeeping without resending.
+        sb.table("message_outbox").update(
+            {"status": "failed", "last_error": "delivery bookkeeping failed"}
+        ).eq("id", row["id"]).execute()
+        return "failed"
     return status
 
 

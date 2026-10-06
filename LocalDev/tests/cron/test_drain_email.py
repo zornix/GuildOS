@@ -164,7 +164,7 @@ def test_unknown_email_delivery_mode_fails_loudly(
     )
 
     drain()
-    assert "Unknown EMAIL_DELIVERY_MODE" in read_outbox(row["id"])["last_error"]
+    assert read_outbox(row["id"])["last_error"] == "delivery failed"
 
 
 # ── Code payloads are credentials ────────────────────────────────────────────

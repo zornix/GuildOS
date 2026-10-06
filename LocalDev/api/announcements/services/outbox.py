@@ -137,6 +137,9 @@ def retry_outbox_row(
 ) -> dict:
     """Put one failed row back in the queue for the next drain.
 
+    Preserve retained provider stamps: possibly delivered rows need bookkeeping-only
+    retries. Known provider failures clear their stamp and Retry resends them.
+
     attempts resets too: 0155 fails a row for good past 5 attempts, so a retry
     that kept the count would be refused by the very next claim. A treasury row
     is invisible — and so unretryable — without treasury:audit:view.
@@ -146,7 +149,7 @@ def retry_outbox_row(
     """
     row = (
         sb.table("message_outbox")
-        .select("id, status, event_type")
+        .select("id, status, event_type, last_error")
         .eq("id", row_id)
         .eq("chapter_id", chapter_id)
         .maybe_single()
@@ -162,14 +165,21 @@ def retry_outbox_row(
     if row["event_type"] in _SECRET_EVENT_TYPES:
         raise OutboxRowNotRetryable(row_id)
 
+    patch = {
+        "status": "pending", "last_error": None, "attempts": 0,
+        "claimed_at": None,
+    }
+    # The provider stamp means "possibly delivered". Keep it only when we KNOW
+    # the provider accepted the message and just the bookkeeping failed (the
+    # drain then closes the row as sent without resending). Any other stamped
+    # row — including one parked as "delivery outcome unknown" — is cleared so
+    # Retry really resends after the officer checked with the recipient.
+    if row.get("last_error") != "delivery bookkeeping failed":
+        patch["provider_attempted_at"] = None
     with sb.transaction() as tx:
         # Re-check the status in the write: the drain may have claimed the row since the read.
-        requeued = tx.table("message_outbox").update(
-            {
-                "status": "pending", "last_error": None, "attempts": 0,
-                "claimed_at": None, "provider_attempted_at": None,
-            }
-        ).eq("id", row_id).eq("chapter_id", chapter_id).eq("status", "failed").execute().data
+        requeued = tx.table("message_outbox").update(patch).eq("id", row_id).eq(
+            "chapter_id", chapter_id).eq("status", "failed").execute().data
         if not requeued:
             raise OutboxRowNotFailed("changed")
         tx.table("audit_logs").insert(

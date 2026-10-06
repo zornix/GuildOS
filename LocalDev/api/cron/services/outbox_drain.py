@@ -23,13 +23,13 @@ A batch is *claimed* before anything is delivered: `outbox_claim_batch`
 them, under FOR UPDATE SKIP LOCKED, so two overlapping runs — the 5-minute cron
 overtaking a slow batch, or an operator draining one chapter by hand — cannot
 both hold the same row and send the same member two messages (issue #32). The
-claim also requeues unstamped abandoned claims (over 15 minutes old), refunds
-their unused attempts, and parks stamped claims whose delivery outcome is unknown.
+claim also requeues unstamped abandoned claims (over 15 minutes old), preserves
+their attempt count, and parks stamped claims whose delivery outcome is unknown.
 Rows past 5 attempts are failed.
 
 Each attempted row advances to a terminal status ('sent', 'simulated' or 'failed'
 with `last_error`), unless bookkeeping fails. Rows left unattempted when the time
-budget expires stay claimed until the reaper refunds them. No single bad row can
+budget expires return to pending with the unused claim attempt refunded. No single bad row can
 abort the batch. Terminal rows are never claimed again, so a 'failed' row is a
 signal for an operator, not something the worker keeps hammering.
 
@@ -173,26 +173,34 @@ def _member_email(sb, member_id: str) -> str:
     return (row.get("email") or "").strip()
 
 
+class _ProviderCallFailed(Exception):
+    """The provider raised, so this attempt can safely be retried."""
+
+
 def _stamp_provider_attempt(sb, row: dict) -> None:
     """Persist the attempt before calling a provider; ambiguous outcomes are parked."""
+    stamp = _now_iso()
     sb.table("message_outbox").update(
-        {"provider_attempted_at": _now_iso()}
+        {"provider_attempted_at": stamp}
     ).eq("id", row["id"]).execute()
+    row["provider_attempted_at"] = stamp
 
 
 def _close_row(
     sb, row: dict, *, status: str, last_error: str | None,
-    provider_message_id: str | None = None,
+    provider_message_id: str | None = None, clear_provider_attempt: bool = False,
 ) -> None:
     """Move a claimed row from 'sending' to its terminal status.
 
     `attempts` is not touched here: outbox_claim_batch increments it when it
-    hands the row over. The reaper refunds claims that never reached a provider.
+    hands the row over. Releasing an unused claim refunds that attempt.
     """
     patch = {
         "status": status,
         "last_error": last_error[:1000] if last_error else None,
     }
+    if clear_provider_attempt:
+        patch["provider_attempted_at"] = None
     if provider_message_id is not None:
         patch["provider_message_id"] = provider_message_id
     if status == "sent":
@@ -257,7 +265,10 @@ def _deliver_sms(sb, row: dict, *, chapter_name: str, payload: dict) -> str:
         return "failed"
 
     _stamp_provider_attempt(sb, row)
-    sid = twilio_client.send_sms(phone, body)
+    try:
+        sid = twilio_client.send_sms(phone, body)
+    except Exception as exc:
+        raise _ProviderCallFailed from exc
     _close_row(sb, row, status="sent", last_error=None, provider_message_id=sid)
     return "sent"
 
@@ -278,7 +289,10 @@ def _deliver_email(sb, row: dict, *, chapter_name: str, payload: dict) -> str:
         return "failed"
 
     _stamp_provider_attempt(sb, row)
-    send_email(address, subject, body)
+    try:
+        send_email(address, subject, body)
+    except Exception as exc:
+        raise _ProviderCallFailed from exc
     _close_row(sb, row, status="sent", last_error=None)
     return "sent"
 
@@ -290,6 +304,13 @@ def _deliver_row(sb, row: dict, *, names: dict) -> str:
     only the rows on that channel.
     """
     try:
+        if row.get("provider_attempted_at"):
+            # A retained stamp on Retry means the provider succeeded but closing failed.
+            # Check before rendering or resolving the recipient: neither is
+            # needed to close a delivered row, and both can fail independently.
+            _close_row(sb, row, status="sent", last_error=None)
+            return "sent"
+
         if not row.get("member_id"):
             # Legacy or malformed recipient-less rows cannot be delivered.
             _close_row(sb, row, status="failed", last_error="no recipient")
@@ -302,12 +323,16 @@ def _deliver_row(sb, row: dict, *, names: dict) -> str:
         return _deliver_email(sb, row, chapter_name=chapter_name, payload=payload)
     except Exception as exc:
         logger.exception("outbox drain failed for row %s", row.get("id"))
-        detail = f"{type(exc).__name__}: {exc}"
+        provider_failed = isinstance(exc, _ProviderCallFailed)
+        error = ("provider call failed" if provider_failed else
+                 "delivery bookkeeping failed" if row.get("provider_attempted_at") else
+                 "delivery failed")
         try:
-            _close_row(sb, row, status="failed", last_error=detail)
+            _close_row(sb, row, status="failed", last_error=error,
+                       clear_provider_attempt=provider_failed)
         except Exception:
             # Even the bookkeeping write failed (row vanished, DB blip). The row
-            # stays 'sending'; the reaper parks stamped rows and refunds unused claims,
+            # stays 'sending'; the reaper parks stamped rows and releases unused claims,
             # rather than this killing the batch.
             logger.exception("could not record failure for outbox row %s", row.get("id"))
         return "failed"
@@ -340,8 +365,20 @@ def drain_outbox(
         ).data or []
         if not claimed:
             break
-        for row in claimed:
+        for index, row in enumerate(claimed):
             if time.monotonic() - started >= DRAIN_BUDGET_SECONDS:
+                # Release only unused rows still sending under this worker's claim timestamp.
+                # Attempts differ per row; refund each unused claim individually.
+                for unused in claimed[index:]:
+                    try:
+                        client.table("message_outbox").update(
+                            {"status": "pending", "claimed_at": None,
+                             "attempts": max(0, unused["attempts"] - 1)}
+                        ).eq("id", unused["id"]).eq("status", "sending").eq(
+                            "claimed_at", unused["claimed_at"]
+                        ).execute()
+                    except Exception:
+                        logger.exception("could not release unused outbox claim %s", unused["id"])
                 break
             status = _deliver_row(client, row, names=names)
             counts["processed"] += 1
