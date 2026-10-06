@@ -66,3 +66,16 @@ def test_summary_with_no_required_events(sb_client, chapter_id, member_factory):
     rows = attendance_summary(sb_client, chapter_id=chapter_id, member_id=m)
     assert rows[0]["total_required_past_events"] == 0
     assert rows[0]["attendance_pct"] is None
+
+
+def test_only_started_events_count(sb_client, cursor, chapter_id, member_factory):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    member = member_factory()
+    now = datetime(2026, 10, 5, 9, tzinfo=ZoneInfo('America/Los_Angeles'))
+    for hours, total in ((3,0),(-2,1)):
+        start = now + timedelta(hours=hours)
+        cursor.execute("INSERT INTO events (chapter_id,title,date,time,location,required) VALUES (%s,'Timed',%s,%s,'Hall',true)", (chapter_id,start.date(),start.time()))
+        row = attendance_summary(sb_client,chapter_id=chapter_id,member_id=member,now=now)[0]
+        assert row['total_required_past_events'] == total
+        assert row['attended_required'] == 0

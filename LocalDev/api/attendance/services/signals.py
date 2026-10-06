@@ -8,20 +8,23 @@ derivation (memberadmin) and announcements audiences.
 
 from __future__ import annotations
 
-from datetime import date as _date
+from datetime import datetime, timedelta, timezone
+
+from api.events.core.timing import chapter_timezone, has_started
 
 
 def attendance_summary(
-    sb, *, chapter_id: str, member_id: str | None = None, today: str | None = None
+    sb, *, chapter_id: str, member_id: str | None = None, now: datetime | None = None
 ) -> list[dict]:
     """Derived attendance % over REQUIRED past events (spec §3).
 
     For each active member: attended_required, total_required_past_events, and
     attendance_pct (None when the chapter has no required past events).
-    Counts events with required=true and date <= today; attended means an
+    Counts required events that have started in the chapter timezone; attended means an
     attendance row with checked_in=true.
     """
-    today = today or _date.today().isoformat()
+    now = now or datetime.now(timezone.utc)
+    tz = chapter_timezone(sb, chapter_id)
 
     members_q = (
         sb.table("members")
@@ -35,12 +38,13 @@ def attendance_summary(
 
     events = (
         sb.table("events")
-        .select("id")
+        .select("id, date, time")
         .eq("chapter_id", chapter_id)
         .eq("required", True)
-        .lte("date", today)
+        .lte("date", (now.astimezone(timezone.utc) + timedelta(days=1)).date().isoformat())
         .execute()
     ).data or []
+    events = [e for e in events if has_started(e, tz, now)]
     event_ids = [e["id"] for e in events]
     total = len(event_ids)
 
