@@ -1,9 +1,8 @@
 """Attendance → treasury/standing signal seam (§7).
 
-Absence-driven FINES already flow through api/treasury/services/fine_processor.py →
-FineToInvoice → tr_create_invoice; that path is authoritative and is NOT
-duplicated here. This module exposes the read-side absence signal for standing
-derivation (memberadmin) and announcements audiences.
+Absence-driven fines are issued through POST /api/fines/issue; that path is
+authoritative and is not duplicated here. This module exposes the read-side
+absence signal for standing derivation (memberadmin) and announcements audiences.
 """
 
 from __future__ import annotations
@@ -80,7 +79,7 @@ def list_unexcused_absences(sb, *, chapter_id: str, event_id: str) -> list[dict]
 
     TODO(attendance): once standing derivation consumes this, consider a
     DB-side view to avoid the three-query fan-in (same shape as the roster
-    endpoint and fine_processor use today).
+    endpoint and POST /api/fines/issue use today).
     """
     members = (
         sb.table("members")

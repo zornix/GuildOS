@@ -208,32 +208,3 @@ def test_legacy_fines_table_is_frozen(cursor, chapter_id, member_id):
             "INSERT INTO fines (member_id, chapter_id, amount, reason, status) VALUES (%s,%s,%s,%s,%s)",
             (member_id, chapter_id, 10, "x", "unpaid"),
         )
-
-
-async def test_fine_processor_creates_fine_invoices_and_dedups(sb_client, cursor, chapter_id, member_factory, monkeypatch):
-    import api.treasury.services.fine_processor as fp
-
-    monkeypatch.setattr(fp, "get_db", lambda: sb_client)
-
-    m1, m2 = member_factory(), member_factory()
-    cursor.execute(
-        """INSERT INTO events (chapter_id, title, description, date, time, location, required, fine_amount)
-           VALUES (%s,'Chapter Meeting','',CURRENT_DATE,'18:00','Hall',true,15.50) RETURNING id""",
-        (chapter_id,),
-    )
-    event_id = str(cursor.fetchone()["id"])
-
-    created = await fp.process_event_fines(event_id)
-    assert len(created) == 2
-    for inv in created:
-        assert inv["kind"] == "fine"
-        assert inv["amount_cents"] == 1550  # 15.50 → 1550, no float drift
-        assert inv["status"] == "unpaid"
-
-    # Running again must not double-fine (dedup on source_event_id).
-    again = await fp.process_event_fines(event_id)
-    assert again == []
-    cursor.execute(
-        "SELECT count(*) AS n FROM unpaid_invoices WHERE source_event_id=%s AND kind='fine'", (event_id,)
-    )
-    assert cursor.fetchone()["n"] == 2
