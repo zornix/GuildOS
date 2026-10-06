@@ -221,6 +221,7 @@ export function adaptFines(rows: FineDto[], members: Member[]): Fine[] {
     memberId: row.member_id || '',
     memberName: row.member_name || nameOf(members, row.member_id),
     amountCents: row.amount_cents,
+    remainingCents: row.remaining_cents,
     amount: row.amount_cents / 100,
     reason: row.reason || 'Fine',
     date: day(row.issued_at),

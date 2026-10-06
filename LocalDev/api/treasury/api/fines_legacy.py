@@ -76,7 +76,7 @@ def _already_fined_ids(sb, event_id: str) -> set[str]:
 def _present_fines(sb, rows: list[dict]) -> list[dict]:
     """Map raw unpaid_invoices fine rows to the client fine shape.
 
-    Money stays integer cents (`amount_cents`); `description`/`created_at` are
+    Money stays integer cents (`amount_cents`, `remaining_cents`); `description`/`created_at` are
     renamed to `reason`/`issued_at`; member and event names are stitched in
     Python — the local shim has no `unpaid_invoices` FK registered, so a
     PostgREST-style embedded select would silently drop the join locally.
@@ -101,6 +101,19 @@ def _present_fines(sb, rows: list[dict]) -> list[dict]:
         ).data or []
         events = {str(e["id"]): e for e in ev_rows}
 
+    # Coverage lives only in payment_allocations (net of reversal rows) — one
+    # bulk read instead of tr_invoice_remaining_cents per row.
+    allocs = (
+        sb.table("payment_allocations")
+        .select("invoice_id, amount_cents, reverses_allocation_id")
+        .in_("invoice_id", [str(r["id"]) for r in rows])
+        .execute()
+    ).data or []
+    covered: dict[str, int] = {}
+    for a in allocs:
+        sign = 1 if a["reverses_allocation_id"] is None else -1
+        covered[str(a["invoice_id"])] = covered.get(str(a["invoice_id"]), 0) + sign * int(a["amount_cents"])
+
     presented = []
     for r in rows:
         ev = events.get(str(r["source_event_id"])) if r.get("source_event_id") else None
@@ -108,6 +121,9 @@ def _present_fines(sb, rows: list[dict]) -> list[dict]:
             {
                 "id": r["id"],
                 "amount_cents": int(r["amount_cents"]),
+                "remaining_cents": 0
+                if r["status"] == "cancelled"
+                else max(0, int(r["amount_cents"]) - covered.get(str(r["id"]), 0)),
                 "status": r["status"],
                 "reason": r.get("description") or "",
                 "issued_at": r.get("created_at"),

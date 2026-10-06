@@ -138,6 +138,8 @@ export interface Fine {
   memberId: string;
   memberName: string;
   amountCents: number;
+  /** Still owed after payments — what "Mark paid" sends. */
+  remainingCents: number;
   amount: number;
   reason: string;
   date: string;

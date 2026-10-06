@@ -262,3 +262,31 @@ def test_vercel_json_has_no_process_fines_cron():
     config = json.loads((_REPO_ROOT / "vercel.json").read_text())
     for cron in config.get("crons", []):
         assert "process-fines" not in cron.get("path", "")
+
+
+def test_list_fines_reports_remaining_cents_after_a_partial_payment(
+    api, sb_client, cursor, chapter_id, member_factory
+):
+    """Mark paid must send what is still owed, not the face amount: each fine
+    row carries `remaining_cents` from its payment allocations."""
+    from api.treasury.services import payments as pay_svc
+
+    debtor = member_factory()
+    part = inv_svc.create_invoice_v2(
+        sb_client, chapter_id=chapter_id, member_id=debtor, kind="fine",
+        amount_cents=2500, description="Late", actor_id=debtor,
+    )
+    sub = pay_svc.submit_balance_payment(
+        sb_client, chapter_id=chapter_id, member_id=debtor,
+        claimed_amount_cents=1000, method="cash", proof_ref=None,
+    )
+    pay_svc.verify_payment_v2(sb_client, chapter_id=chapter_id, submission_id=sub["id"], actor_id=debtor)
+    untouched = inv_svc.create_invoice_v2(
+        sb_client, chapter_id=chapter_id, member_id=debtor, kind="fine",
+        amount_cents=2500, description="Noise", actor_id=debtor,
+    )
+
+    officer = api(make_user(member_factory(role="officer"), chapter_id, role="officer"))
+    rows = officer.get("/api/fines", headers={"Authorization": "Bearer x"}).json()
+    remaining = {str(r["id"]): r["remaining_cents"] for r in rows}
+    assert remaining == {part["id"]: 1500, untouched["id"]: 2500}

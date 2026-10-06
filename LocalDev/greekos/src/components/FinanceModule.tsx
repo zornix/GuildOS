@@ -141,7 +141,7 @@ export default function FinanceModule({
 
   const recentPaidCents = safePayments.reduce((acc, p) => acc + p.amountCents, 0);
   const unpaidFines = safeFines.filter(f => f.status === 'Unpaid');
-  const unpaidFinesCents = unpaidFines.reduce((acc, f) => acc + f.amountCents, 0);
+  const unpaidFinesCents = unpaidFines.reduce((acc, f) => acc + f.remainingCents, 0);
 
   const filteredMembers = safeMembers.filter(m =>
     (m.name || '').toLowerCase().includes(searchMember.toLowerCase()) ||
@@ -405,8 +405,8 @@ export default function FinanceModule({
                     <button
                       onClick={() => setTransaction({
                         title: 'Mark fine paid',
-                        note: `${f.memberName} owes ${formatMoney(f.amountCents)} for "${f.reason}".`,
-                        initial: { kind: 'Payment', memberId: f.memberId, amountDollars: (f.amountCents / 100).toFixed(2), invoiceId: f.id }
+                        note: `${f.memberName} owes ${formatMoney(f.remainingCents)} for "${f.reason}".`,
+                        initial: { kind: 'Payment', memberId: f.memberId, amountDollars: (f.remainingCents / 100).toFixed(2), invoiceId: f.id }
                       })}
                       className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 min-h-11 sm:min-h-0 rounded-lg transition-all cursor-pointer"
                     >

@@ -345,6 +345,8 @@ export interface ExcuseDto {
 export interface FineDto {
   id: string;
   amount_cents: number;
+  /** What is still owed after payment allocations; 0 once paid or waived. */
+  remaining_cents: number;
   status: string;
   reason: string;
   issued_at: string | null;
