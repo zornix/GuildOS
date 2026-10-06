@@ -4,7 +4,6 @@ import {
   Search,
   ThumbsUp,
   Plus,
-  Phone,
   Send
 } from 'lucide-react';
 import { PNM } from '../types';

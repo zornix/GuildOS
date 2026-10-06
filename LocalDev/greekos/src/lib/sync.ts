@@ -19,12 +19,13 @@ export interface SyncOutcome {
   toast: string | null;
   /** The server is the truth: a refetch drops the optimistic row. */
   rollback: boolean;
+  /** Connection state after this actual outcome. */
+  backendDown: boolean;
 }
 
 export function syncOutcome({ backendDown, outcome, successMessage, errorMessage }: SyncInput): SyncOutcome {
-  if (backendDown) return { toast: UNREACHABLE_MESSAGE, rollback: true };
-  if (outcome === 'error') return { toast: errorMessage ?? REFUSED_MESSAGE, rollback: true };
-  return { toast: successMessage ?? null, rollback: false };
+  if (outcome === 'ok') return { toast: successMessage ?? null, rollback: false, backendDown: false };
+  return { toast: errorMessage ?? (backendDown ? UNREACHABLE_MESSAGE : REFUSED_MESSAGE), rollback: true, backendDown };
 }
 
 /** The server's own detail from an api.ts error (`METHOD /path failed (NNN): detail`), else the fallback. */
@@ -33,7 +34,14 @@ export function serverMessage(err: unknown, fallback: string): string {
   return match?.[1].trim() || fallback;
 }
 
+/** A fetch rejection has no HTTP response; auth calls use status 0. */
+export function isNetworkError(err: unknown): boolean {
+  const status = (err as { status?: number } | undefined)?.status;
+  return status === 0 || (err instanceof TypeError && status === undefined);
+}
+
 /** Generic copy for an error the caller did not translate. */
 export function describeError(err: unknown): string {
+  if (isNetworkError(err)) return UNREACHABLE_MESSAGE;
   return (err as { status?: number } | undefined)?.status === 403 ? FORBIDDEN_MESSAGE : REFUSED_MESSAGE;
 }

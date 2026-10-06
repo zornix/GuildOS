@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ShowToast } from './useToast';
-import { describeError, syncOutcome } from '../lib/sync';
+import { describeError, isNetworkError, syncOutcome } from '../lib/sync';
 
 export interface SyncHandlers {
   /** Fires only once the write landed — nothing may claim success before it. */
@@ -29,8 +29,9 @@ export function useBackend(showToast: ShowToast) {
   const syncApi: SyncApi = async (call, refetch, onDone) => {
     const successMessage = typeof onDone === 'string' ? onDone : undefined;
     const handlers = typeof onDone === 'string' ? undefined : onDone;
-    const say = (outcome: 'ok' | 'error', errorMessage?: string) => {
-      const { toast } = syncOutcome({ backendDown, outcome, successMessage, errorMessage });
+    const say = (outcome: 'ok' | 'error', errorMessage?: string, unreachable = false) => {
+      const { toast, backendDown: nextBackendDown } = syncOutcome({ backendDown: unreachable, outcome, successMessage, errorMessage });
+      setBackendDown(nextBackendDown);
       if (toast) showToast(toast);
     };
 
@@ -41,8 +42,9 @@ export function useBackend(showToast: ShowToast) {
     } catch (err) {
       console.error('Mutation failed', err);
       await refetch().catch(() => { /* leave the optimistic row */ });
+      setBackendDown(isNetworkError(err));
       if (handlers?.onError) handlers.onError(err);
-      else say('error', describeError(err));
+      else say('error', describeError(err), isNetworkError(err));
       return false;
     }
     // The write landed. A failed re-read is a stale screen, not a refused save.

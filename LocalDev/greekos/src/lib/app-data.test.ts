@@ -63,3 +63,34 @@ for (const eventId of [undefined, 'e1']) {
     assert.equal(result.detail, eventId ? detail : undefined);
   });
 }
+
+test('failed event refresh still keeps the fresh tasks', async () => {
+  const tasks = [{ id: 'fresh' }] as Awaited<ReturnType<typeof import('../api').api.getTasks>>;
+  const result = await loadJobRefresh({
+    getTasks: async () => tasks,
+    getEvent: async () => { throw new Error('Event cancelled'); }
+  }, 'e1');
+  assert.equal(result.taskRows, tasks);
+  assert.equal(result.detail, undefined);
+});
+
+test('failed task refresh still keeps the fresh event details', async () => {
+  const detail = event('e1') as EventDetailDto;
+  const result = await loadJobRefresh({
+    getTasks: async () => { throw new Error('Tasks unavailable'); },
+    getEvent: async () => detail
+  }, 'e1');
+  assert.equal(result.taskRows, undefined);
+  assert.equal(result.detail, detail);
+});
+
+test('job refresh logs each rejected part and retains fulfilled parts', async t => {
+  const logged = t.mock.method(console, 'error', () => {});
+  const taskError = new Error('Tasks unavailable');
+  const eventError = new Error('Event unavailable');
+  assert.deepEqual(await loadJobRefresh({
+    getTasks: async () => { throw taskError; },
+    getEvent: async () => { throw eventError; }
+  }, 'e1'), { taskRows: undefined, detail: undefined });
+  assert.deepEqual(logged.mock.calls.map(call => call.arguments[1]), [taskError, eventError]);
+});

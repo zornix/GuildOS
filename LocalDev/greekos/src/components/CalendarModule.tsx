@@ -47,7 +47,6 @@ export default function CalendarModule({
   }));
 
   const safeEvents = events || [];
-  const safeInitiatives = initiatives || [];
   const safeAnnouncements = announcements || [];
 
   // An announcement with a backend calendar slot sits on that day; one without
@@ -56,7 +55,6 @@ export default function CalendarModule({
 
   // Items on selected day
   const dayEvents = safeEvents.filter(e => e.date === selectedDateStr);
-  const dayInitiatives = safeInitiatives.filter(i => (i.startDate || '') <= selectedDateStr && (i.targetDate || '') >= selectedDateStr);
   const dayAnnouncements = safeAnnouncements.filter(a => announcementDay(a) === selectedDateStr);
 
   return (

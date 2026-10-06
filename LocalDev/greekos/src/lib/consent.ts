@@ -29,10 +29,12 @@ export const NO_EMAIL = 'no_email';
 /** How a failed outbox row reads, and whether retrying could ever help.
  *  no_consent and no_email would fail identically forever — retrying cannot
  *  conjure an opt-in or an address, so both read as explanations instead. */
-export function outboxFailure(error?: string): { text: string; retryable: boolean } {
+export function outboxFailure(error?: string, eventType?: string): { text: string; retryable: boolean; hint?: string } {
+  const hint = eventType === 'SETUP_CODE' || eventType === 'RESET_CODE'
+    ? { hint: 'This message carried a one-time code. Send the member a new code instead.' } : {};
   if (error === NO_CONSENT)
-    return { text: 'Not sent: member has not opted in to texts.', retryable: false };
+    return { text: 'Not sent: member has not opted in to texts.', retryable: false, ...hint };
   if (error === NO_EMAIL)
-    return { text: 'Not sent: member has no email address.', retryable: false };
-  return { text: error || '', retryable: true };
+    return { text: 'Not sent: member has no email address.', retryable: false, ...hint };
+  return { text: error || '', retryable: !hint.hint, ...hint };
 }

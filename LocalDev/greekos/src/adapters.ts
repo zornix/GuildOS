@@ -261,7 +261,7 @@ export function adaptPayments(rows: VerifiedPaymentDto[], members: Member[]): Pa
     date: day(row.verified_at || row.created_at),
     // A dash, never a made-up method, when the row does not say.
     paymentMethod: PAYMENT_METHODS.find(m => m.value === row.method)?.label ?? row.method ?? '—',
-    reference: row.invoice_id ?? undefined
+    reference: row.proof_ref ?? undefined
   }));
 }
 

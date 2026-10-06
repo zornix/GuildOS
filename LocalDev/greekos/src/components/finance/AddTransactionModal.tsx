@@ -1,4 +1,4 @@
-import React, { useId, useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import type { ChapterEvent, Member } from '../../types';
 import Modal from '../ui/Modal';
 import { formatMoney } from '../../formatters';
@@ -37,12 +37,14 @@ interface AddTransactionModalProps {
   /** Resolves once the server has the row; rejects with the message to show. */
   onSubmit: (draft: TransactionDraft, idempotencyKey: string) => Promise<void>;
   onClose: () => void;
+  /** Eligibility reads run only while creating an event fine. */
+  onEventFineModeChange?: (active: boolean) => void;
 }
 
 /** Fill the form, read the sentence, confirm. One idempotency key per set of
  *  values: regenerated on every edit, reused on a retry of the same values. */
 export default function AddTransactionModal({
-  title = 'Add transaction', note, members, events, access, initial, onSubmit, onClose
+  title = 'Add transaction', note, members, events, access, initial, onSubmit, onClose, onEventFineModeChange
 }: AddTransactionModalProps) {
   const ids = { member: useId(), amount: useId(), memo: useId(), method: useId(), event: useId() };
   const [form, setForm] = useState<TransactionForm>(() => {
@@ -54,6 +56,12 @@ export default function AddTransactionModal({
       memberName: members.find(m => m.id === memberId)?.name ?? ''
     };
   });
+  const [eventMode, setEventMode] = useState(() => !!initial?.eventId || !access.freeFormFines);
+  const eventFineActive = form.kind === 'Fine' && access.eventFines && eventMode;
+  useEffect(() => {
+    onEventFineModeChange?.(eventFineActive);
+    return () => onEventFineModeChange?.(false);
+  }, [eventFineActive, onEventFineModeChange]);
   const [key, setKey] = useState(() => crypto.randomUUID());
   const [confirming, setConfirming] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -67,13 +75,13 @@ export default function AddTransactionModal({
 
   // What the server will actually read: an event fine has a fixed amount, and a
   // session that may only fine on events always has an event selected.
-  const eventId = form.kind === 'Fine' ? (form.eventId || (access.freeFormFines ? '' : events[0]?.id || '')) : '';
+  const eventId = eventFineActive ? (form.eventId || events[0]?.id || '') : '';
   const eventFine = !!eventId;
   const shown: TransactionForm = eventFine
     ? { ...form, eventId, amountDollars: (EVENT_FINE_CENTS / 100).toFixed(2) }
     : form;
   const preview = previewTransaction(shown);
-  const blocked = shown.kind === 'Fine' && !access.freeFormFines && !eventFine
+  const blocked = shown.kind === 'Fine' && (eventFineActive || !access.freeFormFines) && !eventFine
     ? 'No past required event to fine against'
     : '';
   const ok = preview.valid && !blocked;
@@ -125,11 +133,19 @@ export default function AddTransactionModal({
           </div>
         </fieldset>
 
-        {shown.kind === 'Fine' && access.eventFines && (
+        {shown.kind === 'Fine' && access.eventFines && access.freeFormFines && (
+          <label className="flex items-center gap-2 text-xs text-slate-700">
+            <input type="checkbox" checked={eventMode} disabled={confirming}
+              onChange={e => { setEventMode(e.target.checked); update({ eventId: '' }); }} />
+            Fine for a required event
+          </label>
+        )}
+
+        {eventFineActive && (
           <div>
             <label htmlFor={ids.event} className={label}>Event</label>
             <select id={ids.event} value={eventId} disabled={confirming} onChange={e => update({ eventId: e.target.value })} className={field}>
-              {access.freeFormFines && <option value="">No event — a free-form fine</option>}
+              {!eventId && <option value="">Choose an eligible event</option>}
               {events.map(ev => <option key={ev.id} value={ev.id}>{ev.title} · {ev.date}</option>)}
             </select>
             {eventFine && (

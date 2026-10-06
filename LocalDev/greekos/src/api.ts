@@ -382,6 +382,8 @@ export interface IssueFinesResultDto {
 
 export interface VerifiedPaymentDto {
   id: string;
+  /** Reference recorded by the officer or payment proof. */
+  proof_ref?: string | null;
   member_id: string;
   /** Always null since coverage moved to payment_allocations. */
   invoice_id: string | null;
@@ -660,6 +662,8 @@ export const api = {
     request<unknown>('POST', `/api/attendance/event/${eventId}/manual/${memberId}`, { status }),
 
   getFines: () => request<FineDto[]>('GET', '/api/fines/'),
+  getFineEligibility: (eventId: string) =>
+    request<{ event_start: string }>('GET', `/api/fines/missed/${eventId}`),
   issueFines: (eventId: string, memberIds: string[]) =>
     request<unknown>('POST', '/api/fines/issue', { event_id: eventId, member_ids: memberIds }),
 

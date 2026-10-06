@@ -4,9 +4,7 @@ import { Member } from '../types';
 import { adaptMembers } from '../adapters';
 import { ShowToast } from './useToast';
 
-/** The roster. Members are read-only against the backend today: they join by
- *  invite (POST /api/auth/invite + setup code) and standing is derived server
- *  side, so both mutations here are local. */
+/** Members join by invite or CSV import; standing is derived server-side. */
 export function useRoster(showToast: ShowToast) {
   const [members, setMembers] = useState<Member[]>([]);
 
@@ -19,26 +17,6 @@ export function useRoster(showToast: ShowToast) {
       optionalOfficerCall(api.getScores(), [])
     ]);
     setMembers(adaptMembers(memberRows, standingRows, scoreRows));
-  };
-
-  const handleAddMember = (
-    newMem: Omit<Member, 'id' | 'points' | 'attendanceRate' | 'duesBalance' | 'duesBalanceCents' | 'securityHoursServed'>
-  ) => {
-    const mem: Member = {
-      ...newMem,
-      id: 'm_' + Math.random().toString(36).substring(2, 9),
-      duesBalanceCents: 95000,
-      duesBalance: 950,
-      attendanceRate: 100,
-      securityHoursServed: 0
-    };
-    setMembers(prev => [mem, ...prev]);
-    showToast(`Added ${mem.name} to active roster.`);
-  };
-
-  const handleUpdateStanding = (memberId: string, standing: Member['standing']) => {
-    setMembers(prev => prev.map(m => m.id === memberId ? { ...m, standing } : m));
-    showToast(`Updated brother academic/disciplinary standing.`);
   };
 
   /** CSV roster import (officer only). Throws RosterRejectedError with the
@@ -59,5 +37,5 @@ export function useRoster(showToast: ShowToast) {
     return result;
   };
 
-  return { members, setMembers, refetchMembers, handleAddMember, handleUpdateStanding, handleImportRoster };
+  return { members, setMembers, refetchMembers, handleImportRoster };
 }
