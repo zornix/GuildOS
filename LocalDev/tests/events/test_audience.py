@@ -77,3 +77,47 @@ def test_organizer_sees_custom_event(sb_client, user_factory, create_event):
     svc.add_organizer(sb_client, actor=officer, event_id=ev["id"], member_id=helper["id"])
 
     assert ev["id"] in _visible_ids(sb_client, helper)
+
+
+def test_update_event_rolls_back_when_audience_is_rejected(sb_client, cursor, user_factory, create_event):
+    import uuid
+    officer = user_factory(role='officer')
+    event = create_event(officer)
+    cursor.execute("INSERT INTO chapters(name,organization,school) VALUES (%s,'Test','Test') RETURNING id", (f'foreign-{uuid.uuid4()}',))
+    foreign = user_factory(chapter=str(cursor.fetchone()['id']))
+    type_name = f'Rejected-{uuid.uuid4()}'
+    with pytest.raises(Exception, match='not in chapter'):
+        svc.update_event(sb_client, actor=officer, event_id=event['id'], updates={
+            'title': 'Rejected edit', 'time': '20:00', 'audience': 'custom',
+            'audience_member_ids': [foreign['id']], 'event_type_name': type_name})
+    cursor.execute('SELECT title,time,visibility FROM events WHERE id=%s', (event['id'],))
+    row = cursor.fetchone()
+    assert row['title'] == event['title']
+    assert str(row['time']) == str(event['time'])
+    assert row['visibility'] == event['visibility']
+    cursor.execute('SELECT id FROM event_types WHERE chapter_id=%s AND name=%s', (officer['chapter_id'], type_name))
+    assert cursor.fetchall() == []
+
+
+@pytest.mark.parametrize('wrapper', ['_enqueue', 'notify_event_created'])
+@pytest.mark.parametrize('in_tx', [False, True])
+def test_notification_wrappers_preserve_transaction_errors(monkeypatch, wrapper, in_tx):
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+    from api.events import notifications
+    sb = MagicMock()
+    sb._pool = SimpleNamespace(in_tx=in_tx)
+    sb.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value.data = []
+    def fail(*args, **kwargs):
+        raise RuntimeError('enqueue failed')
+    monkeypatch.setattr(notifications, 'enqueue', fail)
+    monkeypatch.setattr(notifications, 'enqueue_many', fail)
+    def invoke():
+        if wrapper == '_enqueue':
+            return notifications._enqueue(sb, event_type='EVENT_CREATED')
+        return notifications.notify_event_created(sb, chapter_id='chapter', event={'id':'event'})
+    if in_tx:
+        with pytest.raises(RuntimeError, match='enqueue failed'):
+            invoke()
+    else:
+        assert invoke() in (None, 0)

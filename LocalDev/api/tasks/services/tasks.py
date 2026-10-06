@@ -21,35 +21,37 @@ def create_task(
     people_needed: int = 1,
     idempotency_key: str | None = None,
 ) -> dict:
-    result = call_rpc(
-        "tk_create_task",
-        {
-            "p_chapter_id": chapter_id,
-            "p_title": title,
-            "p_description": description,
-            "p_assigned_member_id": assigned_member_id,
-            "p_group_id": group_id,
-            "p_event_id": event_id,
-            "p_initiative_id": initiative_id,
-            "p_required": required,
-            "p_due_at": due_at,
-            "p_actor_id": actor_id,
-            "p_idempotency_key": idempotency_key,
-        },
-        sb=sb,
-    )
-    task = result.data
-    # Capacity isn't a param of tk_create_task (0110); set it in a follow-up
-    # single-row update (non-trust-boundary column, default 1).
-    if people_needed and people_needed != 1 and task:
-        (
-            sb.table("tasks")
-            .update({"people_needed": people_needed})
-            .eq("id", task["id"])
-            .eq("chapter_id", chapter_id)
-            .execute()
+    with sb.transaction() as tx:
+        result = call_rpc(
+            "tk_create_task",
+            {
+                "p_chapter_id": chapter_id,
+                "p_title": title,
+                "p_description": description,
+                "p_assigned_member_id": assigned_member_id,
+                "p_group_id": group_id,
+                "p_event_id": event_id,
+                "p_initiative_id": initiative_id,
+                "p_required": required,
+                "p_due_at": due_at,
+                "p_actor_id": actor_id,
+                "p_idempotency_key": idempotency_key,
+            },
+            sb=tx,
         )
-        task["people_needed"] = people_needed
+        task = result.data
+        # Capacity isn't a param of tk_create_task (0110); set it in a follow-up
+        # single-row update (non-trust-boundary column, default 1).
+        if people_needed and people_needed != 1 and task:
+            (
+                tx.table("tasks")
+                .update({"people_needed": people_needed})
+                .eq("id", task["id"])
+                .eq("chapter_id", chapter_id)
+                .execute()
+            )
+            task["people_needed"] = people_needed
+
     return task
 
 

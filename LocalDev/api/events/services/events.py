@@ -538,7 +538,7 @@ def update_event(
     updates: dict,
     idempotency_key: str | None = None,
 ) -> dict:
-    """Single-row update; a custom audience list goes through ev_set_audience."""
+    """Commit event fields, event type, and custom audience together."""
     chapter_id = actor["chapter_id"]
     existing = _get_event_row(sb, chapter_id=chapter_id, event_id=event_id)
 
@@ -547,57 +547,58 @@ def update_event(
     audience_member_ids = updates.pop("audience_member_ids", None)
     event_type_name = updates.pop("event_type_name", None)
 
-    if event_type_name:
-        updates["event_type_id"] = resolve_event_type_id(
-            sb, chapter_id=chapter_id, name=event_type_name, actor_id=actor["id"]
-        )
-        updates.setdefault("event_type", event_type_name)
-    if audience:
-        updates["visibility"] = resolve_visibility(audience=audience, visibility=None)
-    for key in ("date", "time", "end_date", "end_time"):
-        if key in updates and updates[key] is not None:
-            updates[key] = str(updates[key])
-
-    # Validate the effective range (merge incoming fields over the stored row).
-    def _eff(field: str):
-        val = updates.get(field, existing.get(field))
-        return str(val) if val is not None else None
-
-    if any(k in updates for k in ("date", "time", "end_date", "end_time")):
-        eff_date, eff_time = _eff("date"), _eff("time")
-        if eff_date and eff_time:
-            # An end date the caller didn't send is recomputed, so a stored
-            # next-day date follows the event when it moves.
-            updates["end_date"] = _resolve_end_date(
-                date=eff_date, time=eff_time,
-                end_date=updates.get("end_date"), end_time=_eff("end_time"),
+    with sb.transaction() as tx:
+        if event_type_name:
+            updates["event_type_id"] = resolve_event_type_id(
+                tx, chapter_id=chapter_id, name=event_type_name, actor_id=actor["id"]
             )
-            _validate_time_range(
-                date=eff_date, time=eff_time,
-                end_date=updates["end_date"], end_time=_eff("end_time"),
+            updates.setdefault("event_type", event_type_name)
+        if audience:
+            updates["visibility"] = resolve_visibility(audience=audience, visibility=None)
+        for key in ("date", "time", "end_date", "end_time"):
+            if key in updates and updates[key] is not None:
+                updates[key] = str(updates[key])
+
+        # Validate the effective range (merge incoming fields over the stored row).
+        def _eff(field: str):
+            val = updates.get(field, existing.get(field))
+            return str(val) if val is not None else None
+
+        if any(k in updates for k in ("date", "time", "end_date", "end_time")):
+            eff_date, eff_time = _eff("date"), _eff("time")
+            if eff_date and eff_time:
+                # An end date the caller didn't send is recomputed, so a stored
+                # next-day date follows the event when it moves.
+                updates["end_date"] = _resolve_end_date(
+                    date=eff_date, time=eff_time,
+                    end_date=updates.get("end_date"), end_time=_eff("end_time"),
+                )
+                _validate_time_range(
+                    date=eff_date, time=eff_time,
+                    end_date=updates["end_date"], end_time=_eff("end_time"),
+                )
+
+        if updates:
+            (
+                tx.table("events")
+                .update(updates)
+                .eq("id", event_id)
+                .eq("chapter_id", chapter_id)
+                .execute()
             )
 
-    if updates:
-        (
-            sb.table("events")
-            .update(updates)
-            .eq("id", event_id)
-            .eq("chapter_id", chapter_id)
-            .execute()
-        )
-
-    if audience == "custom" and audience_member_ids is not None:
-        call_rpc(
-            "ev_set_audience",
-            {
-                "p_chapter_id": chapter_id,
-                "p_event_id": event_id,
-                "p_audience_member_ids": audience_member_ids,
-                "p_actor_id": actor["id"],
-                "p_idempotency_key": idempotency_key,
-            },
-            sb=sb,
-        )
+        if audience == "custom" and audience_member_ids is not None:
+            call_rpc(
+                "ev_set_audience",
+                {
+                    "p_chapter_id": chapter_id,
+                    "p_event_id": event_id,
+                    "p_audience_member_ids": audience_member_ids,
+                    "p_actor_id": actor["id"],
+                    "p_idempotency_key": idempotency_key,
+                },
+                sb=tx,
+            )
 
     event = _get_event_row(sb, chapter_id=chapter_id, event_id=event_id)
     _decorate_counts(event, len(_organizers_for_event(sb, event_id)))
