@@ -158,6 +158,74 @@ def test_assign_same_member_twice_rejected_but_other_event_ok(
     assert other["task"]["kind"] == "security"
 
 
+def test_assign_security_takes_the_event_lock(
+    db_url, cursor, chapter_id, user_factory, create_event
+):
+    officer = user_factory(role="officer")
+    ev = create_event(officer)
+    member = user_factory()
+
+    hold = psycopg2.connect(db_url)
+    hold.autocommit = False
+    try:
+        with hold.cursor() as hcur:
+            hcur.execute(
+                "SELECT pg_advisory_xact_lock(hashtext('ev_security:' || %s))",
+                (ev["id"],),
+            )
+        cursor.execute("SET lock_timeout = '500ms'")
+        with pytest.raises(psycopg2.errors.LockNotAvailable):
+            cursor.execute(
+                "SELECT ev_assign_security(%s, %s, %s, %s, NULL, NULL)",
+                (chapter_id, ev["id"], member["id"], officer["id"]),
+            )
+    finally:
+        hold.rollback()
+        hold.close()
+        cursor.execute("RESET lock_timeout")
+
+
+def test_assign_security_rejects_inactive_member(
+    sb_client, cursor, chapter_id, user_factory, create_event
+):
+    officer = user_factory(role="officer")
+    ev = create_event(officer)
+    member = user_factory()
+    cursor.execute("UPDATE members SET status = 'inactive' WHERE id = %s", (member["id"],))
+
+    with pytest.raises(psycopg2.Error, match="not an active member"):
+        _assign(sb_client, chapter_id, ev["id"], member["id"], officer["id"])
+
+
+def test_request_security_swap_rejects_inactive_target(
+    sb_client, cursor, chapter_id, user_factory, create_event
+):
+    officer = user_factory(role="officer")
+    ev = create_event(officer)
+    holder = user_factory()
+    target = user_factory()
+    task_id = _assign(sb_client, chapter_id, ev["id"], holder["id"], officer["id"])["task"]["id"]
+    cursor.execute("UPDATE members SET status = 'inactive' WHERE id = %s", (target["id"],))
+
+    with pytest.raises(psycopg2.Error, match="not an active member"):
+        _request(sb_client, chapter_id, task_id, target["id"], holder["id"])
+
+
+def test_accept_security_swap_rejects_target_deactivated_after_request(
+    sb_client, cursor, chapter_id, user_factory, create_event
+):
+    officer = user_factory(role="officer")
+    ev = create_event(officer)
+    holder = user_factory()
+    target = user_factory()
+    task_id = _assign(sb_client, chapter_id, ev["id"], holder["id"], officer["id"])["task"]["id"]
+    swap = _request(sb_client, chapter_id, task_id, target["id"], holder["id"])
+    cursor.execute("UPDATE members SET status = 'inactive' WHERE id = %s", (target["id"],))
+
+    with pytest.raises(psycopg2.Error, match="not an active member"):
+        _accept(sb_client, chapter_id, swap["id"], target["id"])
+
+
 # ── 3. guards on the shared machinery ────────────────────────────────────────
 
 def test_security_task_blocks_commit_uncommit_status(
