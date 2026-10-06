@@ -6,7 +6,7 @@
 > the service is complete. For build status the source of truth is the test suite
 > (`tests/treasury/`).
 
-Last updated: 2026-06-07
+Last updated: 2026-10-06
 
 ---
 
@@ -32,8 +32,9 @@ api/treasury/
 
 Money always crosses the wire and is stored as **integer cents** (`BIGINT`). `Money`
 rejects raw `float` at construction; the single sanctioned float→cents boundary is
-`Money.from_numeric` (via `Decimal(str(v))`), used only by the legacy fines→invoices
-import.
+`Money.from_numeric`, called only by the unused compatibility DTO
+`FineToInvoice` (`api/treasury/api/schemas.py`), which stringifies its float input
+before conversion. Live fine issuance passes integer cents to `tr_issue_event_fines`.
 
 ---
 
@@ -60,26 +61,39 @@ adjustment-approvals deliberately reuse existing actions rather than widen it.
 
 ---
 
-## 3. The mutation path: RPCs are the only atomic writer
+## 3. The mutation path
 
-Every multi-row write goes through a `tr_<op>` plpgsql function called via
-`call_rpc(...)`. Reads and single-row writes use the `sb.table(...)` builder directly.
+Trust-boundary treasury mutations go through `tr_*` plpgsql functions called via
+`call_rpc(...)`. Other multi-statement writes use the owner connection through
+`PostgresClient.transaction()`; reads use the `sb.table(...)` builder or SQL.
+The app connects as the table owner in every environment.
 
-Each RPC:
+Command RPCs:
 
-- takes args prefixed `p_`, always including `p_chapter_id uuid` and (where retryable)
+- take args prefixed `p_`, including `p_chapter_id uuid` and (where supported)
   `p_idempotency_key text DEFAULT NULL`;
-- runs in one server-side transaction and `RAISE`s on any failure → full rollback
+- run in one server-side transaction and `RAISE`s on any failure → full rollback
   (this is what makes the operation atomic; proven by `tr_test_atomic_rollback`);
-- returns `JSONB` (`to_jsonb(row)`);
-- short-circuits replays via `idempotency_keys(chapter_id, operation, key, result_id, result)`.
+- return `JSONB` (a row or an operation-specific object);
+- short-circuit replays when an idempotency key is supplied via `idempotency_keys(chapter_id, operation, key, result_id, result)`.
 
 | Operation | RPC(s) |
 |-----------|--------|
-| Receivables | `tr_create_invoice`, `tr_bulk_create_invoices`, `tr_submit_payment`, `tr_cancel_invoice` |
-| Payment review | `tr_verify_payment`, `tr_reject_payment` |
+| Receivables | `tr_create_invoice`, `tr_create_invoice_v2` (line items), `tr_bulk_create_invoices`, `tr_cancel_invoice`, `tr_void_invoice` |
+| Payment submission / review | `tr_submit_payment`, `tr_submit_balance_payment`, `tr_verify_payment` (delegates to v2), `tr_verify_payment_v2`, `tr_reject_payment` |
+| Officer payment / allocation | `tr_record_payment`, `tr_reallocate_payment` |
+| Event fines | `tr_issue_event_fines`; attendance paths use `at_void_open_fines` to void open fines |
 | Expenses | `tr_create_expense`, `tr_invalidate_expense` |
 | Adjustments / refunds | `tr_create_adjustment`, `tr_approve_adjustment`, `tr_issue_refund` |
+
+Allocation/status helpers are `tr_net_allocated_cents`, `tr_invoice_remaining_cents`
+and `tr_refresh_invoice_status`. Invoice remaining cents use allocations and their
+reversals, rather than `verified_payments.invoice_id`. Bulk invoices (0169) and
+officer-recorded payments (0205) reject idempotency-key reuse with a changed payload.
+Refunds consume unallocated credit first, then reverse cancelled-invoice coverage
+before reopening paid invoices. Invoice locks follow `(created_at, id)` ascending;
+reversal order is cancelled first, allocation creation descending, then invoice
+creation/id descending and allocation id descending (0217).
 
 ---
 
@@ -97,6 +111,11 @@ lets the rebuild engine cross-check the two.
 Only **active** adjustments/refunds count. A **pending** (over-threshold) adjustment has
 no ledger row and no balance effect until a second officer activates it; an
 **invalidated** refund is excluded.
+
+The `member_balances` CSV computes every balance column from operational tables
+in one SQL statement, starting from chapter members so members without cache rows
+are included; members without activity have zero balances. It is a current snapshot, not period-bound.
+Dashboard `recent_payments` includes each submission's `proof_ref` and method.
 
 ---
 
@@ -193,12 +212,36 @@ rows before sending them.
 
 ## 10. Migrations
 
-`migrations/000N_*.sql`, run once each by `scripts/migrate_db.py` (tracked in
-`schema_migrations`, idempotent DDL). Treasury occupies `0005`–`0080`; the first line of
-each file names its owning chunk. Because the runner applies a file only once, an
+`migrations/*.sql`, run once each by `scripts/migrate_db.py` (tracked in
+`schema_migrations`, idempotent DDL). Treasury starts at `0005` and has later
+allocation, fine and review migrations through `0217`. Because the runner applies a file only once, an
 already-applied function is changed by adding a **new** migration that
 `CREATE OR REPLACE`s it (e.g. `0080` adds the tenant guards) — never by editing an
-applied file.
+applied file. After adding a migration, run
+`python3 scripts/migration_checksums.py --update`.
+
+| Migrations | Treasury change |
+|---|---|
+| 0120, 0122–0124 | Line-item invoices; voiding; balance submissions/evidence; allocations and invoice-status refresh |
+| 0158 | Bulk dues due dates |
+| 0165 | Single coverage; v1 verify delegates to v2; remaining-cents helper |
+| 0166 | Targeted allocation before oldest-first allocation; canonical invoice locks |
+| 0167 | Refunds reverse allocations and reopen invoices |
+| 0168 | Freeze operational money/owner columns |
+| 0169 | Bulk-invoice idempotency request hashes |
+| 0170 | Officer-recorded payments |
+| 0171 | Revoke Supabase API-role privileges (shared boundary) |
+| 0196, 0198–0199, 0201 | Event-fine issuance; attendance voiding; fine uniqueness/status guards; skip handled fines |
+| 0205 | Reallocation and record-payment guards, tenant checks and request hashes |
+| 0207 | Refunds reverse cancelled-invoice coverage first |
+| 0208 | Freeze refund member ownership |
+| 0209 | Refund invoice locks align with verification lock order |
+| 0213 | Fine issuance and attendance serialize with the event attendance lock |
+| 0214 | Self check-in voids open fines |
+| 0217 | Deterministic refund reversal tiebreak for same-time allocations; latest `tr_issue_refund` body |
+
+This review round added 0206–0217; 0216/0217 refine 0210/0209. There is no 0202
+migration. 0215 is the outbox attempt cap, not a treasury mutation migration.
 
 ---
 
@@ -216,3 +259,28 @@ GET  /payments/receipts/{id}           GET  /dashboard
 GET  /members/{id}/statement           GET  /report?period=YYYY-MM&dataset=…
 POST /rebuild?apply_repairs=…
 ```
+
+Additional routes under `/api/treasury`:
+
+```
+POST /invoices/{invoice_id}/void
+POST /payments/balance-submissions
+POST /payments/submissions/{submission_id}/evidence
+GET  /payments/evidence/{evidence_id}
+POST /payments/submissions/{submission_id}/verify-v1
+POST /payments/submissions/{submission_id}/reject-v1
+POST /payments/record
+POST /payments/{verified_payment_id}/reallocate
+GET  /payments/{verified_payment_id}/allocations
+GET  /members/{member_id}/dashboard
+```
+
+`verify-v1`/`reject-v1` are what the app calls; `/verify` is a frozen URL with the same behaviour (both run `tr_verify_payment_v2`), and `reject-v1` requires a reason. Payment evidence uploads
+are capped at 2 MiB and scoped to the submission's chapter and owner. The report
+datasets are `payments`, `invoices`, `expenses`, `member_balances`, and `ledger`.
+
+The separate `/api/fines` router (`api/treasury/api/fines_legacy.py`) exposes
+`GET /`, `GET /missed/{event_id}`, `POST /issue`, `POST /{invoice_id}/waive` and
+`GET /summary`. Issuance creates flat 2500-cent invoices for eligible unexcused
+members after the 24-hour gate through `tr_issue_event_fines`; waiving calls
+`tr_void_invoice`. Attendance updates and self check-in void open fine invoices.

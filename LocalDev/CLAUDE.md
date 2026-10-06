@@ -148,13 +148,15 @@ param must be added to `_ARRAY_TYPED_RPC_PARAMS` in `api/platform/postgres.py`.
 `migrations/*.sql`, applied in **lexical order** by `scripts/migrate_db.py`,
 tracked in a `schema_migrations` table (idempotent — only pending files run).
 **Never edit an already-applied migration; always add a new numbered file.**
+After adding a migration, run `python3 scripts/migration_checksums.py --update`.
 
 ## Hard rules (enforced across the backend)
 
 - **Money is always integer cents (`BIGINT`).** Use the `Money` value object
   (`api/treasury/core/money.py`); it rejects raw floats. The only float→cents
-  boundary is `Money.from_numeric`, used solely by the legacy
-  `events.fine_amount` → invoices import. Never add another float currency path.
+  boundary is `Money.from_numeric`, called only by `FineToInvoice` in
+  `api/treasury/api/schemas.py`, an unused compatibility DTO retained for tests.
+  Live fines use integer cents through `tr_issue_event_fines`. Never add another float currency path.
 - **Trust-boundary mutations go through plpgsql RPCs**
   (`api/platform/rpc.py` → `call_rpc`). RPC bodies enforce tenant guards (`chapter_id`), idempotency
   (`idempotency_keys`), and write `audit_logs` (plus `big_ledger` for anything
@@ -164,7 +166,7 @@ tracked in a `schema_migrations` table (idempotent — only pending files run).
   Model reversals by appending a row with `reverses_entry_id`, never by mutating
   history. The `EntryType` / `AuditAction` enums are frozen — reuse existing
   values rather than widening them.
-- **RLS exists on 43 tables; the app connects as the table owner, so RLS never applies at runtime; Supabase API roles hold no grants since migration 0171.**
+- **RLS exists on 45 tables; the app connects as the table owner, so RLS never applies at runtime; Supabase API roles hold no grants since migration 0171.**
   The runtime tenant guard is the RPC layer — the RPC body validates every
   referenced row against the caller's `chapter_id`; RLS is defense-in-depth.
 - **Permissions come from `member_roles` plus an implicit `member` baseline.** The `members.role` column is
@@ -205,23 +207,23 @@ The frontend (`LocalDev/greekos/`) is a single-page React app with no router; `A
 
 | Concern | Do | Do not |
 |---|---|---|
-| Multi-row or trust-boundary writes | One plpgsql RPC: chapter guard, idempotency key, audit row, ledger row if money (`tr_*`, `tk_*`, `ev_*`) | Python sequences of autocommitted statements (`update_event`, `create_task`, onboarding, check-in) |
+| Multi-row or trust-boundary writes | Trust-boundary writes use a plpgsql RPC with chapter guards and audit/ledger rows; other multi-statement writes use `transaction()` | Sequences of autocommitted statements that must succeed together |
 | Money | BIGINT cents in DB, `Money` in Python, `formatMoney`/`dollarsToCents` in TS | `NUMERIC` columns; `Decimal→float` in `_serialize` |
-| Authority | `require_permission(*keys)` dependency, `can(key)` in the SPA | `members.role`, `LEGACY_ROLE_COMPAT`, `isOfficer`, inline `has_permission` |
-| Identity equality | Normalise IDs to `str` at the platform boundary once | `str(a) == str(b)` sprinkled per call site |
+| Authority | `require_permission(*keys)` dependencies, `permissions.has_permission` in services, `can(permissions, key)` in the SPA | Authority inferred from display-only `members.role` or inline role-string checks |
+| Identity equality | SQL query rows serialize UUIDs to strings in `QueryBuilder._serialize`; SQL RPC results retain their returned JSON shape | Assuming RPC results pass through the query-row serializer |
 | Tenant scope | Session `chapter_id` passed into an RPC that re-checks every referenced row | Trusting RLS |
 | Idempotency | `UNIQUE(chapter_id, operation, key)`; `tr_bulk_create_invoices` (0169) and `tr_record_payment` (0205) check `request_hash`; keys never expire | Reusing a dues-run or record-payment key after changing the payload |
-| Invoice status and "owed" | `tr_refresh_invoice_status`; one remaining-cents helper for standing, reminders, dashboards | `tr_verify_payment` v1; `status='unpaid'` filters |
-| Errors | Named domain exceptions mapped to fixed HTTP messages (events, initiatives) | `HTTPException(…, f"{exc}")` |
-| Time | Timestamptz everywhere; one chapter timezone; one parser | Naive `date`+`time` combined with `tzinfo=UTC`; inline ISO slicing in adapters |
+| Invoice status and "owed" | `tr_refresh_invoice_status`; `remaining_by_invoice` for fine standing, reminders and open-invoice displays; `BalanceEngine` as the balance reader for treasury totals | Ignoring allocations, reversals or partially paid invoices when calculating remaining cents |
+| Errors | Events/initiatives map named domain exceptions; raw database errors use fixed messages through `api/platform/errors.py::public_message` where wired | Exposing raw database exception text in HTTP responses |
+| Time | Timestamp columns use timestamptz; event dates/times remain separate and resolve through chapter-timezone timing helpers | Treating a chapter-local event time as UTC |
 | Notifications | Treasury enqueue runs after commit; failures log outside a transaction and raise with a transaction client. Inline SMS `dispatch_send` atomically claims pending rows before sending; the cron drain also delivers queued rows | Sending SMS without claiming rows first |
-| Configuration | Typed `Settings`; generate `.env.example` from it | Reading `os.environ`; nine dead env names |
+| Configuration | Typed `Settings` in `api/config.py`; `.env.example` is maintained separately | Bypassing Settings in new runtime code or documenting unused env names |
 | Frontend data | Domain hooks + pure adapters; toast after `await` | Optimistic toast before the request; client-local "ledgers" |
-| Frontend forms and validation | Pure `lib/*.ts` validators returning `{valid, error}` | Inline `onSubmit` guards with toasts |
+| Frontend forms and validation | Pure `lib/*.ts` validators where extracted; return shapes vary by form (e.g. auth validators return an error string or null) | Inventing a shared validator contract that existing forms do not implement |
 | Frontend permissions | `can(permissions, key)` | `isOfficer`, `isOfficerView` |
 | Tests | Real DB fixtures with per-test chapters; dependency-override clients; name tests by invariant | `FakeSb`; patching `recompute_member_balance`; AST-only tests |
 | Imports | Absolute `api.*` imports | Cross-domain imports of private helpers |
-| Naming | `snake_case` Python, `tr_` / `ev_` / `at_` / `tk_` RPC prefixes, `domain:verb` permission keys | `sb` for the DB client (call it `db`) |
+| Naming | `snake_case` Python; `tr_` / `ev_` / `at_` / `tk_` RPC prefixes; permission keys use two or three segments; existing DB helpers commonly take `sb` | Renaming established helper arguments as a drive-by change |
 | Directory shape | `api/<domain>/{api,services,core,auth.py}` as a menu, not a mandate | Per-domain db directories, repositories directories |
-| Logging | Named loggers with request id, chapter id, outbox id via a filter | Bare `logger.warning` without correlation |
+| Logging | Named loggers; the global filter adds request id only; chapter/outbox context must be supplied by the caller | Assuming the request-id filter adds tenant or outbox identifiers |
 | Route paths | Frozen; new collection routes without trailing slash | Mixed trailing slashes |

@@ -266,9 +266,22 @@ a verified "send mail as" alias on that account. Set `EMAIL_FROM` to the mailbox
 itself unless you have configured the alias.
 
 **Failures** land on the outbox row: `no_email` means the member has no usable
-address, anything else is the SMTP error verbatim. Officers see them in the
-outbox surface; codes are the exception — `SETUP_CODE`/`RESET_CODE` bodies are
-never rendered there, because the payload holds a live credential.
+address; provider failures use `provider call failed`, and other failures use
+`delivery failed` or `delivery bookkeeping failed`. Officers see these fixed
+messages in the outbox surface (this list covers email delivery; SMS rows also
+use `no phone`/`no_consent`, and parked rows use `delivery outcome unknown` or
+`attempt cap reached (5 delivery attempts)`). `SETUP_CODE`/`RESET_CODE` bodies are never rendered
+there; terminal rows have their credential payload wiped and cannot be retried.
+Issue a fresh code instead.
+
+A retained `provider_attempted_at` stamp on a failed row means possibly-delivered.
+Rows whose provider call is known to have failed clear the stamp, and Retry
+really resends them. Rows marked `delivery bookkeeping failed` were accepted by
+the provider: Retry keeps their stamp and the drain closes them as sent without
+another provider call. Unknown-outcome rows (an abandoned stamped claim) are
+parked; **check with the recipient or the provider log first** — if the message
+never arrived, Retry clears the stamp and sends it again, and if it did arrive,
+do not press Retry.
 
 ---
 
@@ -453,6 +466,7 @@ Complete waves 1–4 and the full suite before the production sync; add the CI
    hand (the user decides each refund; the demo DB was cleaned 2026-10-05 with
    a demo-guarded script kept outside git).
 9. Test chapter cleanup: `scripts/purge_test_chapters.py` (demo only, batches
-   of 500, `--apply`).
+   of 500, `--apply`). Each purge batch takes write locks on every triggered table;
+   run only when no tests or agents are using the demo DB.
 10. Production tree sync: `scripts/build_prod.sh` (`--check` shows Prod drift;
     syncing Prod needs the user's go-ahead).

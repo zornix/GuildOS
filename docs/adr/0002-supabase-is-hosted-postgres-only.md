@@ -7,7 +7,7 @@ own HS256 JWTs (`sub = member.id`, signed with `JWT_SECRET`, validated
 in-process). supabase-py, PostgREST, GoTrue, and the Data API are deliberately
 unused; the Data API is disabled in both projects' settings.
 
-Decided 2026-07-11, when we discovered the supabase-py branch of `api/platform/db.py`
+Decided 2026-07-11, when we discovered the supabase-py branch of `api/db.py`
 had never carried traffic anywhere — deployed prod, local dev, and pytest all
 already ran the psycopg client against a Supabase pooler. Standardising on the
 path that actually serves production was pure deletion; standardising on

@@ -1,5 +1,7 @@
 # 17 · Docs: describe the tree that exists
 
+> Historical snapshot: references to RLS on 43 tables describe the audit baseline; the current count of RLS-enabled tables in `migrations/` is 45 (verified 2026-10-06).
+
 > **For agentic workers:** read `00-README.md` first; its rules bind every step here. Steps use checkbox (`- [ ]`) syntax. Every statement you write must be checked against the files first. If you cannot verify something, leave it out.
 
 **Stream:** `17-docs` · **Wave:** 4 (after every code stream is merged) · **Agent:** Gemini 3.8 Flash medium (Antigravity CLI) · **Branch:** `fix/audit-17-docs`

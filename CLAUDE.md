@@ -2,7 +2,8 @@
 
 Active development happens in `LocalDev/` — see `LocalDev/CLAUDE.md` for the
 project guide, commands, and conventions. `Prod/` is produced from `LocalDev/`
-by `scripts/build_prod.sh`, with a CI drift check. Running the sync, migrating
+by `LocalDev/scripts/build_prod.sh`. The CI drift check is planned after the
+next production sync; it does not run yet (see `LocalDev/docs/ops-runbook.md`). Running the sync, migrating
 production and deploying each need the user's explicit go-ahead. Until the
 sync runs, `Prod/` is a stale hand copy. `local-dev-scripts/` holds the shared
 dev-runner tooling.

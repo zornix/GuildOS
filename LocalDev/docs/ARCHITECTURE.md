@@ -8,7 +8,7 @@ repo without re-exploring the codebase. Read this plus `LocalDev/CLAUDE.md`
 [CODEMAP.md](CODEMAP.md) (guided file order),
 [TREASURY_ARCHITECTURE.md](TREASURY_ARCHITECTURE.md) (ledger/money internals),
 [services/README.md](services/README.md) (per-service docs),
-`../../FrontendConventions.md` (full frontend spec),
+[Frontend architecture and rules](../CLAUDE.md#frontend-architecture) (current greekos conventions),
 [events-v1-spec.md](events-v1-spec.md) + [events-dev-status.md](events-dev-status.md)
 (current feature work).
 
@@ -24,7 +24,7 @@ RBAC, calendar.
 |-------|------------|------------|-------|
 | Frontend | Vite, React 19, TS | 3000 | `greekos/` — single-page React app (see §6) |
 | Backend | FastAPI (Python 3) | 8001 | `api/` — Swagger at `/api/docs` |
-| Database | PostgreSQL, raw SQL migrations | Supabase pooler (demo & prod) | plpgsql RPCs for all multi-row mutations |
+| Database | PostgreSQL, raw SQL migrations | Supabase pooler (demo & prod) | plpgsql RPCs for trust-boundary writes; `transaction()` for other multi-statement writes |
 
 Deployment: Vercel — `api/index.py` as a Python serverless function, `greekos/`
 as the static build (see `vercel.json`).
@@ -34,7 +34,7 @@ as the static build (see `vercel.json`).
 The git root is one level **above** this directory.
 
 - `LocalDev/` — **the active development sandbox. All new work happens here.**
-- `Prod/` — produced from `LocalDev/` by `scripts/build_prod.sh`. `Prod/api` (FastAPI) + `Prod/fratos` (clone of greekos). `LocalDev/greekos` is the active frontend.
+- `Prod/` — produced from `LocalDev/` by `LocalDev/scripts/build_prod.sh` (path from the repo root). The CI drift check is planned after the next production sync and does not run yet. `Prod/api` (FastAPI) + `Prod/fratos` (clone of greekos). `LocalDev/greekos` is the active frontend.
 - The marketing site (greekos-landing/) was archived alongside the old Next.js fratos; both now live in the gitignored archive/ at the git root, as does the older GreekV1/ copy.
 - `local-dev-scripts/` — tooling; `LocalDev/package.json` scripts shell out to
   `local-dev-scripts/scripts/local-dev.sh`.
@@ -157,8 +157,9 @@ selects the per-feature send log.
 
 - **Money is always integer cents (`BIGINT`).** Use the `Money` value object
   (`api/treasury/core/money.py`); it rejects raw floats. The only float→cents
-  boundary is `Money.from_numeric`, used solely by the legacy
-  `events.fine_amount` → invoices import. Never add another float currency path.
+  boundary is `Money.from_numeric`, called only by `FineToInvoice` in
+  `api/treasury/api/schemas.py`, an unused compatibility DTO retained for tests.
+  Live fines use integer cents through `tr_issue_event_fines`. Never add another float currency path.
 - **`big_ledger` and `audit_logs` are append-only, signed-cents event logs.**
   DB triggers block `DELETE` and allow only `active → invalidated` status
   flips. Model reversals by appending a row with `reverses_entry_id`, never by
@@ -194,7 +195,8 @@ Established patterns to copy (don't invent alternatives):
 
 - **New tenant table:** `chapter_id UUID NOT NULL` + FK, `ENABLE ROW LEVEL
   SECURITY`, SELECT policy on `chapter_id = rbac_request_chapter_id()`, writes
-  via service-role RPCs only. Model: `event_supervisors` in 0141.
+  through the owner connection: RPCs for trust-boundary mutations,
+  `transaction()` for other multi-statement writes. Model: `event_supervisors` in 0141.
 - **Extending a CHECK-constraint catalog** (e.g. `audit_logs.action`,
   outbox/notification types): rebuild the constraint inside a `DO $$` block
   that drops and re-adds it with the widened value list. `audit_logs.action`
@@ -275,8 +277,7 @@ The product frontend is `greekos/` (Vite + React 19).
 
 ## 7. Auth & RBAC summary
 
-1. `POST /api/auth/login` returns an HS256 JWT (`sub = member.id` locally,
-   `auth_id` on Supabase).
+1. `POST /api/auth/login` returns an HS256 JWT (`sub = member_id` in every environment; no Supabase auth path).
 2. `get_current_user` (FastAPI dependency) decodes it into the actor dict.
 3. Routes gate with `require_permission("domain:resource:action")` (e.g.
    `treasury:payment:verify`, `calendar:event:create`); services use
