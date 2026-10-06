@@ -173,3 +173,26 @@ def test_renotify_after_cooldown_creates_fresh_send_with_distinct_dedup_keys(
 
     updated = events_svc.get_event(sb_client, user=officer, event_id=ev["id"])
     assert updated["last_notified_at"] is not None
+
+
+def test_notify_takes_the_event_lock(db_url, cursor, chapter_id, create_event, create_job, set_phone, user_factory, sb_client):
+    import json
+    import psycopg2
+
+    ev, officer, _ = _complete_event(create_event, create_job, set_phone, user_factory, sb_client)
+    other = psycopg2.connect(db_url)
+    try:
+        with other.cursor() as lock_cursor:
+            lock_cursor.execute("SELECT pg_advisory_xact_lock(hashtext('ev_notify:' || %s))", (ev["id"],))
+        # Keep the timeout and RPC on one connection through the transaction pooler.
+        cursor.execute("BEGIN")
+        cursor.execute("SET LOCAL lock_timeout = '500ms'")
+        with pytest.raises(psycopg2.errors.LockNotAvailable):
+            cursor.execute(
+                "SELECT ev_notify_event(%s,%s,%s,%s::jsonb,%s,%s,%s)",
+                (chapter_id, ev["id"], officer["id"], json.dumps([officer["id"]]), "Event notice", "dry_run", None),
+            )
+    finally:
+        other.rollback()
+        other.close()
+        cursor.execute("ROLLBACK")
