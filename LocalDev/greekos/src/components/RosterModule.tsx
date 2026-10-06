@@ -1,34 +1,26 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   Users,
   Search,
-  GraduationCap,
-  Phone,
-  Plus
+  GraduationCap
 } from 'lucide-react';
 import { Member } from '../types';
 import type { RosterImportResult } from '../api';
 import RosterCsvImport from './roster/RosterCsvImport';
-import Modal from './ui/Modal';
 import MemberRolesPanel from './MemberRolesPanel';
 import Card from './ui/Card';
-import ConfirmDialog from './ui/ConfirmDialog';
 import { formatMoney } from '../formatters';
 
 interface RosterModuleProps {
   members: Member[];
-  /** `members:invite` — add a brother and the CSV roster import. */
+  /** `members:invite` — the CSV roster import. */
   canInviteMembers: boolean;
-  /** `standing:update` — the per-member standing selector. */
-  canSetStanding: boolean;
   /** `standing:view_all` — the chapter-wide attendance column. */
   canSeeStandingDetail: boolean;
   /** `roles:assign` — gates the per-member role toggles. */
   canAssignRoles: boolean;
   /** `members:invite` — gates the per-member announcement-texts indicator (#57). */
   canSeeSmsConsent: boolean;
-  onAddMember: (member: Omit<Member, 'id' | 'points' | 'attendanceRate' | 'duesBalance' | 'duesBalanceCents' | 'securityHoursServed'>) => void;
-  onUpdateStanding: (memberId: string, standing: 'Good Standing' | 'Academic Probation' | 'Social Suspension' | 'Financial Hold') => void;
   onRolesChanged?: (memberId: string) => void;
   onImportRoster?: (file: File) => Promise<RosterImportResult>;
 }
@@ -36,33 +28,16 @@ interface RosterModuleProps {
 export default function RosterModule({
   members,
   canInviteMembers,
-  canSetStanding,
   canSeeStandingDetail,
   canAssignRoles,
   canSeeSmsConsent,
-  onAddMember,
-  onUpdateStanding,
   onRolesChanged,
   onImportRoster
 }: RosterModuleProps) {
   const safeMembers = members || [];
   const [filterRole, setFilterRole] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
-  const [showAddModal, setShowAddModal] = useState(false);
   const [rolesMember, setRolesMember] = useState<Member | null>(null);
-  const [pendingStanding, setPendingStanding] = useState<{ member: Member; standing: Member['standing'] } | null>(null);
-
-  // New Member Form State
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [role, setRole] = useState<Member['role']>('Active');
-  const [pledgeClass, setPledgeClass] = useState('Fall 2026');
-  const [major, setMajor] = useState('');
-  const [gpa, setGPA] = useState('3.4');
-  const [roomNumber, setRoomNumber] = useState('204');
-
   const filteredMembers = safeMembers.filter(m => {
     if (filterRole !== 'ALL' && m.role !== filterRole) return false;
     if (searchTerm) {
@@ -73,28 +48,6 @@ export default function RosterModule({
     }
     return true;
   });
-
-  const handleAddSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onAddMember({
-      name,
-      email,
-      phone,
-      role,
-      status: role === 'Pledge' ? 'Pledge' : 'Active',
-      pledgeClass,
-      major,
-      gpa: parseFloat(gpa) || 3.0,
-      standing: 'Good Standing',
-      roomNumber
-    });
-
-    setName('');
-    setEmail('');
-    setPhone('');
-    setMajor('');
-    setShowAddModal(false);
-  };
 
   return (
     <div className="space-y-6">
@@ -114,16 +67,6 @@ export default function RosterModule({
             Everyone on the chapter roll, from new pledges to officers.
           </p>
         </div>
-
-        {canInviteMembers && (
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="bg-gold hover:bg-[#c5a02b] text-navy font-bold text-xs px-4 py-2.5 min-h-11 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            Add Member
-          </button>
-        )}
       </div>
 
       {canInviteMembers && onImportRoster && <RosterCsvImport onImport={onImportRoster} />}
@@ -175,8 +118,6 @@ export default function RosterModule({
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredMembers.map(mem => {
-                const isProbation = mem.standing !== 'Good Standing';
-
                 return (
                   <tr key={mem.id} className="hover:bg-slate-50/60">
                     <td className="py-3 px-4">
@@ -242,18 +183,6 @@ export default function RosterModule({
                           Roles
                         </button>
                       )}
-                      {canSetStanding && (
-                        <select
-                          value={mem.standing}
-                          onChange={e => setPendingStanding({ member: mem, standing: e.target.value as Member['standing'] })}
-                          className="text-xs border border-slate-200 rounded p-1 min-h-11 sm:min-h-0 bg-white cursor-pointer"
-                        >
-                          <option value="Good Standing">Good Standing</option>
-                          <option value="Academic Probation">Academic Probation</option>
-                          <option value="Social Suspension">Social Suspension</option>
-                          <option value="Financial Hold">Financial Hold</option>
-                        </select>
-                      )}
                       </div>
                     </td>
                   </tr>
@@ -264,127 +193,12 @@ export default function RosterModule({
         </div>
       </Card>
 
-      {/* MODAL: Add Member */}
-      {showAddModal && (
-        <Modal title="Enroll New Brother on Roster" onClose={() => setShowAddModal(false)}>
-
-            <form onSubmit={handleAddSubmit} className="space-y-4">
-              <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">Full Name</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="e.g. Samuel Bennett"
-                  className="w-full text-sm border border-slate-200 rounded-lg p-2.5 min-h-11 focus:outline-none focus:border-gold"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1">Email</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder="s.bennett@university.edu"
-                    className="w-full text-xs border border-slate-200 rounded-lg p-2.5 min-h-11 focus:outline-none focus:border-gold"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1">Phone</label>
-                  <input
-                    type="text"
-                    value={phone}
-                    onChange={e => setPhone(e.target.value)}
-                    placeholder="(555) 019-2834"
-                    className="w-full text-xs border border-slate-200 rounded-lg p-2.5 min-h-11 focus:outline-none focus:border-gold"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1">Chapter Role</label>
-                  <select
-                    value={role}
-                    onChange={e => setRole(e.target.value as any)}
-                    className="w-full text-xs border border-slate-200 rounded-lg p-2.5 min-h-11 focus:outline-none focus:border-gold"
-                  >
-                    <option value="Active">Active Brother</option>
-                    <option value="Pledge">New Pledge</option>
-                    <option value="Risk Manager">Risk Manager</option>
-                    <option value="Secretary">Secretary</option>
-                    <option value="Pledge Educator">Pledge Educator</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1">Pledge Class</label>
-                  <input
-                    type="text"
-                    value={pledgeClass}
-                    onChange={e => setPledgeClass(e.target.value)}
-                    className="w-full text-xs border border-slate-200 rounded-lg p-2.5 min-h-11 focus:outline-none focus:border-gold"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1">Major</label>
-                  <input
-                    type="text"
-                    value={major}
-                    onChange={e => setMajor(e.target.value)}
-                    placeholder="Economics"
-                    className="w-full text-xs border border-slate-200 rounded-lg p-2.5 min-h-11 focus:outline-none focus:border-gold"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1">Cumulative GPA</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={gpa}
-                    onChange={e => setGPA(e.target.value)}
-                    className="w-full text-xs border border-slate-200 rounded-lg p-2.5 min-h-11 focus:outline-none focus:border-gold"
-                    required
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-navy text-gold hover:bg-slate-800 font-bold py-3 min-h-11 rounded-lg text-xs transition-all mt-2 cursor-pointer"
-              >
-                Add Brother to Roster
-              </button>
-            </form>
-        </Modal>
-      )}
-
       {rolesMember && (
         <MemberRolesPanel
           memberId={rolesMember.id}
           memberName={rolesMember.name}
           onRolesChanged={onRolesChanged}
           onClose={() => setRolesMember(null)}
-        />
-      )}
-
-      {pendingStanding && (
-        <ConfirmDialog
-          title="Change standing?"
-          tone="danger"
-          body={<p><strong>{pendingStanding.member.name}</strong>: {pendingStanding.member.standing} &rarr; <strong>{pendingStanding.standing}</strong>. Standing affects what they may do in the chapter.</p>}
-          confirmLabel="Change standing"
-          onCancel={() => setPendingStanding(null)}
-          onConfirm={() => { onUpdateStanding(pendingStanding.member.id, pendingStanding.standing); setPendingStanding(null); }}
         />
       )}
     </div>

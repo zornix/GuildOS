@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { logout } from './api';
 import { useAppData } from './hooks/useAppData';
 import AppShell from './components/layout/AppShell';
@@ -219,13 +219,10 @@ function ChapterApp({ onLogout }: { onLogout: () => void }) {
         <RosterModule
           members={roster.members}
           canInviteMembers={canInviteMembers}
-          canSetStanding={can(app.permissions, 'standing:update')}
           canSeeStandingDetail={can(app.permissions, 'standing:view_all')}
           canAssignRoles={can(app.permissions, 'roles:assign')}
           canSeeSmsConsent={canInviteMembers}
           onImportRoster={file => roster.handleImportRoster(app.chapterId, file)}
-          onAddMember={roster.handleAddMember}
-          onUpdateStanding={roster.handleUpdateStanding}
           onRolesChanged={app.refreshOwnPermissions}
         />
       )}

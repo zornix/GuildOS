@@ -7,8 +7,6 @@ import { toggleRoleKeys } from './MemberRolesPanel';
 import { can } from '../lib/session';
 import type { Member } from '../types';
 
-const noop = () => {};
-
 const member: Member = {
   id: 'm1', name: 'Test Brother', email: 'brother@example.test', phone: '',
   role: 'Active Member', status: 'Active', pledgeClass: 'Fall 2026', major: 'Economics',
@@ -20,11 +18,9 @@ function roster(permissions: string[]) {
   return renderToStaticMarkup(createElement(RosterModule, {
     members: [member],
     canInviteMembers: can(permissions, 'members:invite'),
-    canSetStanding: can(permissions, 'standing:update'),
     canSeeStandingDetail: can(permissions, 'standing:view_all'),
     canAssignRoles: can(permissions, 'roles:assign'),
     canSeeSmsConsent: can(permissions, 'members:invite'),
-    onAddMember: noop, onUpdateStanding: noop,
   }));
 }
 
