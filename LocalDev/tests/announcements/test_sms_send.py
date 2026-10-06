@@ -355,13 +355,42 @@ def queued_send(president, as_member, announcement_factory, monkeypatch, cursor,
 
 def test_inline_dispatch_skips_rows_the_cron_already_claimed(queued_send, sb_client, cursor, monkeypatch):
     from api.announcements.services import sms
-    dispatch = sms.dispatch_send
-    cursor.execute("UPDATE message_outbox SET status='sending', claimed_at=now() WHERE target_id=%s", (queued_send["id"],))
+    from api.platform.postgres import QueryBuilder
+
+    cursor.execute("SELECT * FROM message_outbox WHERE target_id=%s ORDER BY id", (queued_send["id"],))
+    rows = cursor.fetchall()
+    assert len(rows) == 2
+    assert all(row["status"] == "pending" for row in rows)
+    claimed_id = rows[0]["id"]
+    cursor.execute("SELECT phone FROM members WHERE id=%s", (rows[0]["member_id"],))
+    claimed_phone = cursor.fetchone()["phone"]
+    claimed_before = None
+    execute = QueryBuilder.execute
+
+    def cron_after_candidate_select(query):
+        nonlocal claimed_before
+        result = execute(query)
+        if query._table == "message_outbox" and query._op == "select" and claimed_before is None:
+            assert str(claimed_id) in {str(row["id"]) for row in result.data}
+            cursor.execute(
+                "UPDATE message_outbox SET status='sending', claimed_at=now() "
+                "WHERE id=%s RETURNING *", (claimed_id,),
+            )
+            claimed_before = cursor.fetchone()
+        return result
+
     calls = []
+    monkeypatch.setattr(QueryBuilder, "execute", cron_after_candidate_select)
     monkeypatch.setattr(sms.twilio_client, "send_sms", lambda *args: calls.append(args))
-    result = dispatch(sb_client, queued_send)
-    assert calls == []
-    assert result["status"] == "queued"
+    result = sms.dispatch_send(sb_client, queued_send)
+    assert claimed_before is not None
+    assert len(calls) == 1
+    assert calls[0][0] != claimed_phone
+    cursor.execute("SELECT * FROM message_outbox WHERE id=%s", (claimed_id,))
+    assert cursor.fetchone() == claimed_before
+    cursor.execute("SELECT status FROM message_outbox WHERE id=%s", (rows[1]["id"],))
+    assert cursor.fetchone()["status"] == "sent"
+    assert result["status"] == "sent"
 
 
 def test_inline_dispatch_marks_rows_sending_before_the_provider_call(queued_send, sb_client, cursor, monkeypatch):
@@ -408,3 +437,39 @@ def test_inline_dispatch_claim_excludes_a_row_taken_after_selection(queued_send,
     assert stolen[0] not in calls
     cursor.execute("SELECT status FROM message_outbox WHERE target_id=%s", (queued_send["id"],))
     assert sorted(row["status"] for row in cursor.fetchall()) == ["sending", "sent"]
+
+
+@pytest.mark.parametrize("provider_fails", [True, False])
+def test_inline_dispatch_failure_preserves_only_possibly_delivered_stamps(
+    queued_send, sb_client, cursor, monkeypatch, provider_fails,
+):
+    from api.announcements.services import sms
+    from api.platform.postgres import QueryBuilder
+
+    execute = QueryBuilder.execute
+    calls = []
+
+    def provider(*args):
+        calls.append(args)
+        if provider_fails:
+            raise RuntimeError("private provider error detail")
+        return "SM123"
+
+    def fail_sent_close(query):
+        if query._table == "message_outbox" and query._op == "update" and query._payload.get("status") == "sent":
+            raise RuntimeError("private database error detail")
+        return execute(query)
+
+    monkeypatch.setattr(sms.twilio_client, "send_sms", provider)
+    if not provider_fails:
+        monkeypatch.setattr(QueryBuilder, "execute", fail_sent_close)
+    assert sms.dispatch_send(sb_client, queued_send)["status"] == "failed"
+    assert len(calls) == 2
+    cursor.execute("SELECT * FROM message_outbox WHERE target_id=%s", (queued_send["id"],))
+    rows = cursor.fetchall()
+    assert len(rows) == 2
+    for row in rows:
+        assert row["status"] == "failed"
+        assert row["delivered_at"] is None
+        assert (row["provider_attempted_at"] is None) == provider_fails
+        assert row["last_error"] == ("provider call failed" if provider_fails else "delivery bookkeeping failed")

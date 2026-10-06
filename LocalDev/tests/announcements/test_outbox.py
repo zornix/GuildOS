@@ -260,12 +260,30 @@ def test_non_secret_failed_row_keeps_its_payload_and_can_be_retried(
 ):
     from api.announcements.services.outbox import retry_outbox_row
     row = outbox_factory(chapter_id, officer, status="failed")
-    cursor.execute("UPDATE message_outbox SET provider_attempted_at=now() WHERE id=%s", (row,))
+    cursor.execute(
+        "UPDATE message_outbox SET provider_attempted_at=now(), "
+        "last_error='delivery bookkeeping failed' WHERE id=%s", (row,))
     retry_outbox_row(sb_client, chapter_id=chapter_id, row_id=row, actor_id=officer)
     cursor.execute("SELECT payload, provider_attempted_at FROM message_outbox WHERE id=%s AND chapter_id=%s", (row, chapter_id))
     after = cursor.fetchone()
     assert after["payload"] == {"body": "Chapter meeting at 7pm."}
-    assert after["provider_attempted_at"] is None
+    # The retained stamp marks delivered-but-unrecorded rows that Retry must not
+    # resend. Only the "delivery bookkeeping failed" rows keep it.
+    assert after["provider_attempted_at"] is not None
+
+
+def test_retry_clears_the_stamp_when_the_delivery_outcome_is_unknown(
+    officer, outbox_factory, chapter_id, sb_client, cursor
+):
+    from api.announcements.services.outbox import retry_outbox_row
+    row = outbox_factory(chapter_id, officer, status="failed")
+    cursor.execute(
+        "UPDATE message_outbox SET provider_attempted_at=now(), "
+        "last_error='delivery outcome unknown' WHERE id=%s", (row,))
+    retry_outbox_row(sb_client, chapter_id=chapter_id, row_id=row, actor_id=officer)
+    cursor.execute("SELECT provider_attempted_at FROM message_outbox WHERE id=%s AND chapter_id=%s", (row, chapter_id))
+    # The officer checked with the recipient; Retry must really resend.
+    assert cursor.fetchone()["provider_attempted_at"] is None
 
 
 def test_retry_refuses_a_row_that_left_failed_after_it_was_read(

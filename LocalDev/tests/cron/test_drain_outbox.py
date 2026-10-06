@@ -208,7 +208,7 @@ def test_template_failure_fails_one_row_without_killing_the_batch(
 
     failed = read_outbox(bad["id"])
     assert failed["status"] == "failed"
-    assert "body" in failed["last_error"]
+    assert failed["last_error"] == "delivery failed"
     assert failed["attempts"] == 1
     assert read_outbox(good["id"])["status"] == "simulated"
 
@@ -289,7 +289,7 @@ def test_provider_error_fails_the_row_with_the_error_recorded(
 
     after = read_outbox(row["id"])
     assert after["status"] == "failed"
-    assert "twilio 401 unauthorized" in after["last_error"]
+    assert after["last_error"] == "provider call failed"
 
 
 def test_unknown_delivery_mode_fails_only_the_sms_rows(
@@ -320,7 +320,7 @@ def test_unknown_delivery_mode_fails_only_the_sms_rows(
     drain()
 
     assert read_outbox(sms["id"])["status"] == "failed"
-    assert "Unknown MESSAGE_DELIVERY_MODE" in read_outbox(sms["id"])["last_error"]
+    assert read_outbox(sms["id"])["last_error"] == "delivery failed"
     assert read_outbox(email["id"])["status"] == "sent"
     assert len(fake_email) == 1
 
@@ -657,13 +657,13 @@ def test_unknown_outcome_is_parked_not_resent(drain, delivery_mode, outbox_row, 
     assert after["last_error"].startswith("delivery outcome unknown")
 
 
-def test_claimed_but_never_attempted_is_requeued_with_its_attempt_back(claim, cursor, outbox_row, read_outbox):
+def test_claimed_but_never_attempted_is_requeued_without_resetting_attempts(claim, cursor, outbox_row, read_outbox):
     row = outbox_row(status="sending")
     cursor.execute("UPDATE message_outbox SET claimed_at=now()-interval '20 minutes', attempts=1 WHERE id=%s", (row["id"],))
     claim(limit=0)
     after = read_outbox(row["id"])
     assert after["status"] == "pending"
-    assert after["attempts"] == 0
+    assert after["attempts"] == 1
 
 
 def test_twilio_sid_is_recorded(drain, delivery_mode, outbox_row, read_outbox, member_with_phone, monkeypatch):
@@ -694,8 +694,8 @@ def test_drain_stops_when_the_budget_is_spent(drain, outbox_row, read_outbox, mo
     assert after["attempts"] == 0
 
 
-def test_budget_expiring_mid_batch_leaves_unused_claims_refundable(
-    drain, claim, outbox_row, read_outbox, member_with_phone, cursor, monkeypatch
+def test_budget_expiring_mid_batch_releases_unused_claims(
+    drain, outbox_row, read_outbox, member_with_phone, monkeypatch
 ):
     from types import SimpleNamespace
     from api.cron.services import outbox_drain as worker
@@ -718,16 +718,11 @@ def test_budget_expiring_mid_batch_leaves_unused_claims_refundable(
     assert unclaimed["status"] == "pending"
     assert unclaimed["attempts"] == 0
     unused = read_outbox(rows[1]["id"])
-    assert unused["status"] == "sending"
-    assert unused["provider_attempted_at"] is None
-    cursor.execute(
-        "UPDATE message_outbox SET claimed_at=now()-interval '20 minutes' WHERE chapter_id=%s AND status='sending'",
-        (unused["chapter_id"],),
-    )
-    claim(limit=0)
-    unused = read_outbox(rows[1]["id"])
     assert unused["status"] == "pending"
+    assert unused["provider_attempted_at"] is None
+    assert unused["claimed_at"] is None
     assert unused["attempts"] == 0
+    assert all(read_outbox(row["id"])["status"] == "pending" for row in rows[1:])
 
 
 @pytest.mark.parametrize("target_table", ["announcement_sms_sends", "event_notification_sends"])
