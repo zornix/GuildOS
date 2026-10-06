@@ -191,6 +191,15 @@ export function planDuesRun(draft: DuesRunDraft): DuesRunPlan {
   };
 }
 
+/** What the treasurer reads when the bulk call fails. A 409 is the server
+ *  holding this key with a different payload (D11): the form was edited after
+ *  a submit that did land, so the only honest move is to look again. */
+export function duesRunErrorMessage(err: unknown): string {
+  return (err as { status?: number })?.status === 409
+    ? 'This dues run was already submitted with different details. Review and submit again.'
+    : 'Could not create the dues run. Try again — a retry will not bill anyone twice.';
+}
+
 // ── The "I paid" form ────────────────────────────────────────────────────────
 
 export interface ProofDraft {

@@ -11,6 +11,7 @@ import {
   ProofSubmission,
   adaptInvoices,
   adaptSubmissions,
+  duesRunErrorMessage,
   planDuesRun,
   planProof,
   toBase64
@@ -78,7 +79,7 @@ export function useFinance({ members, setMembers, currentMemberId, showToast }: 
       result = await api.bulkCreateInvoices(plan.items, idempotencyKey);
     } catch (err) {
       console.error('Dues run failed', err);
-      showToast('Could not create the dues run. Try again — a retry will not bill anyone twice.');
+      showToast(duesRunErrorMessage(err));
       throw err;
     }
     await refreshMyTreasury();

@@ -1,4 +1,4 @@
-import React, { useId, useRef, useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import type { Member } from '../../types';
 import Modal from '../ui/Modal';
 import { formatMoney } from '../../formatters';
@@ -22,9 +22,11 @@ export default function DuesRunModal({ candidates, onSubmit, onClose }: DuesRunM
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [confirming, setConfirming] = useState(false);
   const [sending, setSending] = useState(false);
-  // One key per opened modal: a retry after a timeout reuses it, so the server
-  // dedupes the second attempt instead of billing the chapter twice.
-  const runKey = useRef(crypto.randomUUID());
+  // One key per set of values: a retry of the same run reuses it, so the server
+  // dedupes the second attempt instead of billing the chapter twice; an edit
+  // gets a fresh key, so a changed run is never answered with the old result.
+  const [runKey, setRunKey] = useState(() => crypto.randomUUID());
+  useEffect(() => { setRunKey(crypto.randomUUID()); }, [title, amountDollars, dueDate, excluded]);
 
   const draft: DuesRunDraft = {
     title,
@@ -47,7 +49,7 @@ export default function DuesRunModal({ candidates, onSubmit, onClose }: DuesRunM
     if (!confirming) { setConfirming(true); return; }
     setSending(true);
     try {
-      await onSubmit(draft, runKey.current);
+      await onSubmit(draft, runKey);
       onClose();
     } catch {
       // The handler already toasted. Stay open so the treasurer can retry —

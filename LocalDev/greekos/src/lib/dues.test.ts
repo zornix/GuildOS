@@ -9,6 +9,7 @@ import {
   PAYMENT_VERIFY_KEY,
   adaptInvoice,
   adaptSubmissions,
+  duesRunErrorMessage,
   invoiceStatus,
   invoiceTitle,
   planDuesRun,
@@ -229,4 +230,14 @@ test('each transaction kind is offered only to a holder of the key its endpoint 
   );
   // An officer-shaped session without treasury keys records nothing.
   assert.deepEqual(transactionAccess(['standing:view_all', 'events:create']).kinds, []);
+});
+
+test('a dues run the server already holds under different details asks for a fresh look (F-070)', () => {
+  assert.equal(
+    duesRunErrorMessage({ status: 409 }),
+    'This dues run was already submitted with different details. Review and submit again.'
+  );
+  const generic = 'Could not create the dues run. Try again — a retry will not bill anyone twice.';
+  assert.equal(duesRunErrorMessage({ status: 500 }), generic);
+  assert.equal(duesRunErrorMessage(new Error('boom')), generic);
 });
