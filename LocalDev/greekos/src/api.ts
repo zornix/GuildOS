@@ -369,8 +369,12 @@ export interface IssueFinesResultDto {
 export interface VerifiedPaymentDto {
   id: string;
   member_id: string;
-  invoice_id: string;
+  /** Always null since coverage moved to payment_allocations. */
+  invoice_id: string | null;
   amount_cents: number;
+  /** venmo|zelle|cash|bank_transfer|check. ponytail: the dashboard does not
+   *  join it from payment_submissions yet, so rows render "—" until it does. */
+  method?: string | null;
   verified_at?: string | null;
   created_at?: string | null;
 }

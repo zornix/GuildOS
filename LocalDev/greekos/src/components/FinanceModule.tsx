@@ -419,7 +419,6 @@ export default function FinanceModule({
                 <tr>
                   <th className="py-2.5 px-3">Date</th>
                   <th className="py-2.5 px-3">Brother</th>
-                  <th className="py-2.5 px-3">Type</th>
                   <th className="py-2.5 px-3">Method & Reference</th>
                   <th className="py-2.5 px-3 text-right">Amount</th>
                 </tr>
@@ -429,7 +428,6 @@ export default function FinanceModule({
                   <tr key={p.id} className="hover:bg-slate-50/60">
                     <td className="py-3 px-3 text-slate-500">{p.date}</td>
                     <td className="py-3 px-3 font-bold font-sans text-slate-900">{p.memberName}</td>
-                    <td className="py-3 px-3">{p.type}</td>
                     <td className="py-3 px-3 text-slate-600">{p.paymentMethod} &bull; {p.reference || 'N/A'}</td>
                     <td className="py-3 px-3 text-right font-bold text-emerald-600">
                       {formatMoney(p.amountCents)}

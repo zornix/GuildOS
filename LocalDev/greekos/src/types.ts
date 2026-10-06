@@ -154,9 +154,9 @@ export interface Payment {
   memberName: string;
   amountCents: number;
   amount: number;
-  type: 'Dues' | 'Fine' | 'Merch' | 'Assessment' | 'Adjustment';
   date: string;
-  paymentMethod: 'Card' | 'Venmo' | 'Bank Transfer' | 'Cash' | 'Ledger Credit';
+  /** Display label from PAYMENT_METHODS, or "—" when the server does not say. */
+  paymentMethod: string;
   reference?: string;
 }
 
