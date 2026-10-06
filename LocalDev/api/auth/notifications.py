@@ -37,8 +37,10 @@ def notify_code(
     code: str,
     expires_at: str,
 ) -> dict | None:
-    """Queue one setup/reset code email. Never raises — a failed enqueue must
-    not cost the officer the invite; the code is in the response either way."""
+    """Queue a code email; transaction failures must roll back its issuance.
+
+    Outside transactions, preserve the invite even if email enqueue fails.
+    """
     try:
         return enqueue(
             sb,
@@ -58,6 +60,8 @@ def notify_code(
             },
         )
     except Exception as exc:
+        if getattr(getattr(sb, "_pool", None), "in_tx", False):
+            raise
         # No exc_info, and the message is scrubbed: a DB error quotes the
         # statement it failed on, and that statement carries the code. Logs are
         # a wider readership than the outbox, which already hides these rows.

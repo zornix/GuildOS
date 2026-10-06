@@ -463,7 +463,7 @@ async def redeem_setup_code(body: RedeemSetupCodeRequest, request: Request):
     _record_attempt(sb, email=normalized_email, ip=ip, success=True)
 
     return {
-        "access_token": _issue_member_token(member["id"], member.get("token_version")),
+        "access_token": _issue_member_token(member["id"], claim.data["token_version"]),
         "token_type": "bearer",
         "password_setup_required": True,
     }
@@ -495,16 +495,16 @@ async def issue_reset_code(
         # Same 404 for "no such member" and "member of another chapter".
         raise HTTPException(404, "Member not found")
 
-    code, expires_at = _issue_setup_code(
-        sb,
-        chapter_id=member["chapter_id"],
-        member_id=member["id"],
-        event_type=RESET_CODE,
-    )
-
-    sb.rpc("au_bump_token_version", {
-        "p_chapter_id": member["chapter_id"],
-        "p_member_id": member["id"],
-    }).execute()
+    with sb.transaction() as tx:
+        tx.rpc("au_bump_token_version", {
+            "p_chapter_id": member["chapter_id"],
+            "p_member_id": member["id"],
+        }).execute()
+        code, expires_at = _issue_setup_code(
+            tx,
+            chapter_id=member["chapter_id"],
+            member_id=member["id"],
+            event_type=RESET_CODE,
+        )
 
     return {"setup_code": code, "expires_at": expires_at}
