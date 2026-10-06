@@ -22,24 +22,20 @@ RBAC, calendar.
 
 | Layer | Technology | Local port | Notes |
 |-------|------------|------------|-------|
-| Frontend | Next.js 16 App Router, React 19, TS | 3000 | `fratos/` — currently a single-route SPA (see §6) |
+| Frontend | Vite, React 19, TS | 3000 | `greekos/` — single-page React app (see §6) |
 | Backend | FastAPI (Python 3) | 8001 | `api/` — Swagger at `/api/docs` |
 | Database | PostgreSQL, raw SQL migrations | Supabase pooler (demo & prod) | plpgsql RPCs for all multi-row mutations |
 
-Deployment: Vercel — `api/index.py` as a Python serverless function, `fratos/`
-as the Next app (see `vercel.json`).
+Deployment: Vercel — `api/index.py` as a Python serverless function, `greekos/`
+as the static build (see `vercel.json`).
 
 ### Repo geography (important)
 
-The git root is `/home/mshi/GuildOS`, one level **above** this directory.
+The git root is one level **above** this directory.
 
 - `LocalDev/` — **the active development sandbox. All new work happens here.**
-- `Prod/` — the Vercel root: `Prod/api` (LocalDev FastAPI) + `Prod/fratos` (clone
-  of greekos). The old Next.js `LocalDev/fratos` was archived on 2026-09-15 (tag
-  `last-with-localdev-fratos`); `LocalDev/greekos` is the only tracked frontend.
-- The marketing site (`greekos-landing/`) was archived alongside it; both now
-  live in the gitignored `archive/` at the git root, as does the older
-  `GreekV1/` copy under `docs/archive/GreekV1/`.
+- `Prod/` — produced from `LocalDev/` by `scripts/build_prod.sh`. `Prod/api` (FastAPI) + `Prod/fratos` (clone of greekos). `LocalDev/greekos` is the active frontend.
+- The marketing site (greekos-landing/) was archived alongside the old Next.js fratos; both now live in the gitignored archive/ at the git root, as does the older GreekV1/ copy.
 - `local-dev-scripts/` — tooling; `LocalDev/package.json` scripts shell out to
   `local-dev-scripts/scripts/local-dev.sh`.
 
@@ -48,9 +44,9 @@ The git root is `/home/mshi/GuildOS`, one level **above** this directory.
 ```
 LocalDev/
   api/                  # FastAPI backend (domain packages, see §2)
-  migrations/           # NNNN_name.sql, applied in lexical order (see §4)
+  migrations/           # *.sql, applied in lexical order (see §4)
   tests/                # pytest, per-domain dirs (see §5)
-  fratos/               # Next.js frontend (see §6)
+  greekos/              # Vite + React frontend (see §6)
   scripts/              # migrate_db.py, seed scripts
   docs/                 # this file, specs, imp-*.md plan docs (see §8)
   pytest.ini            # asyncio_mode=auto
@@ -72,7 +68,7 @@ Most domains expose one resource router that `index.py` mounts directly; only
 (fixed path segments must be registered before parameterized ones). Those
 aggregate routers are **append-only** — sub-routers `include_router` into them;
 existing includes are never removed. Mounted URL paths are frozen: check
-`fratos/lib/api-client.ts` before changing a prefix.
+`greekos/src/api.ts` before changing a prefix.
 
 Domains: `auth`, `events`, `attendance`, `treasury`, `tasks`, `announcements`,
 `memberadmin` (owns standing, mounted at both `/api/memberadmin` and
@@ -80,8 +76,8 @@ Domains: `auth`, `events`, `attendance`, `treasury`, `tasks`, `announcements`,
 `initiatives`, `cron`, `instrumentation`, `members`. `api/platform/` sits
 alongside them but is plumbing, not a domain.
 
-**Treasury (`api/treasury/`) is the reference implementation.** `events/` and
-`tasks/` are also modern examples. Every domain follows this shape; small
+**Treasury (`api/treasury/`) is the reference implementation.** `api/events/` and
+`api/tasks/` are also modern examples. Every domain follows this shape; small
 domains omit files but never invent a different layout:
 
 ```
@@ -92,18 +88,17 @@ api/<domain>/
   services/          # business logic; pure where possible, no FastAPI imports
   core/              # domain value objects / rules with no I/O (e.g. treasury/core/money.py)
   auth.py            # domain permission-key constants + domain capability helpers
-  notifications.py   # transactional outbox enqueue helpers
+  notifications.py   # outbox enqueue helpers
 ```
 
 Db plumbing is not per-domain: `get_db`, `call_rpc`, `unwrap_row` and
-`delivery_mode` all come from `api/platform/` (§ below). Domains have no `db/`
+`delivery_mode` all come from `api/platform/` (§ below). Domains have no db
 directory for those, and route files import `require_permission` from
 `api.rbac.auth` directly rather than through a domain re-export.
 
-**There are no legacy flat modules.** `api/routes/`, `api/services/` and
-`api/models/` were removed once every handler, service and schema had moved
-into its domain package; nothing delegates to them and no domain carries a
-`CONFORM_TODO.md`.
+**There are no legacy flat modules.** Legacy routes, services and models under `api/`
+were removed once every handler, service and schema had moved into its domain package;
+nothing delegates to them and no domain carries a `CONFORM_TODO.md`.
 
 Route-handler error mapping convention: services raise domain exceptions or
 return status strings; handlers map to **403** (permission/authority), **404**
@@ -142,17 +137,19 @@ per domain: `tr_*` (treasury), `ev_*` (events), `tk_*` (tasks), `rbac_*`,
    stored response (replay) or raise a conflict.
 4. **The writes** — atomic within the function.
 5. **Audit** — append to `audit_logs`; anything financial also appends to
-   `big_ledger`; user-facing notifications enqueue an outbox row.
+   `big_ledger`. Treasury notification helpers enqueue after the RPC commits.
 
 Never do multi-row financial writes from Python.
 
-### Notifications (transactional outbox)
+### Notifications (outbox)
 
-Domains enqueue via their `notifications.py` helpers into an outbox table
-inside the same transaction as the state change (usually from within the RPC).
-A dispatcher (`dispatch_send`, keyword-only `send_table=` parameter selects the
-per-feature sends table, e.g. `event_notification_sends` from 0143) fans out
-later. Never send directly from a route handler.
+Treasury notification helpers enqueue after the money RPC commits. Enqueue
+failures are logged outside a transaction; with a transaction client, they
+raise so the transaction rolls back. The cron drain delivers queued rows.
+Inline SMS delivery stays: `api/announcements/services/sms.py::dispatch_send`
+atomically claims pending rows before sending, so it does not send rows
+already claimed by the cron drain. Its keyword-only `send_table` parameter
+selects the per-feature send log.
 
 ---
 
@@ -168,11 +165,10 @@ later. Never send directly from a route handler.
   mutating history. The `EntryType` / `AuditAction` enums are frozen — reuse
   existing values rather than widening them (new audit actions go through the
   CHECK-rebuild migration pattern, §4).
-- **Every tenant table carries `chapter_id` and has RLS enabled.** Policies key
-  on `rbac_request_chapter_id()`. The backend connects with a service role, so
-  RLS is defense-in-depth — the *operative* guards are the token-derived
-  `chapter_id` filters in routes and RPCs. New tables still must ship RLS
-  policies in the same migration (copy the pattern from 0141).
+- **RLS is defense in depth.** The app connects as the table owner and bypasses
+  RLS. Runtime tenant guards are the token-derived `chapter_id` filters in
+  routes and RPCs. Migration 0171 revokes public-schema table, sequence and
+  function privileges from Supabase's `anon` and `authenticated` roles.
 - **Permission checks go only through `api/rbac`** —
   `require_permission("domain:resource:action")` as a route dependency, or
   `permissions.has_permission(...)` in services. **No
@@ -188,10 +184,9 @@ later. Never send directly from a route handler.
 
 ## 4. Migrations
 
-`migrations/NNNN_name.sql`, applied in **lexical order** by
+`migrations/*.sql`, applied in **lexical order** by
 `scripts/migrate_db.py`, tracked in `schema_migrations` (idempotent — only
-pending files run). Current frontier: **0143** (`0143_event_notify.sql`); next
-free number is **0144**.
+pending files run).
 
 **Never edit an already-applied migration; always add a new numbered file.**
 
@@ -252,63 +247,29 @@ rot (a hardcoded June-2026 window already caused one flake).
 
 ---
 
-## 6. Frontend (`fratos/`)
+## 6. Frontend (`greekos/`)
 
-> **Archived 2026-09-15.** This section describes the old Next.js app, now in
-> gitignored `archive/LocalDev-fratos` (tag `last-with-localdev-fratos`). The
-> product frontend is `greekos/` (Vite + React); see `docs/GREEKOS-WIRE.md`.
+The product frontend is `greekos/` (Vite + React 19).
 
-Layered so visual redesigns stay independent of business logic. Full spec:
-`../../FrontendConventions.md`. Audit + migration plan:
-[imp-fe-remediation.md](imp-fe-remediation.md) (findings F1–F11, phases A–E).
+### Architecture
 
-### Layering (target — enforce in all new code)
+- Single-page React app with no router; `App.tsx` switches tabs.
+- `hooks/useAppData.ts` composes the domain hooks.
+- `api.ts` is the fetch client and DTO types.
+- `adapters.ts` converts DTOs to the shapes in `types.ts`.
+- Pure logic lives in `lib/*.ts` with sibling `*.test.ts` unit tests.
+- Permissions come from `GET /api/rbac/me/permissions` and are checked with `can()`.
+- Money is integer cents and is displayed through `formatMoney` in `formatters.ts`.
 
-| Layer | Location | Owns | Must not |
-|-------|----------|------|----------|
-| Pages | `app/` | compose modules, route params | markup, styling, `fetch` |
-| Layout | `components/layout/` | shell, sidebar, topbar, nav rendering | product logic |
-| Modules | `components/modules/<module>/` | product workflows, receive frontend contracts | know whether data came from API or mock; generic styling |
-| UI primitives | `components/ui/` | `Btn`, `Card`, `Badge`, `Modal`, `DataTable`, `StatCard`, `SegmentedControl`, `EmptyState`, `LoadingState`, … semantic variants (`tone="warning"`) | product-specific names |
-| API clients | `lib/api-client.ts` | fetch DTOs, retries, auth headers | shape conversion |
-| Adapters | `lib/adapters/<domain>.ts` | DTO → contract: snake→camel, cents→dollars, status labels, date formatting | — |
-| Contracts | `lib/contracts/<domain>.ts` | stable frontend-facing types | — |
-| Formatters | `lib/formatters/` | `formatMoney(cents)`, dates, status | — |
-| Config | `config/theme/tokens.ts`, `config/navigation.ts` | design tokens; nav + role/capability gating | — |
+### Frontend rules
 
-### Current reality (know before editing)
+- A success toast only after the server answers.
+- Nothing on screen that the server did not return.
+- New logic goes in `lib/` with a test.
 
-- The app is a **single-route SPA**: `app/page.tsx` renders
-  `fraternity-os-frontend.tsx`, which owns nav state and switches between
-  `views/*.tsx`. Views are mid-migration into `components/modules/` — prefer
-  the module structure for new work; App Router segment split is planned
-  (remediation Phase D).
-- **Adapters/contracts exist only for treasury** (`lib/adapters/treasury.ts`).
-  Everything else still flows raw DTOs via `lib/types.ts` and `as T` casts in
-  `api-client.ts` (remediation Phase B fixes this, events first).
-- **Two theme systems coexist:** legacy `lib/theme.ts` (`T.*`, colors only) and
-  canonical `config/theme/tokens.ts`. Use `tokens.*` in new code; `T.*`
-  importers are being burned down.
-- `Badge` still takes raw colors (`color="red"`), not tones.
-- Role gating: use `config/navigation.ts` + capability helpers; raw
-  `user.role === "officer"` checks exist in old code but must not be added.
-- `mocks/data/` is dead code pending Phase E.
+### Frontend testing (run from `greekos/`)
 
-### Money in the UI
-
-**Always** `formatMoney(cents)` from `lib/formatters/money.ts`. One legacy trap:
-`Event.fine_amount` is **float dollars** (the only float money path in the
-system) — render it as `formatMoney(Math.round(fine_amount * 100))` until the
-events adapter (Phase B) takes over the conversion.
-
-### Frontend testing (run from `fratos/`)
-
-`npm run test:unit` (vitest), `npm run test:e2e` (playwright role flows:
-auth, events, fines, excuses, checkin, members), `npm run lint`,
-`npm run build`. Known pre-existing lint error: `app/layout.tsx` contains a
-committed `<script src="http://localhost:8400/live.js">` injected by the
-impeccable dev tool (`@next/next/no-sync-scripts`) — leave it unless told
-otherwise.
+`npm test` (node:test), `npm run lint` (tsc --noEmit), `npm run build` (vite build).
 
 ---
 
@@ -332,18 +293,17 @@ otherwise.
 
 - **Plan docs:** feature work is planned in `docs/imp-*.md` (decision records
   D1, D2, … carry across phases) and executed by an implementer agent exactly
-  as written. Live: `imp-fe-remediation.md` (frontend). Shipped plans move to
-  `docs/archive/` — the four Events V1 phases (`imp-ev-ph1/2/3/4.md`) are all
-  there, landed in migrations 0141–0145. `events-dev-status.md` tracks phase
-  status.
+  as written. Shipped plans move to archive — the four Events V1 phases
+  (imp-ev-ph1..4.md) are all there, landed in migrations 0141–0145.
+  `events-dev-status.md` tracks phase status.
 - **Seams:** grep for `PHASE3 SEAM` — extension points left in 0142
   (`tk_uncommit_task` event-start resolver) and
   `api/tasks/services/approvals.py` (`can_approve_job`), both resolved by the
   initiatives work in 0144.
-- **Issue tracker:** GitHub issues on `zornix/GuildOS` via `gh` (see
+- **Issue tracker:** GitHub issues on zornix/GuildOS via `gh` (see
   `docs/agents/issue-tracker.md` at the git root).
 - **Verification bar before committing backend work:** relevant
-  `python3 -m pytest tests/<domain>/` green. Frontend: `npm run test:unit` and
-  `npm run build` green; lint may show only the known layout.tsx error.
+  `python3 -m pytest tests/<domain>/` green. Frontend: `npm test` and
+  `npm run build` green.
 - There are **no** `npm run verify` / `preflight` scripts (removed with the
-  old `deploy/` dir) — don't look for them.
+  old deploy directory) — don't look for them.

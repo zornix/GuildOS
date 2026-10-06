@@ -1,13 +1,13 @@
 # Supabase is hosted Postgres only — the app owns its client and its auth
 
 Both databases (production and demo) are Supabase projects, but the app talks
-to them exclusively through its own psycopg2 client (`api/postgres_client.py`)
+to them exclusively through its own psycopg2 client (`api/platform/postgres.py`)
 over the transaction-mode connection pooler, and authenticates users with its
 own HS256 JWTs (`sub = member.id`, signed with `JWT_SECRET`, validated
 in-process). supabase-py, PostgREST, GoTrue, and the Data API are deliberately
 unused; the Data API is disabled in both projects' settings.
 
-Decided 2026-07-11, when we discovered the supabase-py branch of `api/db.py`
+Decided 2026-07-11, when we discovered the supabase-py branch of `api/platform/db.py`
 had never carried traffic anywhere — deployed prod, local dev, and pytest all
 already ran the psycopg client against a Supabase pooler. Standardising on the
 path that actually serves production was pure deletion; standardising on
@@ -30,6 +30,3 @@ GoTrue auth (which rejects app-issued tokens), and an untested RLS surface.
   permanent.
 - Do not "fix" the absence of supabase-py: it was removed on purpose. If the
   Data API is ever re-enabled, the RLS policies must get real tests first.
-- Names not yet updated (`get_supabase()`, `get_supabase_admin()`,
-  `postgres_client.py`) are stale on purpose; they rename once, inside the
-  planned platform-db-module consolidation.

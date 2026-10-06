@@ -8,7 +8,7 @@ repo-root `CONTEXT.md` and `docs/adr/` for vocabulary — permission, standing,
 contribution, shoutout, job, chair. This file only answers **which files to
 open, in what order**.
 
-The generated `.ua/` snapshot is local-only and goes stale on every refactor.
+The generated Understand-Anything snapshot is local-only and goes stale on every refactor.
 Do not treat it as truth.
 
 ---
@@ -18,10 +18,10 @@ Do not treat it as truth.
 | Layer | Where | What belongs |
 |-------|--------|----------------|
 | Backend API | `api/<domain>/api/` | Thin FastAPI handlers and domain-local Pydantic schemas. Aggregate `router.py` only when include order is load-bearing (attendance, events, tasks, treasury). |
-| Domain services & rules | `api/<domain>/services/`, `core/`, `auth.py` | Orchestration; I/O-free value objects (`Money`, event rules); permission-key constants. |
+| Domain services & rules | `api/<domain>/services/`, `api/<domain>/core/`, `auth.py` | Orchestration; I/O-free value objects (`Money`, event rules); permission-key constants. |
 | Platform | `api/platform/`, `api/index.py`, `api/dependencies.py` | The one DB path: `get_db`, `PostgresClient`, `call_rpc`, `unwrap_row`, `delivery_mode`. JWT → member. |
 | Schema & RPCs | `migrations/*.sql` | Lexical SQL: tables, RLS, plpgsql RPCs, `big_ledger` / `audit_logs`. |
-| Frontend UI | `greekos/src/components/` | Vite + React modules and UI primitives (old `fratos/` archived 2026-09-15). |
+| Frontend UI | `greekos/src/components/` | Vite + React modules and UI primitives. |
 | Frontend data | `greekos/src/api.ts`, `adapters.ts`, `hooks/` | One API client → adapters → hooks. |
 | Tests | `tests/`, `greekos/src/**/*.test.ts` | Real Postgres pytest; node:test. |
 | Ship | `vercel.json`, `.github/workflows/`, `scripts/` | Vercel dual-runtime, CI, `migrate_db.py`, `db_guard.py`. |
@@ -46,23 +46,24 @@ Do not treat it as truth.
 
 - `api/platform/db.py` — `get_db()`; the only accessor
 - `api/platform/postgres.py` — PostgREST-shaped client over psycopg2; `_ARRAY_TYPED_RPC_PARAMS`
+- `api/platform/message_templates.py` — shared message templates
 - `api/dependencies.py` — JWT → member; `ver` vs `members.token_version`
 
-There is no supabase-py path and no per-domain `db/session.py` / `db/rpc.py`.
+There is no supabase-py path and no per-domain session or rpc modules.
 
 ### 4. Domain-package pattern (treasury)
 
 - `api/treasury/api/router.py` — append-only aggregator, mounted at `/api/treasury`
 - `api/treasury/api/invoices.py` — thin handlers; mutations go to RPCs
 - `api/treasury/services/` — orchestration
-- `api/platform/rpc.py` — `call_rpc`; the only multi-write path for every domain
+- `api/treasury/services/remaining.py` — bulk remaining-cents computation
+- `api/platform/rpc.py` — `call_rpc`; helper for plpgsql mutations. `PostgresClient.transaction()` supports multi-statement writes
 
 ### 5. Money as integer cents
 
 - `api/treasury/core/money.py` — `Money`; floats rejected; `from_numeric` is the sole legacy exception
 - `api/treasury/core/ledger.py` — append-only `big_ledger`; reversals are new rows
-- `api/treasury/core/idempotency.py` — `Idempotency-Key` contract
-- `fratos/lib/formatters/money.ts` — only sanctioned cents → screen path
+- `greekos/src/formatters.ts` — only sanctioned cents → screen path (`formatMoney`)
 
 ### 6. Permissions through RBAC only
 
@@ -90,6 +91,7 @@ There is no supabase-py path and no per-domain `db/session.py` / `db/rpc.py`.
 - `api/events/api/router.py`
 - `api/events/services/events.py`
 - `api/events/core/rules.py` — notify-gate completeness, organizer minimum, visibility
+- `api/events/core/timing.py` — chapter timezone and start calculation (`has_started`)
 
 ### 10. Attendance
 
@@ -97,19 +99,16 @@ There is no supabase-py path and no per-domain `db/session.py` / `db/rpc.py`.
 
 ### 11. Frontend shell
 
-- `fratos/app/page.tsx` — thin; no fetch
-- `fratos/components/layout/app-shell.tsx` — sidebar, header, active page
-- `fratos/config/navigation.ts` — page ids + `requiredPermission`
-- `fratos/hooks/use-permissions.ts` — `can(permission)`
-- `fratos/config/theme/tokens.ts`
-
-Still a single-route SPA over `views/`; new work goes in `components/modules/`.
+- `greekos/src/App.tsx` — single-page React app, switches tabs
+- `greekos/src/components/Sidebar.tsx` — navigation and chapter switcher
+- `greekos/src/hooks/useAppData.ts` — composes domain hooks
+- `GET /api/rbac/me/permissions` + `can()` helper
 
 ### 12. Frontend data path
 
-- `fratos/lib/api-client.ts` — one HTTP client; check here before changing a URL prefix
-- `fratos/lib/contracts/` + `fratos/lib/adapters/` — treasury is the model; events still pending Phase 5
-- `fratos/hooks/use-api.ts`
+- `greekos/src/api.ts` — fetch client and DTO types; check here before changing a URL prefix
+- `greekos/src/adapters.ts` — DTOs to UI types in `types.ts`
+- `greekos/src/hooks/` — domain hooks
 
 ### 13. Tests
 

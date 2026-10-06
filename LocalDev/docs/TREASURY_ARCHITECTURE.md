@@ -4,7 +4,7 @@
 > expenses, adjustments, refunds, and reporting). This is the consolidated successor
 > to the `treasury-v1-*.md` build-time planning files, which have been removed now that
 > the service is complete. For build status the source of truth is the test suite
-> (`tests/treasury/`, 115 tests).
+> (`tests/treasury/`).
 
 Last updated: 2026-06-07
 
@@ -17,22 +17,17 @@ package is self-contained under `api/treasury/`:
 
 ```
 api/treasury/
-  core/         # deep domain primitives (no I/O)
+  core/         # money primitives, balance computation, drift detection
     money.py        # Money — integer-cents value object; rejects float/bool
     clock.py        # Clock protocol, SystemClock, FakeClock
-    ledger.py       # LedgerWriter + EntryType enum
-    audit.py        # AuditLogger + AuditAction enum
+    ledger.py       # EntryType enum
+    audit.py        # AuditAction enum
     balance.py      # BalanceEngine — the one shared cross-chunk module
     rebuild.py      # RebuildEngine — shadow reconstruction + drift report
-    idempotency.py  # idempotency-key convention helpers
-  db/
-    rpc.py          # call_rpc(name, params, *, sb) — the only sanctioned multi-write path
-    session.py      # get_treasury_db() -> service-role client
   services/     # one thin module per operation (invoices, payments, balance,
-                #   expenses, adjustments, refunds, reports, rebuild)
+                #   expenses, adjustments, refunds, reports, rebuild, remaining)
   api/          # FastAPI sub-routers, append-only included by router.py
-  auth.py       # require_capability(cap) dependency
-  notifications.py  # message_outbox enqueue (transactional outbox)
+  notifications.py  # post-commit message_outbox enqueue
 ```
 
 Money always crosses the wire and is stored as **integer cents** (`BIGINT`). `Money`
@@ -44,6 +39,10 @@ import.
 
 ## 2. The ledger model
 
+### What the ledger is
+
+Balances are computed from the operational tables (`unpaid_invoices`, `verified_payments`, `finance_adjustments`, `refunds`). Amount and owner columns on those rows are frozen by trigger (migration 0168). `big_ledger` is an append-only shadow log; `core/rebuild.py` reports ledger and balance-cache drift. It is read-only by default and never repairs the ledger. With `apply_repairs=true`, it recomputes the balance cache.
+
 `big_ledger` is an **append-only, signed-cents** event log. Money-in is positive,
 money-out negative. It is the audit substrate, not the balance source.
 
@@ -54,7 +53,7 @@ A DB trigger blocks every `DELETE`, and the only permitted `UPDATE` is a status 
 `active → invalidated`. Reversals are modelled by appending a new row whose
 `reverses_entry_id` points at the original — never by mutating history.
 
-`audit_logs` is likewise append-only. **`AuditAction`** (DB CHECK): `CREATE_INVOICE,
+`audit_logs` is likewise append-only. **`AuditAction`** (Python enum): `CREATE_INVOICE,
 VERIFY_PAYMENT, REJECT_PAYMENT, CREATE_EXPENSE, INVALIDATE_EXPENSE, CREATE_ADJUSTMENT,
 CANCEL_INVOICE, ISSUE_REFUND, REBUILD`. The enum is frozen: submissions and
 adjustment-approvals deliberately reuse existing actions rather than widen it.
@@ -105,20 +104,20 @@ no ledger row and no balance effect until a second officer activates it; an
 
 Two independent layers:
 
-1. **Capability grants** (`treasury_grants`) checked by the `require_capability(cap)`
-   FastAPI dependency. Capabilities: `treasury:read, invoice:create, payment:review,
-   expense:create, adjustment:create, refund:create, rebuild:run`. Officers are seeded
-   all seven.
+1. **RBAC permissions** checked by `api.rbac.auth.require_permission`.
+   Permissions come from `member_roles` plus an implicit `member` baseline;
+   `members.role` grants no authority. Payment review uses
+   `treasury:payment:verify`; rebuild uses `treasury:rebuild:run`.
 2. **Chapter scoping.** Routes resolve `chapter_id` from the authenticated member's DB
    record (`get_current_user`), **never** from the request body. Every RPC re-scopes its
    target rows with `WHERE ... AND chapter_id = p_chapter_id`.
 
 RLS is enabled on the treasury tables with `SELECT` policies gated on
-`treasury_has_capability(...)`; writes flow through the service-role client (which
-bypasses RLS) via the RPCs, so the RPC bodies carry the integrity checks RLS cannot.
+`treasury_has_capability(...)`; the app connects as the table owner and
+bypasses RLS; writes flow through RPCs, so the RPC bodies carry the integrity checks RLS cannot.
 
 **Tenant-integrity guards** (migration `0080`): because the write path runs as
-service-role, the RPCs explicitly verify that a body-supplied `member_id`/`invoice_id`
+the table owner, the RPCs explicitly verify that a body-supplied `member_id`/`invoice_id`
 belongs to the caller's chapter before moving anything:
 
 - `tr_create_invoice` / `tr_bulk_create_invoices` / `tr_create_adjustment` reject a
@@ -170,18 +169,25 @@ Ledger drift is **reported, never repaired** (append-only). `apply_repairs=True`
 the one and only write it is allowed — `BalanceEngine.recompute_all`, which rewrites the
 balance cache. `PAYMENT_RECEIVED` is diffed on `(type, amount, member)` rather than source
 table so historical migrated fines don't read as drift; pending adjustments are excluded.
-Exposed as `POST /api/treasury/rebuild` (gated `rebuild:run`).
+Exposed as `POST /api/treasury/rebuild` (gated `treasury:rebuild:run`).
 
 ---
 
-## 9. Notifications (transactional outbox)
+## 9. Notifications (outbox)
 
-`message_outbox` is the single notification surface. Four event types:
-`INVOICE_ISSUED, PAYMENT_APPROVED, PAYMENT_REJECTED, REFUND_ISSUED`, each with a
-`dedup_key = "{event_type}:{target_id}"` under a UNIQUE index → exactly-once. External
-dispatch is gated by `MESSAGE_DELIVERY_MODE` (default `dry_run`, where rows persist
-`status='pending'`). Every service `notify_*` call threads the caller's `sb` so the
-outbox row is written in the same DB/transaction as the operation it describes.
+Treasury lifecycle notifications use `message_outbox` with event types
+`INVOICE_ISSUED`, `PAYMENT_APPROVED`, `PAYMENT_REJECTED`, and `REFUND_ISSUED`.
+Their `dedup_key = "{event_type}:{target_id}"` has a UNIQUE index, so retries
+do not enqueue duplicate rows. The helpers enqueue after the money RPC commits.
+A real enqueue failure is logged outside a transaction, leaving the money
+committed; with a transaction client, the error propagates and rolls back
+that transaction.
+
+Enqueue writes `status='pending'`. The cron drain delivers treasury email;
+`MESSAGE_DELIVERY_MODE` gates provider calls, and dry-run delivery marks rows
+`simulated`. Inline SMS dispatch is also supported:
+`api/announcements/services/sms.py::dispatch_send` atomically claims pending
+rows before sending them.
 
 ---
 
