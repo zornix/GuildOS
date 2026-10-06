@@ -127,15 +127,22 @@ async def bulk_create_invoices(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
     sb = get_db()
-    return svc.bulk_create_invoices(
-        sb,
-        chapter_id=user["chapter_id"],
-        # mode="json" so due_at reaches the RPC as an ISO string, not a datetime
-        # the JSON encoder would choke on.
-        invoices=[i.model_dump(mode="json") for i in body.invoices],
-        actor_id=user["id"],
-        idempotency_key=idempotency_key,
-    )
+    try:
+        return svc.bulk_create_invoices(
+            sb,
+            chapter_id=user["chapter_id"],
+            # mode="json" so due_at reaches the RPC as an ISO string, not a datetime
+            # the JSON encoder would choke on.
+            invoices=[i.model_dump(mode="json") for i in body.invoices],
+            actor_id=user["id"],
+            idempotency_key=idempotency_key,
+        )
+    except Exception as exc:
+        if "idempotency_key_reused" in str(exc):
+            raise HTTPException(
+                409, "This request was already submitted with different details. Start a new one."
+            )
+        raise
 
 
 @router.post("/invoices/{invoice_id}/cancel")
