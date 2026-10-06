@@ -4,7 +4,6 @@ import {
   Plus,
   Users,
   CheckCircle2,
-  Target,
   Layers
 } from 'lucide-react';
 import { Initiative, EventJob, Member } from '../types';
@@ -50,7 +49,7 @@ export default function InitiativesModule({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<Initiative['category']>('Philanthropy');
-  const [leadChairs, setLeadChairs] = useState<string[]>([currentMemberName]);
+  const [leadChairs] = useState<string[]>([currentMemberName]);
   const [startDate, setStartDate] = useState('2026-07-15');
   const [targetDate, setTargetDate] = useState('2026-10-01');
 

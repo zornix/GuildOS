@@ -6,7 +6,7 @@ import {
   History,
   Zap
 } from 'lucide-react';
-import { Member, ChapterEvent, Task, PNM } from '../types';
+import { Member, ChapterEvent } from '../types';
 import Card from './ui/Card';
 import ConfirmDialog from './ui/ConfirmDialog';
 import { formatMoney } from '../formatters';
@@ -30,7 +30,6 @@ export default function CommandModule({
   onExecuteCommand
 }: CommandModuleProps) {
   const safeMembers = members || [];
-  const safeEvents = events || [];
   const [commandInput, setCommandInput] = useState('');
   const [commandHistory, setCommandHistory] = useState<Array<{
     input: string;
