@@ -45,6 +45,9 @@ interface EventsModuleProps {
   onSelectEvent: (eventId: string) => void;
   onAddEvent: (event: Omit<ChapterEvent, 'id' | 'attendanceTaken' | 'checkedInCount'>) => void;
   onUpdateEvent: (event: ChapterEvent) => void;
+  /** `calendar:event:delete` — delete (or, with history attached, cancel) an event. */
+  canDeleteEvent: boolean;
+  onDeleteEvent: (eventId: string) => void;
   onVolunteerOrganizer: (eventId: string, memberName: string) => void;
   onClaimJob: (eventId: string, jobId: string, memberId: string, memberName: string) => void;
   onUnclaimJob: (eventId: string, jobId: string, memberId: string) => void;
@@ -78,6 +81,8 @@ export default function EventsModule({
   onSelectEvent,
   onAddEvent,
   onUpdateEvent,
+  canDeleteEvent,
+  onDeleteEvent,
   onVolunteerOrganizer,
   onClaimJob,
   onUnclaimJob,
@@ -102,6 +107,7 @@ export default function EventsModule({
   const [showSwapModal, setShowSwapModal] = useState<{ eventId: string; assignmentId: string } | null>(null);
   const [targetSwapMemberId, setTargetSwapMemberId] = useState('');
   const [showLiveQRModal, setShowLiveQRModal] = useState(false);
+  const [confirmDeleteEventId, setConfirmDeleteEventId] = useState<string | null>(null);
 
   // New Event Form State
   const [title, setTitle] = useState('');
@@ -380,6 +386,16 @@ export default function EventsModule({
                     <QrCode className="w-4 h-4" />
                     Show door code
                   </button>
+
+                  {canDeleteEvent && (
+                    <button
+                      onClick={() => setConfirmDeleteEventId(selectedEvent.id)}
+                      className="text-xs font-semibold px-3 py-1.5 min-h-11 sm:min-h-0 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Delete event
+                    </button>
+                  )}
 
                   {canManageCheckInLink && (
                     <button
@@ -1069,6 +1085,32 @@ export default function EventsModule({
                 {editJobId ? 'Save Job Changes' : 'Publish Job to Event'}
               </button>
             </form>
+        </Modal>
+      )}
+
+      {/* MODAL: Confirm event delete */}
+      {confirmDeleteEventId && (
+        <Modal title="Delete this event?" onClose={() => setConfirmDeleteEventId(null)}>
+            <p className="text-xs text-slate-600 mb-4">
+              Events with attendance, jobs or fines are cancelled, not deleted.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setConfirmDeleteEventId(null)}
+                className="px-4 py-2 min-h-11 sm:min-h-0 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg"
+              >
+                Keep event
+              </button>
+              <button
+                onClick={() => {
+                  onDeleteEvent(confirmDeleteEventId);
+                  setConfirmDeleteEventId(null);
+                }}
+                className="px-4 py-2 min-h-11 sm:min-h-0 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all"
+              >
+                Delete event
+              </button>
+            </div>
         </Modal>
       )}
 

@@ -333,6 +333,17 @@ export interface SecurityAssignmentDto {
   pending_swap: SwapDto | null;
 }
 
+/** GET /api/events/upcoming-details — what GET /api/events/{id}, /security and
+ *  /checkin-link return, for every upcoming event, in one request. */
+export interface UpcomingDetailsDto {
+  events: {
+    event_id: string;
+    detail: EventDetailDto;
+    security: SecurityAssignmentDto[];
+    checkin_link: CheckInLinkDto;
+  }[];
+}
+
 export interface ExcuseDto {
   id: string;
   event_id: string;
@@ -591,9 +602,13 @@ export const api = {
 
   getEvents: () => request<EventDto[]>('GET', '/api/events/'),
   getEvent: (id: string) => request<EventDetailDto>('GET', `/api/events/${id}`),
+  getUpcomingEventDetails: () => request<UpcomingDetailsDto>('GET', '/api/events/upcoming-details'),
   createEvent: (body: Record<string, unknown>) => request<EventDto>('POST', '/api/events/', body),
   updateEvent: (id: string, body: Record<string, unknown>) =>
     request<EventDto>('PUT', `/api/events/${id}`, body),
+  /** An event with attendance, jobs or fines is cancelled rather than deleted. */
+  deleteEvent: (id: string) =>
+    request<{ deleted: boolean; cancelled: boolean }>('DELETE', `/api/events/${id}`),
 
   /** Self-volunteer: an omitted member_id means the signed-in member. */
   addOrganizer: (eventId: string) =>

@@ -5,6 +5,7 @@ import { adaptCheckInLink, adaptEventDetail, adaptEvents, adaptSecurityAssignmen
 import { ShowToast } from './useToast';
 import { SyncApi } from './useBackend';
 import { describeError } from '../lib/sync';
+import { eventDeleteMessage } from '../lib/events';
 
 /** 409 conflict tokens the jobs API raises, mapped to member-facing copy. */
 const JOB_409: Record<string, string> = {
@@ -41,7 +42,8 @@ interface Deps {
   members: Member[];
   syncApi: SyncApi;
   showToast: ShowToast;
-  refetchJobs: () => Promise<void>;
+  /** Restamps the job boards; pass the event whose jobs changed to refresh its chips. */
+  refetchJobs: (eventId?: string) => Promise<void>;
 }
 
 /** Chapter events plus their claimable jobs and security shifts. */
@@ -132,6 +134,12 @@ export function useEvents({ members, syncApi, showToast, refetchJobs }: Deps) {
     syncApi(() => api.updateEvent(updated.id, toEventBody(updated)), refetchEvents);
   };
 
+  /** Either outcome removes the event from the list; the toast says which (D4). */
+  const handleDeleteEvent = (eventId: string) => {
+    setEvents(prev => prev.filter(e => e.id !== eventId));
+    syncApi(async () => showToast(eventDeleteMessage(await api.deleteEvent(eventId))), refetchEvents);
+  };
+
   const handleVolunteerOrganizer = (eventId: string, memberName: string) => {
     setEvents(prev => prev.map(e => {
       if (e.id === eventId) {
@@ -173,7 +181,7 @@ export function useEvents({ members, syncApi, showToast, refetchJobs }: Deps) {
       return e;
     }));
     // The backend commits the signed-in member; it has no impersonation concept.
-    syncApi(() => api.commitTask(jobId), refetchJobs, 'Claimed job successfully!');
+    syncApi(() => api.commitTask(jobId), () => refetchJobs(eventId), 'Claimed job successfully!');
   };
 
   const handleUnclaimJob = (eventId: string, jobId: string, memberId: string) => {
@@ -196,7 +204,7 @@ export function useEvents({ members, syncApi, showToast, refetchJobs }: Deps) {
       }
       return e;
     }));
-    syncApi(() => api.uncommitTask(jobId), refetchJobs, 'Unclaimed job.');
+    syncApi(() => api.uncommitTask(jobId), () => refetchJobs(eventId), 'Unclaimed job.');
   };
 
   const handleReportJobDone = (eventId: string, jobId: string, memberName: string) => {
@@ -219,7 +227,7 @@ export function useEvents({ members, syncApi, showToast, refetchJobs }: Deps) {
       }
       return e;
     }));
-    syncApi(() => api.reportJobDone(jobId), refetchJobs, 'Reported job complete! Awaiting supervisor sign-off.');
+    syncApi(() => api.reportJobDone(jobId), () => refetchJobs(eventId), 'Reported job complete! Awaiting supervisor sign-off.');
   };
 
   const handleApproveJob = (eventId: string, jobId: string, officerName: string) => {
@@ -242,7 +250,7 @@ export function useEvents({ members, syncApi, showToast, refetchJobs }: Deps) {
       }
       return e;
     }));
-    syncApi(() => api.approveJob(jobId), refetchJobs, 'Job approved and verified by supervisor.');
+    syncApi(() => api.approveJob(jobId), () => refetchJobs(eventId), 'Job approved and verified by supervisor.');
   };
 
   const handleRejectJob = (eventId: string, jobId: string, officerName: string, reason: string) => {
@@ -264,7 +272,7 @@ export function useEvents({ members, syncApi, showToast, refetchJobs }: Deps) {
       }
       return e;
     }));
-    syncApi(() => api.rejectJob(jobId, reason), refetchJobs, 'Job returned with feedback.');
+    syncApi(() => api.rejectJob(jobId, reason), () => refetchJobs(eventId), 'Job returned with feedback.');
   };
 
   const handleAddJobToEvent = (eventId: string, jobData: Omit<EventJob, 'id' | 'claimants' | 'status'>) => {
@@ -288,7 +296,7 @@ export function useEvents({ members, syncApi, showToast, refetchJobs }: Deps) {
           people_needed: jobData.peopleNeeded,
           event_id: eventId
         }),
-      refetchJobs,
+      () => refetchJobs(eventId),
       'Added job to event.'
     );
   };
@@ -297,7 +305,7 @@ export function useEvents({ members, syncApi, showToast, refetchJobs }: Deps) {
   // (claimed job, capacity below claims, security shift), so the refetch is the
   // only source of truth and the 409 copy explains the refusal.
   const handleEditJob = (
-    _eventId: string,
+    eventId: string,
     jobId: string,
     patch: { title?: string; description?: string; peopleNeeded?: number }
   ) => {
@@ -312,10 +320,10 @@ export function useEvents({ members, syncApi, showToast, refetchJobs }: Deps) {
       } catch (err) {
         showToast(errorToast(err, JOB_409, 'Could not update job'));
       }
-    }, refetchJobs);
+    }, () => refetchJobs(eventId));
   };
 
-  const handleDeleteJob = (_eventId: string, jobId: string) => {
+  const handleDeleteJob = (eventId: string, jobId: string) => {
     syncApi(async () => {
       try {
         await api.deleteJob(jobId);
@@ -323,7 +331,7 @@ export function useEvents({ members, syncApi, showToast, refetchJobs }: Deps) {
       } catch (err) {
         showToast(errorToast(err, JOB_409, 'Could not delete job'));
       }
-    }, refetchJobs);
+    }, () => refetchJobs(eventId));
   };
 
   const handleSendEventNotifyBlast = (eventId: string) => {
@@ -470,6 +478,7 @@ export function useEvents({ members, syncApi, showToast, refetchJobs }: Deps) {
     handleSelectEvent,
     handleAddEvent,
     handleUpdateEvent,
+    handleDeleteEvent,
     handleVolunteerOrganizer,
     handleClaimJob,
     handleUnclaimJob,

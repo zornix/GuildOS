@@ -439,6 +439,171 @@ def get_event(sb, *, user: dict, event_id: str) -> dict:
     return event
 
 
+def list_upcoming_details(sb, *, user: dict) -> dict:
+    """Detail, security roster and check-in link for every upcoming event the
+    caller may see, in a fixed number of queries (F-044).
+
+    Each part matches its single-event route (get_event, list_security,
+    GET /{id}/checkin-link) for the same caller; visibility is list_events'.
+    """
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+
+    from api.attendance.auth import CHECKIN_LINK_MANAGE
+    from api.config import settings
+    from api.events.core.timing import chapter_timezone
+
+    chapter_id = user["chapter_id"]
+    today = datetime.now(ZoneInfo(chapter_timezone(sb, chapter_id))).date().isoformat()
+    events = [e for e in list_events(sb, user=user) if str(e["date"]) >= today]
+    if not events:
+        return {"events": []}
+    ids = [e["id"] for e in events]
+
+    def rows(table: str, columns: str, column: str, values: list, **eq) -> list[dict]:
+        q = sb.table(table).select(columns).in_(column, values)
+        for k, v in eq.items():
+            q = q.eq(k, v)
+        return q.execute().data or []
+
+    def group(items: list[dict], key: str) -> dict[str, list[dict]]:
+        out: dict[str, list[dict]] = {}
+        for r in items:
+            out.setdefault(str(r[key]), []).append(r)
+        return out
+
+    checked_in = group(rows("attendance", "event_id", "event_id", ids, checked_in=True), "event_id")
+    organizers = group(
+        rows("event_organizers", "id, member_id, source, created_at, event_id", "event_id", ids),
+        "event_id",
+    )
+    sup_rows = (
+        sb.table("event_supervisors")
+        .select("event_id, member_id, is_creator, created_at")
+        .in_("event_id", ids)
+        .order("created_at")
+        .execute()
+    ).data or []
+    names = _member_names(sb, [r["member_id"] for r in sup_rows])
+    supervisors = group(sup_rows, "event_id")
+    sends = (
+        sb.table("event_notification_sends")
+        .select("event_id, created_at")
+        .in_("event_id", ids)
+        .order("created_at", desc=True)
+        .execute()
+    ).data or []
+    last_sent: dict[str, str] = {}
+    for r in sends:
+        last_sent.setdefault(str(r["event_id"]), r["created_at"])
+    group_ids = list({e["event_group_id"] for e in events if e.get("event_group_id")})
+    siblings = group(
+        (
+            sb.table("events")
+            .select("id, title, date, event_group_id")
+            .in_("event_group_id", group_ids)
+            .eq("chapter_id", chapter_id)
+            .eq("cancelled", False)
+            .order("date")
+            .execute()
+        ).data or [] if group_ids else [],
+        "event_group_id",
+    )
+
+    # Security roster: same filters and shape as services/security.list_security.
+    from api.events.services.security import _swap_out
+
+    sec_tasks = [
+        t for t in rows(
+            "tasks", "id, event_id, status, rejection_reason, kind", "event_id", ids,
+            chapter_id=chapter_id, kind="security",
+        )
+        if t.get("status") != "cancelled"
+    ]
+    task_ids = [t["id"] for t in sec_tasks]
+    holders = group(
+        rows("task_commitments", "task_id, member_id", "task_id", task_ids, status="active")
+        if task_ids else [],
+        "task_id",
+    )
+    swaps = group(
+        rows("security_swap_requests", "*", "task_id", task_ids, status="pending")
+        if task_ids else [],
+        "task_id",
+    )
+    security = group(
+        [
+            {
+                "task_id": str(t["id"]),
+                "event_id": str(t["event_id"]),
+                "member_id": str(holders[str(t["id"])][0]["member_id"]) if str(t["id"]) in holders else None,
+                "status": t["status"],
+                "rejection_reason": t.get("rejection_reason"),
+                "pending_swap": _swap_out(swaps[str(t["id"])][0]) if str(t["id"]) in swaps else None,
+            }
+            for t in sec_tasks
+        ],
+        "event_id",
+    )
+
+    # Check-in links: same query and gate as GET /{id}/checkin-link.
+    links = group(
+        (
+            sb.table("checkin_links")
+            .select("event_id, short_code, expires_at, active")
+            .in_("event_id", ids)
+            .eq("active", True)
+            .gte("expires_at", datetime.now(timezone.utc).isoformat())
+            .execute()
+        ).data or [],
+        "event_id",
+    )
+    can_manage = bool(links) and has_permission(user, CHECKIN_LINK_MANAGE, sb=sb)
+
+    def link_for(eid: str) -> dict:
+        if eid not in links:
+            return {}
+        row = links[eid][0]
+        if not can_manage:
+            return {"event_id": row["event_id"], "active": True, "expires_at": row["expires_at"]}
+        return {
+            "short_code": row["short_code"],
+            "url": f"{settings.BASE_URL}/c/{row['short_code']}",
+            "expires_at": row["expires_at"],
+            "event_id": row["event_id"],
+        }
+
+    out = []
+    for e in events:
+        eid = str(e["id"])
+        e["attendance_count"] = len(checked_in.get(eid, []))
+        e["organizers"] = [
+            {k: r[k] for k in ("id", "member_id", "source", "created_at")}
+            for r in organizers.get(eid, [])
+        ]
+        e["supervisors"] = [
+            {
+                "member_id": str(r["member_id"]),
+                "is_creator": bool(r["is_creator"]),
+                "name": names.get(str(r["member_id"])),
+            }
+            for r in supervisors.get(eid, [])
+        ]
+        e["last_notified_at"] = last_sent.get(eid)
+        e["group_events"] = [
+            {k: s[k] for k in ("id", "title", "date")}
+            for s in siblings.get(str(e.get("event_group_id")), [])
+            if str(s["id"]) != eid
+        ] if e.get("event_group_id") else []
+        out.append({
+            "event_id": eid,
+            "detail": e,
+            "security": security.get(eid, []),
+            "checkin_link": link_for(eid),
+        })
+    return {"events": out}
+
+
 def _get_event_row(sb, *, chapter_id: str, event_id: str) -> dict:
     event = (
         sb.table("events")

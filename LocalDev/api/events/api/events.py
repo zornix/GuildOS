@@ -53,13 +53,19 @@ def _map_domain_errors():
         raise HTTPException(422, str(exc))
 
 
-# NOTE: fixed paths (/types) are declared before /{event_id} so they are not
+# NOTE: fixed paths (/types, /upcoming-details) are declared before /{event_id} so they are not
 # captured by the path parameter.
 
 @router.get("/types")
 async def list_event_types(user=Depends(get_current_user)):
     """List the chapter's event types (seeding defaults on first use)."""
     return svc.list_event_types(get_db(), chapter_id=user["chapter_id"])
+
+
+@router.get("/upcoming-details")
+async def upcoming_details(user=Depends(get_current_user)):
+    """Detail, security roster and check-in link for every upcoming event, in one read."""
+    return svc.list_upcoming_details(get_db(), user=user)
 
 
 @router.get("/")

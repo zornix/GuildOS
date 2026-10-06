@@ -17,6 +17,7 @@ import {
   SecurityAssignmentDto,
   StandingDto,
   TaskDto,
+  UpcomingDetailsDto,
   VerifiedPaymentDto
 } from './api';
 import {
@@ -171,6 +172,22 @@ export function adaptSecurityAssignment(
   };
 }
 
+/** GET /api/events/upcoming-details -> the per-event security shifts and the
+ *  detail-only fields (leaders, counts, door code) keyed by event id. */
+export function adaptUpcomingDetails(
+  dto: UpcomingDetailsDto,
+  members: Member[],
+  membersById: Map<string, Member>
+) {
+  const securityByEvent = new Map<string, SecurityAssignment[]>();
+  const detailByEvent = new Map<string, Partial<ChapterEvent>>();
+  for (const row of dto.events) {
+    securityByEvent.set(row.event_id, row.security.map(s => adaptSecurityAssignment(s, membersById)));
+    detailByEvent.set(row.event_id, { ...adaptEventDetail(row.detail, members), ...adaptCheckInLink(row.checkin_link) });
+  }
+  return { securityByEvent, detailByEvent };
+}
+
 /** ChapterEvent -> EventCreate/EventUpdate body. */
 export function toEventBody(event: {
   title: string;
@@ -227,8 +244,9 @@ export function adaptFines(rows: FineDto[], members: Member[]): Fine[] {
     amount: row.amount_cents / 100,
     reason: row.reason || 'Fine',
     date: day(row.issued_at),
-    // 'cancelled' is a waived fine — no longer owed, so it reads as cleared here.
-    status: row.status === 'unpaid' || row.status === 'partially_paid' ? 'Unpaid' : 'Paid',
+    // 'cancelled' is a waived fine: no longer owed, but nobody paid it either.
+    status: row.status === 'unpaid' || row.status === 'partially_paid' ? 'Unpaid'
+      : row.status === 'cancelled' ? 'Waived' : 'Paid',
     relatedEventId: row.event_id || undefined
   }));
 }
@@ -268,6 +286,7 @@ export function adaptTasks(
   // Security shifts live on the event's Security panel, never on the jobs board.
   return rows.filter(row => row.kind !== 'security').map(row => ({
     id: row.id,
+    eventId: row.event_id || undefined,
     title: row.title,
     description: row.description || '',
     assignedTo: row.claimants?.length

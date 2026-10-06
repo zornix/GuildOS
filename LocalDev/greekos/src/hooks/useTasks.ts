@@ -6,7 +6,7 @@ import { SyncApi } from './useBackend';
 
 interface Deps {
   syncApi: SyncApi;
-  refetchJobs: () => Promise<void>;
+  refetchJobs: (eventId?: string) => Promise<void>;
 }
 
 /** Jobs: standalone or attached to an event or initiative. */
@@ -53,7 +53,7 @@ export function useTasks({ syncApi, refetchJobs }: Deps) {
       }
       return t;
     }));
-    syncApi(() => api.commitTask(taskId, memberId), refetchJobs, 'Claimed job.');
+    syncApi(() => api.commitTask(taskId, memberId), () => refetchJobs(current.eventId), 'Claimed job.');
   };
 
   return { tasks, setTasks, handleAddTask, handleToggleTaskStatus, handleClaimTask };

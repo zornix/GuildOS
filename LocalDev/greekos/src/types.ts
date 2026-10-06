@@ -143,7 +143,7 @@ export interface Fine {
   amount: number;
   reason: string;
   date: string;
-  status: 'Unpaid' | 'Paid';
+  status: 'Unpaid' | 'Paid' | 'Waived';
   issuedBy?: string;
   relatedEventId?: string;
 }
@@ -177,6 +177,8 @@ export interface Excuse {
 }
 
 export interface Task {
+  /** Parent event to refresh after a job mutation; absent for other jobs. */
+  eventId?: string;
   id: string;
   title: string;
   description: string;
