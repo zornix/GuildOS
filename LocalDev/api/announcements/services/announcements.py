@@ -123,8 +123,8 @@ def audiences_for_viewer(sb, *, chapter_id: str, viewer: dict) -> set[str]:
     """
     audiences = {AUDIENCE_CHAPTER}
 
-    # rbac.is_officer, the same union authorization resolves from: an officer who
-    # holds only the legacy members.role reads officers-only notices in the feed.
+    # members.role is display-only; permissions come from member_roles via
+    # api.rbac, including access to officers-only notices in the feed.
     role_keys = list_member_role_keys(sb, chapter_id=chapter_id, member_id=viewer["id"])
     if is_officer(viewer, role_keys):
         audiences.add(AUDIENCE_OFFICERS)
