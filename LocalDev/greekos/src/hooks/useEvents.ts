@@ -5,6 +5,7 @@ import { adaptEventDetail, adaptEvents, adaptSecurityAssignment, toEventBody } f
 import { ShowToast } from './useToast';
 import { EnqueueOutbox } from './useOutbox';
 import { SyncApi } from './useBackend';
+import { describeError } from '../lib/sync';
 
 /** 409 conflict tokens the jobs API raises, mapped to member-facing copy. */
 const JOB_409: Record<string, string> = {
@@ -21,6 +22,12 @@ const NOTIFY_409: Record<string, string> = {
   'No SMS-reachable': 'No brother has a phone number on file to text',
   'count changed': 'The member list just changed — send the blast again',
   'within the last hour': 'This event was already notified in the last hour'
+};
+
+/** The swap RPC's 409 and the local pre-check read the same way. */
+const SWAP_409: Record<string, string> = {
+  swap_wrong_state: 'That swap request is no longer pending',
+  'no longer pending': 'That swap request is no longer pending'
 };
 
 /** api.ts throws `Error('PATCH /path failed (409): <detail>')`, so the conflict
@@ -103,20 +110,11 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
   };
 
   /** Swap mutations share one 409 the UI can put in plain words. */
-  const syncSwap = (eventId: string, call: () => Promise<unknown>) =>
-    syncApi(async () => {
-      try {
-        await call();
-      } catch (err) {
-        await refetchSecurity(eventId).catch(() => { /* leave the optimistic row */ });
-        const message = (err as Error).message;
-        if (message.includes('swap_wrong_state') || message.includes('no longer pending')) {
-          showToast('That swap request is no longer pending');
-          return;
-        }
-        throw err;
-      }
-    }, () => refetchSecurity(eventId));
+  const syncSwap = (eventId: string, call: () => Promise<unknown>, successMessage: string) =>
+    syncApi(call, () => refetchSecurity(eventId), {
+      onSuccess: () => showToast(successMessage),
+      onError: err => showToast(errorToast(err, SWAP_409, describeError(err)))
+    });
 
   const handleAddEvent = (newEvent: Omit<ChapterEvent, 'id' | 'attendanceTaken' | 'checkedInCount'>) => {
     const ev: ChapterEvent = {
@@ -129,8 +127,7 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
       securityAssignments: []
     };
     setEvents(prev => [ev, ...prev]);
-    syncApi(() => api.createEvent(toEventBody(ev)), refetchEvents);
-    showToast(`Created chapter event "${ev.title}"`);
+    syncApi(() => api.createEvent(toEventBody(ev)), refetchEvents, `Created chapter event "${ev.title}"`);
   };
 
   const handleUpdateEvent = (updated: ChapterEvent) => {
@@ -153,8 +150,7 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
       return e;
     }));
     // The backend signs up the signed-in member; it has no impersonation concept.
-    syncApi(() => api.addOrganizer(eventId), () => refetchEventDetail(eventId));
-    showToast(`Volunteered as Organizer for event!`);
+    syncApi(() => api.addOrganizer(eventId), () => refetchEventDetail(eventId), 'Volunteered as Organizer for event!');
   };
 
   const handleClaimJob = (eventId: string, jobId: string, memberId: string, memberName: string) => {
@@ -180,8 +176,7 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
       return e;
     }));
     // The backend commits the signed-in member; it has no impersonation concept.
-    syncApi(() => api.commitTask(jobId), refetchJobs);
-    showToast(`Claimed job successfully!`);
+    syncApi(() => api.commitTask(jobId), refetchJobs, 'Claimed job successfully!');
   };
 
   const handleUnclaimJob = (eventId: string, jobId: string, memberId: string) => {
@@ -204,8 +199,7 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
       }
       return e;
     }));
-    syncApi(() => api.uncommitTask(jobId), refetchJobs);
-    showToast(`Unclaimed job.`);
+    syncApi(() => api.uncommitTask(jobId), refetchJobs, 'Unclaimed job.');
   };
 
   const handleReportJobDone = (eventId: string, jobId: string, memberName: string) => {
@@ -228,8 +222,7 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
       }
       return e;
     }));
-    syncApi(() => api.reportJobDone(jobId), refetchJobs);
-    showToast(`Reported job complete! Awaiting supervisor sign-off.`);
+    syncApi(() => api.reportJobDone(jobId), refetchJobs, 'Reported job complete! Awaiting supervisor sign-off.');
   };
 
   const handleApproveJob = (eventId: string, jobId: string, officerName: string) => {
@@ -252,8 +245,7 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
       }
       return e;
     }));
-    syncApi(() => api.approveJob(jobId), refetchJobs);
-    showToast(`Job approved and verified by supervisor.`);
+    syncApi(() => api.approveJob(jobId), refetchJobs, 'Job approved and verified by supervisor.');
   };
 
   const handleRejectJob = (eventId: string, jobId: string, officerName: string, reason: string) => {
@@ -285,8 +277,7 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
       }
       return e;
     }));
-    syncApi(() => api.rejectJob(jobId, reason), refetchJobs);
-    showToast(`Job rejected with feedback sent to brother outbox.`);
+    syncApi(() => api.rejectJob(jobId, reason), refetchJobs, 'Job returned with feedback.');
   };
 
   const handleAddJobToEvent = (eventId: string, jobData: Omit<EventJob, 'id' | 'claimants' | 'status'>) => {
@@ -310,9 +301,9 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
           people_needed: jobData.peopleNeeded,
           event_id: eventId
         }),
-      refetchJobs
+      refetchJobs,
+      'Added job to event.'
     );
-    showToast(`Added job to event.`);
   };
 
   // Edit/delete are not applied optimistically: the backend can refuse either
@@ -407,14 +398,13 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
       }
       return e;
     }));
-    syncApi(() => api.assignSecurity(eventId, memberId), () => refetchSecurity(eventId));
+    syncApi(() => api.assignSecurity(eventId, memberId), () => refetchSecurity(eventId), `Assigned ${memberName} to security shift.`);
     enqueueOutbox({
       type: 'SECURITY_ASSIGNED',
       recipient: memberName,
       message: `[GreekOS Security] You have been assigned to a security shift.`,
       channel: 'SMS'
     });
-    showToast(`Assigned ${memberName} to security shift.`);
   };
 
   const handleRequestSecuritySwap = (eventId: string, assignmentId: string, targetMemberId: string, targetMemberName: string) => {
@@ -437,7 +427,7 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
       }
       return e;
     }));
-    syncSwap(eventId, () => api.requestSwap(eventId, assignmentId, targetMemberId));
+    syncSwap(eventId, () => api.requestSwap(eventId, assignmentId, targetMemberId), `Shift swap request sent to ${targetMemberName}.`);
 
     enqueueOutbox({
       type: 'SECURITY_SWAP_REQUEST',
@@ -445,7 +435,6 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
       message: `[GreekOS Swap Request] A brother requested you to cover their security shift. Review in Events tab.`,
       channel: 'SMS'
     });
-    showToast(`Shift swap request sent to ${targetMemberName}.`);
   };
 
   const handleRespondSecuritySwap = (eventId: string, assignmentId: string, accept: boolean) => {
@@ -482,8 +471,7 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
     syncSwap(eventId, async () => {
       const swapId = await pendingSwapId(eventId, assignmentId);
       await (accept ? api.acceptSwap(eventId, swapId) : api.declineSwap(eventId, swapId));
-    });
-    showToast(accept ? 'Accepted security shift swap.' : 'Declined shift swap.');
+    }, accept ? 'Accepted security shift swap.' : 'Declined shift swap.');
   };
 
   /** The requester withdraws their own pending swap request. */
@@ -505,8 +493,7 @@ export function useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJ
     syncSwap(eventId, async () => {
       const swapId = await pendingSwapId(eventId, assignmentId);
       await api.cancelSwap(eventId, swapId);
-    });
-    showToast('Cancelled your shift swap request.');
+    }, 'Cancelled your shift swap request.');
   };
 
   return {

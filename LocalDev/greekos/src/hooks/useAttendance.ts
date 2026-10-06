@@ -50,8 +50,7 @@ export function useAttendance({ members, setEvents, refetchEvents, syncApi, show
       submittedAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
     };
     setExcuses(prev => [newExcuse, ...prev]);
-    syncApi(() => api.submitExcuse(newExcuse.eventId, newExcuse.reason), refetchExcuses);
-    showToast(`Excuse request submitted for executive review.`);
+    syncApi(() => api.submitExcuse(newExcuse.eventId, newExcuse.reason), refetchExcuses, 'Excuse request submitted for executive review.');
   };
 
   const handleReviewExcuse = (excuseId: string, status: 'Approved' | 'Rejected', reviewedBy: string) => {
@@ -59,7 +58,8 @@ export function useAttendance({ members, setEvents, refetchEvents, syncApi, show
     setExcuses(prev => prev.map(e => e.id === excuseId ? { ...e, status, decidedBy: reviewedBy } : e));
     syncApi(
       () => api.reviewExcuse(excuseId, status === 'Approved' ? 'approved' : 'denied'),
-      refetchExcuses
+      refetchExcuses,
+      `Excuse marked ${status}.`
     );
 
     if (exc) {
@@ -70,7 +70,6 @@ export function useAttendance({ members, setEvents, refetchEvents, syncApi, show
         channel: 'SMS'
       });
     }
-    showToast(`Excuse marked ${status}.`);
   };
 
   /** Door-code check-in. The code identifies the event and the backend checks in

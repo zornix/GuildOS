@@ -2,18 +2,16 @@ import { useState } from 'react';
 import { EventJob, Initiative, Member } from '../types';
 import { api } from '../api';
 import { adaptInitiatives } from '../adapters';
-import { ShowToast } from './useToast';
 import { SyncApi } from './useBackend';
 
 interface Deps {
   members: Member[];
   syncApi: SyncApi;
-  showToast: ShowToast;
   refetchJobs: () => Promise<void>;
 }
 
 /** Chair-led initiatives and their claimable tasks. */
-export function useInitiatives({ members, syncApi, showToast, refetchJobs }: Deps) {
+export function useInitiatives({ members, syncApi, refetchJobs }: Deps) {
   const [initiatives, setInitiatives] = useState<Initiative[]>([]);
 
   // adaptInitiatives rebuilds rows with an empty jobs list, so restamp the boards after.
@@ -38,9 +36,9 @@ export function useInitiatives({ members, syncApi, showToast, refetchJobs }: Dep
           time: '12:00:00',
           end_date: init.targetDate || null
         }),
-      refetchInitiatives
+      refetchInitiatives,
+      `Launched chair initiative "${init.title}"`
     );
-    showToast(`Launched chair initiative "${init.title}"`);
   };
 
   const handleAddJobToInitiative = (initId: string, jobData: Omit<EventJob, 'id' | 'claimants' | 'status'>) => {
@@ -64,9 +62,9 @@ export function useInitiatives({ members, syncApi, showToast, refetchJobs }: Dep
           people_needed: jobData.peopleNeeded,
           initiative_id: initId
         }),
-      refetchJobs
+      refetchJobs,
+      'Added job to initiative.'
     );
-    showToast(`Added job to initiative.`);
   };
 
   const handleClaimInitiativeJob = (initId: string, jobId: string, memberId: string, memberName: string) => {
@@ -130,8 +128,7 @@ export function useInitiatives({ members, syncApi, showToast, refetchJobs }: Dep
       }
       return i;
     }));
-    syncApi(() => api.reportJobDone(jobId), refetchJobs);
-    showToast(`Reported initiative job complete!`);
+    syncApi(() => api.reportJobDone(jobId), refetchJobs, 'Reported initiative job complete!');
   };
 
   const handleApproveInitiativeJob = (initId: string, jobId: string, approverName: string) => {
@@ -149,8 +146,7 @@ export function useInitiatives({ members, syncApi, showToast, refetchJobs }: Dep
       }
       return i;
     }));
-    syncApi(() => api.approveJob(jobId), refetchJobs);
-    showToast(`Chair sign-off confirmed.`);
+    syncApi(() => api.approveJob(jobId), refetchJobs, 'Chair sign-off confirmed.');
   };
 
   return {

@@ -58,7 +58,7 @@ export function useAppData() {
   const refetchJobs = () => refetchJobsRef.current();
 
   const events = useEvents({ members, syncApi, showToast, enqueueOutbox, refetchJobs });
-  const initiatives = useInitiatives({ members, syncApi, showToast, refetchJobs });
+  const initiatives = useInitiatives({ members, syncApi, refetchJobs });
   const finance = useFinance({ members, setMembers, currentMemberId, currentMemberName, isOfficer, syncApi, showToast, enqueueOutbox });
   const attendance = useAttendance({
     members,
@@ -68,12 +68,8 @@ export function useAppData() {
     showToast,
     enqueueOutbox
   });
-  const tasks = useTasks({
-    syncApi,
-    showToast,
-    refetchJobs
-  });
-  const recruitment = useRecruitment({ syncApi, showToast, enqueueOutbox });
+  const tasks = useTasks({ syncApi, refetchJobs });
+  const recruitment = useRecruitment({ syncApi, enqueueOutbox });
   const contribution = useContribution();
 
   /** Stamp the job rows onto whichever event/initiative owns each one. The chip
@@ -240,8 +236,7 @@ export function useAppData() {
   /** Officer-only: drops a draft, retires a sent one from the calendar. */
   const handleDeleteAnnouncement = (announcementId: string) => {
     setAnnouncements(prev => prev.filter(a => a.id !== announcementId));
-    syncApi(() => api.deleteAnnouncement(announcementId), refetchAnnouncements);
-    showToast('Announcement removed from calendar.');
+    syncApi(() => api.deleteAnnouncement(announcementId), refetchAnnouncements, 'Announcement removed from calendar.');
   };
 
   // ----------------------------------------------------
@@ -283,14 +278,13 @@ export function useAppData() {
             calendar_date: calendarDate
           });
           await api.sendAnnouncement(created.id);
-        }, refetchAnnouncements);
+        }, refetchAnnouncements, 'Dispatched broadcast announcement.');
         enqueueOutbox({
           type: 'ANNOUNCEMENT_BLAST',
           recipient: 'All Brothers',
           message: `[GreekOS Announcement] ${cmdResult.payload.content}`,
           channel: 'SMS'
         });
-        showToast(`Dispatched broadcast announcement.`);
         break;
       }
       case 'EXCUSE_APPROVE':
