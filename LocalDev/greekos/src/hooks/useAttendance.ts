@@ -1,5 +1,6 @@
 import { useState, type Dispatch, type SetStateAction } from 'react';
 import { ChapterEvent, Excuse, Member } from '../types';
+import { serverMessage } from '../lib/sync';
 import { api } from '../api';
 import { adaptExcuses } from '../adapters';
 import { ShowToast } from './useToast';
@@ -65,13 +66,13 @@ export function useAttendance({ members, setEvents, refetchEvents, syncApi, show
   const handleSelfCheckIn = async (code: string): Promise<{ ok: boolean; message: string }> => {
     try {
       const res = await api.checkInWithCode(code.trim());
-      await refetchEvents();
+      await refetchEvents().catch(err => console.error('Refresh after check-in failed', err));
       return { ok: true, message: `Checked in to ${res.event_title}.` };
     } catch (err) {
       const msg = (err as Error).message;
       if (msg.includes('(410)')) return { ok: false, message: 'That door code has expired or is not valid.' };
       if (msg.includes('(409)')) return { ok: false, message: 'You are already checked in for this event.' };
-      return { ok: false, message: 'Check-in failed. Ask an officer for the current door code.' };
+      return { ok: false, message: serverMessage(err, 'Check-in failed. Ask an officer for the current door code.') };
     }
   };
 
