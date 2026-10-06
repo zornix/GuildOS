@@ -1,7 +1,7 @@
 """Config boot guard (imp-tenant-guards.md D5).
 
-Deploys (production **and** preview) refuse to boot misconfigured; local dev
-(empty VERCEL_ENV) boots as today. These are pure unit tests — no DB. Every
+Deploys refuse to boot misconfigured; explicit local/test runs and Vercel
+development bypass the guard. These are pure unit tests — no DB. Every
 guarded field is passed explicitly so the assertions are deterministic
 regardless of what the ambient environment or LocalDev/.env holds.
 """
@@ -26,6 +26,7 @@ def _prod_settings(**overrides) -> Settings:
         DEV_AUTH_BYPASS=False,
         CRON_SECRET="a-real-cron-secret-value",
         FRONTEND_URL="https://app.guildos.example",
+        BASE_URL="https://api.guildos.example",
         MESSAGE_DELIVERY_MODE="dry_run",
     )
     base.update(overrides)
@@ -184,9 +185,8 @@ def test_well_configured_production_boots():
     assert production_config_violations(_prod_settings()) == []
 
 
-def test_dev_is_never_guarded():
-    # Empty VERCEL_ENV (local/dev) — even the insecure default is allowed.
-    s = Settings(VERCEL_ENV="", JWT_SECRET="local-dev-secret", DATABASE_URL=None, DEV_AUTH_BYPASS=True)
+def test_explicit_local_is_not_guarded():
+    s = Settings(APP_ENV="local", VERCEL_ENV="", JWT_SECRET="local-dev-secret", DATABASE_URL=None, DEV_AUTH_BYPASS=True)
     assert production_config_violations(s) == []
 
 
@@ -250,3 +250,41 @@ def test_smtp_mode_missing_a_credential_is_a_violation(missing):
 
 def test_a_complete_smtp_config_is_clean():
     assert production_config_violations(_prod_settings(**_SMTP_OK)) == []
+
+
+def test_unlabelled_environment_is_guarded():
+    s = Settings(_env_file=None, VERCEL_ENV="", APP_ENV="", JWT_SECRET="local-dev-secret")
+    assert any("JWT_SECRET" in v for v in production_config_violations(s))
+
+
+def test_app_env_production_is_guarded_without_vercel():
+    s = _prod_settings(VERCEL_ENV="", APP_ENV="production", JWT_SECRET="local-dev-secret")
+    assert any("JWT_SECRET" in v for v in production_config_violations(s))
+    assert s.is_production
+
+
+def test_vercel_development_is_not_guarded():
+    s = Settings(_env_file=None, VERCEL_ENV="development", APP_ENV="", JWT_SECRET="local-dev-secret")
+    assert production_config_violations(s) == []
+
+
+@pytest.mark.parametrize("variable", ["BASE_URL", "FRONTEND_URL"])
+@pytest.mark.parametrize("host", ["localhost", "127.0.0.1"])
+def test_production_rejects_localhost_urls(variable, host):
+    s = _prod_settings(**{variable: f"http://{host}:8001"})
+    assert any(variable in v for v in production_config_violations(s))
+
+
+def test_preview_allows_localhost_urls():
+    s = _prod_settings(VERCEL_ENV="preview", BASE_URL="http://localhost:8001",
+                       FRONTEND_URL="http://localhost:3000")
+    assert production_config_violations(s) == []
+
+
+@pytest.mark.parametrize("vercel,app,deployed", [
+    ("production", "local", True), ("preview", "test", True),
+    ("development", "", False), ("", "local", False), ("", "test", False),
+    ("", "preview", True), ("", "production", True), ("", "", True),
+])
+def test_environment_guard_matrix(vercel, app, deployed):
+    assert Settings(_env_file=None, VERCEL_ENV=vercel, APP_ENV=app).is_deployed is deployed
