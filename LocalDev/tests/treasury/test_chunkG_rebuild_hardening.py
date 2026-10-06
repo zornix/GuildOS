@@ -293,7 +293,7 @@ def test_migrated_0012_payment_row_still_matches_its_payment(sb_client, cursor, 
             "VALUES (%s,%s,2500,%s,'unpaid_invoices',%s,'active')",
             (chapter_id, entry_type, member_id, invoice_id),
         )
-    _run_0165_data(cursor)
+    _run_0165_data(cursor, chapter_id)
     BalanceEngine(sb_client).recompute_member(member_id)
 
     report = RebuildEngine(sb_client).rebuild(chapter_id)
