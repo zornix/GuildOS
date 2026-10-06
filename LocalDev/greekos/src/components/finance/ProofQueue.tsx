@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Image as ImageIcon, ShieldCheck } from 'lucide-react';
 import Card from '../ui/Card';
 import Modal from '../ui/Modal';
