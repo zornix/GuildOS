@@ -1,13 +1,19 @@
-"""Usage instrumentation — append-only event track + a bounded read model."""
+"""Usage instrumentation — bounded event track + a bounded read model."""
 
 from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# ponytail: one extra indexed COUNT per tracked event; move to a windowed counter if tracking volume ever matters.
+MAX_EVENTS_PER_MEMBER_PER_HOUR = 600
+_EVENT_NAME = re.compile(r"[a-z0-9_.:\-]{1,64}")
+_METADATA_MAX_BYTES = 1000
 
 # The client abstraction (api/platform/postgres.py, mimicking supabase-py) has no
 # GROUP BY: only filters, ordering, limit, and an exact COUNT(*). So the total
@@ -25,18 +31,29 @@ def track(
 ) -> None:
     if not event_name:
         raise ValueError("event_name is required")
-        
-    event_name = event_name[:120]
+    if _EVENT_NAME.fullmatch(event_name) is None:
+        return
+
     metadata = metadata or {}
-    
     try:
-        # Check size of metadata roughly
-        if len(json.dumps(metadata)) > 8000:
+        encoded = json.dumps(metadata).encode()
+        if len(encoded) > _METADATA_MAX_BYTES:
             metadata = {"_truncated": True}
     except Exception:
         metadata = {"_truncated": True}
 
     try:
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        existing = (
+            db.table("usage_events")
+            .select("id", count="exact")
+            .eq("member_id", member_id)
+            .gte("created_at", cutoff)
+            .limit(1)
+            .execute()
+        )
+        if (existing.count or 0) >= MAX_EVENTS_PER_MEMBER_PER_HOUR:
+            return
         db.table("usage_events").insert(
             {
                 "chapter_id": chapter_id,
