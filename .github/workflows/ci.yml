@@ -55,6 +55,14 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements.txt
 
+      - name: Lint (errors only)
+        run: |
+          pip install -r requirements-dev.txt
+          python3 -m ruff check api scripts tests
+
+      - name: Migration checksums
+        run: python3 scripts/migration_checksums.py --check
+
       - name: Prepare environment
         # .env.example is the reference, but it is currently gitignored
         # (LocalDev/.gitignore) so it may be absent from a clean checkout —

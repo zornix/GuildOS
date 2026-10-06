@@ -201,9 +201,11 @@ echo -e "  ${GREEN}Migrations OK${NC}"
 
 # ── 4. Python dependencies ──────────────────────────
 echo "▸ Checking Python dependencies ..."
-if ! python3 -c "import fastapi" 2>/dev/null; then
-  echo "  Installing Python dependencies ..."
+REQ_HASH="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' requirements.txt)"
+if [ ! -f .deps-stamp ] || [ "$(cat .deps-stamp)" != "$REQ_HASH" ]; then
+  echo "  Installing Python dependencies (requirements.txt changed) ..."
   pip install -r requirements.txt -q
+  echo "$REQ_HASH" > .deps-stamp
 fi
 echo -e "  ${GREEN}Python deps OK${NC}"
 
