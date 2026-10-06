@@ -1,6 +1,7 @@
 import type { ChapterEvent, Member } from '../types';
 import type { api as Api, IssueFinesResultDto } from '../api';
 import { formatMoney } from '../formatters';
+import { isNetworkError, syncOutcome } from './sync';
 
 /** The four things a treasurer records. Same words as the backend ledger. */
 export type TransactionKind = 'Payment' | 'Fine' | 'Invoice' | 'Adjustment';
@@ -175,15 +176,37 @@ export function draftFromForm(form: TransactionForm): TransactionDraft {
   }
 }
 
-/** The events a fine can attach to: required, and already happened. */
-export const finableEvents = (events: ChapterEvent[], today: string): ChapterEvent[] =>
-  events.filter(e => e.required && e.date <= today);
+const FINE_WINDOW_MS = 26 * 60 * 60 * 1000;
+const eventAge = (event: ChapterEvent, now: Date) =>
+  now.getTime() - Date.parse(`${event.date}T${event.startTime}`);
+
+/** Only recent required starts need the chapter timezone's precise UTC instant.
+ *  Future and invalid starts never trigger a read. */
+export const eventsNeedingFineEligibility = (events: ChapterEvent[], now: Date = new Date()): ChapterEvent[] =>
+  events.filter(event => {
+    const age = eventAge(event, now);
+    return event.required && age >= 0 && age <= FINE_WINDOW_MS;
+  });
+
+/** Clearly old starts are eligible locally. Inside the boundary window, only
+ *  confirmed UTC starts at least 24 hours old are offered. The write's 422
+ *  remains authoritative for the chapter timezone and absence rules. */
+export const finableEvents = (
+  events: ChapterEvent[], starts: ReadonlyMap<string, string>, now: Date = new Date()
+): ChapterEvent[] => events.filter(event => {
+  const age = eventAge(event, now);
+  if (!event.required || !Number.isFinite(age) || age < 0) return false;
+  if (age > FINE_WINDOW_MS) return true;
+  const start = Date.parse(starts.get(event.id) || '');
+  return now.getTime() - start >= 24 * 60 * 60 * 1000;
+});
 
 export interface TransactionDeps {
   api: Pick<typeof Api, 'recordPayment' | 'issueFines' | 'createInvoice' | 'createAdjustment'>;
   members: Pick<Member, 'id' | 'name'>[];
-  /** The last load failed; a write now would only fail later, so refuse it. */
+  /** Last observed connection state; it must not prevent a new write. */
   backendDown: boolean;
+  setBackendDown: (down: boolean) => void;
   /** Re-reads every number on the tab after a write; false if any read failed. */
   refetch: () => Promise<boolean>;
   showToast: (message: string) => void;
@@ -193,39 +216,44 @@ export interface TransactionDeps {
  *  and the tab has been re-read; rejects with the message to show inline. */
 export async function submitTransaction(deps: TransactionDeps, draft: TransactionDraft, idempotencyKey: string): Promise<void> {
   const { api } = deps;
-  if (deps.backendDown) throw new Error('Not saved: the server is unreachable.');
   const call = planTransaction(draft);
   const name = deps.members.find(m => m.id === draft.memberId)?.name || 'the member';
   let message: string;
-  switch (call.call) {
-    case 'recordPayment':
-      await api.recordPayment(call.body, idempotencyKey);
-      message = `Recorded ${formatMoney(call.body.amount_cents)} payment from ${name}.`;
-      break;
-    case 'issueEventFine': {
-      const result = await api.issueFines(call.eventId, call.memberIds) as IssueFinesResultDto;
-      // A skip is not a failure: on a retry the first request already fined
-      // them. ponytail: the response does not say why a member was skipped, so
-      // one neutral line; split it when /issue returns the reason.
-      message = result.issued_member_ids.includes(draft.memberId)
-        ? `Assessed ${formatMoney(result.flat_fine_cents)} fine to ${name}.`
-        : `No new fine for ${name}: already fined, present, or excused for that event.`;
-      break;
+  try {
+    switch (call.call) {
+      case 'recordPayment':
+        await api.recordPayment(call.body, idempotencyKey);
+        message = `Recorded ${formatMoney(call.body.amount_cents)} payment from ${name}.`;
+        break;
+      case 'issueEventFine': {
+        const result = await api.issueFines(call.eventId, call.memberIds) as IssueFinesResultDto;
+        // A skip is not a failure: on a retry the first request already fined
+        // them. ponytail: the response does not say why a member was skipped, so
+        // one neutral line; split it when /issue returns the reason.
+        message = result.issued_member_ids.includes(draft.memberId)
+          ? `Assessed ${formatMoney(result.flat_fine_cents)} fine to ${name}.`
+          : `No new fine for ${name}: already fined, present, or excused for that event.`;
+        break;
+      }
+      case 'createInvoice':
+        await api.createInvoice(call.body, idempotencyKey);
+        message = call.body.source === 'fine'
+          ? `Assessed ${formatMoney(call.body.amount_cents)} fine to ${name}.`
+          : `Invoiced ${formatMoney(call.body.amount_cents)} to ${name}.`;
+        break;
+      case 'createAdjustment': {
+        const adjustment = await api.createAdjustment(call.body, idempotencyKey);
+        message = adjustment.status === 'pending'
+          ? `Adjustment of ${formatMoney(Math.abs(adjustment.delta_cents))} needs a second sign-off before it applies.`
+          : 'Adjustment recorded.';
+        break;
+      }
     }
-    case 'createInvoice':
-      await api.createInvoice(call.body, idempotencyKey);
-      message = call.body.source === 'fine'
-        ? `Assessed ${formatMoney(call.body.amount_cents)} fine to ${name}.`
-        : `Invoiced ${formatMoney(call.body.amount_cents)} to ${name}.`;
-      break;
-    case 'createAdjustment': {
-      const adjustment = await api.createAdjustment(call.body, idempotencyKey);
-      message = adjustment.status === 'pending'
-        ? `Adjustment of ${formatMoney(Math.abs(adjustment.delta_cents))} needs a second sign-off before it applies.`
-        : 'Adjustment recorded.';
-      break;
-    }
+  } catch (error) {
+    deps.setBackendDown(isNetworkError(error));
+    throw error;
   }
+  deps.setBackendDown(syncOutcome({ backendDown: deps.backendDown, outcome: 'ok' }).backendDown);
   const reloaded = await deps.refetch();
   deps.showToast(reloaded ? message : `${message} Saved, but the lists could not be reloaded. Refresh the page.`);
 }

@@ -15,8 +15,9 @@ import AddTransactionModal from './finance/AddTransactionModal';
 import DuesRunModal from './finance/DuesRunModal';
 import InvoiceView, { InvoiceStatusBadge } from './finance/InvoiceView';
 import ProofQueue from './finance/ProofQueue';
-import { formatMoney, isoDay } from '../formatters';
+import { formatMoney } from '../formatters';
 import { can } from '../lib/session';
+import { api } from '../api';
 import {
   ADJUSTMENT_CREATE_KEY,
   FINES_ISSUE_KEY,
@@ -30,7 +31,7 @@ import {
   invoiceTitle,
   transactionAccess
 } from '../lib/dues';
-import { TransactionDraft, TransactionForm, finableEvents } from '../lib/transaction';
+import { TransactionDraft, TransactionForm, finableEvents, eventsNeedingFineEligibility } from '../lib/transaction';
 
 interface FinanceModuleProps {
   members: Member[];
@@ -116,6 +117,8 @@ export default function FinanceModule({
 
   const [activeSubTab, setActiveSubTab] = useState<'invoices' | 'overview' | 'fines' | 'payments' | 'queue'>('invoices');
   const [transaction, setTransaction] = useState<TransactionPrompt | null>(null);
+  const [eventFineActive, setEventFineActive] = useState(false);
+  const [fineStarts, setFineStarts] = useState<Map<string, string>>(new Map());
   const [showDuesRun, setShowDuesRun] = useState(false);
   const [openInvoice, setOpenInvoice] = useState<Invoice | null>(null);
   const [searchMember, setSearchMember] = useState('');
@@ -138,6 +141,25 @@ export default function FinanceModule({
   useEffect(() => {
     if (activeSubTab === 'queue' && canVerifyPayments) void onRefreshQueue();
   }, [activeSubTab, canVerifyPayments]);
+
+  // Only an event fine needs eligibility reads, and only recent starts need
+  // the server's precise chapter-timezone interpretation.
+  const transactionOpen = transaction !== null;
+  useEffect(() => {
+    let cancelled = false;
+    setFineStarts(new Map());
+    if (transactionOpen && eventFineActive && access.eventFines) {
+      void Promise.allSettled(eventsNeedingFineEligibility(events || []).map(async e => {
+        const eligibility = await api.getFineEligibility(e.id);
+        return [e.id, eligibility.event_start] as const;
+      })).then(results => {
+        if (!cancelled) setFineStarts(new Map(results.flatMap(result =>
+          result.status === 'fulfilled' ? [result.value] : []
+        )));
+      });
+    }
+    return () => { cancelled = true; };
+  }, [transactionOpen, eventFineActive, access.eventFines, events, currentMemberId]);
 
   const recentPaidCents = safePayments.reduce((acc, p) => acc + p.amountCents, 0);
   const unpaidFines = safeFines.filter(f => f.status === 'Unpaid');
@@ -460,8 +482,9 @@ export default function FinanceModule({
           note={transaction.note}
           initial={transaction.initial}
           members={safeMembers}
-          events={finableEvents(events || [], isoDay())}
+          events={finableEvents(events || [], fineStarts)}
           access={access}
+          onEventFineModeChange={setEventFineActive}
           onSubmit={onSubmitTransaction}
           onClose={() => setTransaction(null)}
         />

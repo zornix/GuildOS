@@ -24,12 +24,13 @@ interface Deps {
   setMembers: Dispatch<SetStateAction<Member[]>>;
   currentMemberId: string;
   backendDown: boolean;
+  setBackendDown: (down: boolean) => void;
   showToast: ShowToast;
 }
 
 /** Fines, payments, invoices and the officer-recorded transactions. Every
  *  write goes to the server and every number shown afterwards is re-read. */
-export function useFinance({ members, setMembers, currentMemberId, backendDown, showToast }: Deps) {
+export function useFinance({ members, setMembers, currentMemberId, backendDown, setBackendDown, showToast }: Deps) {
   const [fines, setFines] = useState<Fine[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   // The signed-in member's real treasury record — the one read behind both the
@@ -186,7 +187,7 @@ export function useFinance({ members, setMembers, currentMemberId, backendDown, 
   };
 
   const submitTransaction = (draft: TransactionDraft, idempotencyKey: string) =>
-    runTransaction({ api, members, backendDown, refetch: refetchAfterWrite, showToast }, draft, idempotencyKey);
+    runTransaction({ api, members, backendDown, setBackendDown, refetch: refetchAfterWrite, showToast }, draft, idempotencyKey);
 
   /** The command console's "fine NAME $N for REASON" (useAppData) lands here. */
   const handleIssueFine = async (fine: { memberId: string; amountCents: number; reason: string; relatedEventId?: string }) => {

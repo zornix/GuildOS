@@ -1,7 +1,9 @@
+import * as transactions from './transaction';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   EVENT_FINE_CENTS,
+  finableEvents,
   dollarsToCents,
   draftFromForm,
   planTransaction,
@@ -174,6 +176,7 @@ function fakeDeps() {
     api: api as never,
     members: [{ id: 'm1', name: 'Jake Martinez' }],
     backendDown: false,
+    setBackendDown: (_value: boolean) => {},
     refetch: async () => true,
     showToast: (m: string) => { toasts.push(m); }
   };
@@ -196,14 +199,16 @@ test('submitTransaction sends the key, waits on a pending adjustment, and never 
   assert.deepEqual(toasts, []);
 });
 
-test('submitTransaction refuses up front while the server is unreachable', async () => {
+test('a successful transaction attempts the write and clears a stale down flag before refresh', async () => {
   const { deps, calls, toasts } = fakeDeps();
-  await assert.rejects(
-    submitTransaction({ ...deps, backendDown: true }, { kind: 'Invoice', memberId: 'm1', amountCents: 5000, description: 'Dues' }, 'k'),
-    { message: 'Not saved: the server is unreachable.' }
-  );
-  assert.deepEqual(calls, []);
-  assert.deepEqual(toasts, []);
+  let down = true;
+  await submitTransaction({ ...deps, backendDown: true,
+    setBackendDown: value => { down = value; },
+    refetch: async () => { assert.equal(down, false); return true; }
+  }, { kind: 'Invoice', memberId: 'm1', amountCents: 5000, description: 'Dues' }, 'k');
+  assert.equal(calls.length, 1);
+  assert.equal(down, false);
+  assert.deepEqual(toasts, ['Invoiced $50.00 to Jake Martinez.']);
 });
 
 test('a saved transaction whose refetch fails says it saved but the lists did not reload', async () => {
@@ -217,4 +222,33 @@ test('an event fine the server skips (e.g. a retry after it already landed) is n
   api.issueFines = async () => ({ event_id: 'e1', flat_fine_cents: 2500, issued_member_ids: [], skipped_member_ids: ['m1'] });
   await submitTransaction(deps, { kind: 'Fine', memberId: 'm1', amountCents: 2500, reason: '', eventId: 'e1' }, 'k');
   assert.deepEqual(toasts, ['No new fine for Jake Martinez: already fined, present, or excused for that event.']);
+});
+
+test('event fines exclude starts less than 24 hours ago and include the boundary', () => {
+  const events = ['recent', 'boundary', 'older', 'optional', 'unknown'].map(id => ({
+    id, date: id === 'older' || id === 'optional' ? '2026-10-04' : '2026-10-05', startTime: '19:00', required: id !== 'optional'
+  })) as import('../types').ChapterEvent[];
+  const starts = new Map([
+    ['recent', new Date('2026-10-05T19:00:01').toISOString()], ['boundary', new Date('2026-10-05T19:00:00').toISOString()],
+    ['older', new Date('2026-10-04T19:00:00').toISOString()], ['optional', new Date('2026-10-04T19:00:00').toISOString()]
+  ]);
+  assert.deepEqual(finableEvents(events, starts, new Date('2026-10-06T19:00:00')).map(e => e.id), ['boundary', 'older']);
+});
+
+test('only required starts in the last 26 hours need server eligibility; old events are local and future events excluded', () => {
+  const now = new Date('2026-10-06T19:00:00');
+  const events = [
+    ['future', '2026-10-06', '19:01'], ['just-started', '2026-10-06', '19:00'],
+    ['recent', '2026-10-06', '18:00'], ['boundary', '2026-10-05', '17:00'],
+    ['older', '2026-10-05', '16:59'], ['optional', '2026-10-06', '18:00'],
+    ['invalid', 'bad', 'bad']
+  ].map(([id, date, startTime]) => ({ id, date, startTime, required: id !== 'optional' })) as import('../types').ChapterEvent[];
+  assert.deepEqual(finableEvents(events, new Map(), now).map(e => e.id), ['older']);
+  assert.deepEqual(transactions.eventsNeedingFineEligibility(events, now).map(e => e.id), ['just-started', 'recent', 'boundary']);
+  const starts = new Map([
+    ['recent', new Date(now.getTime() - 23 * 3600000).toISOString()],
+    ['boundary', new Date(now.getTime() - 24 * 3600000).toISOString()],
+    ['future', new Date(now.getTime() - 48 * 3600000).toISOString()]
+  ]);
+  assert.deepEqual(finableEvents(events, starts, now).map(e => e.id), ['boundary', 'older']);
 });

@@ -168,3 +168,15 @@ test('Tasks board keeps the event id for targeted refreshes', () => {
   assert.equal(tasks[1].eventId, undefined);
   assert.equal(tasks[2].eventId, undefined);
 });
+
+test('a payment reference shows the recorded proof reference, never an invoice id', () => {
+  const base = { id: 'p1', member_id: 'm1', invoice_id: null, amount_cents: 5000 };
+  const [payment, missing, absent] = adaptPayments([
+    { ...base, proof_ref: 'Officer reference' },
+    { ...base, invoice_id: 'legacy-invoice', proof_ref: null },
+    base
+  ], []);
+  assert.equal(payment.reference, 'Officer reference');
+  assert.equal(missing.reference, undefined);
+  assert.equal(absent.reference, undefined);
+});

@@ -60,3 +60,17 @@ test('a payment opened from a fine locks the member and says what it pays first'
   assert.match(html, /<select[^>]*disabled/);
   assert.match(html, /pays this invoice first/);
 });
+
+test('a free-form fine offers event mode without activating the event picker', () => {
+  const html = render({ initial: { kind: 'Fine' } });
+  assert.match(html, /Fine for a required event/);
+  assert.doesNotMatch(html, /Chapter meeting|Choose an eligible event/);
+  assert.doesNotMatch(render({ initial: { kind: 'Payment' } }), /Fine for a required event/);
+});
+
+test('event mode with no eligible events blocks saving instead of creating a free-form fine', () => {
+  const html = render({ initial: { kind: 'Fine', eventId: '' }, events: [],
+    access: { kinds: ['Fine'], eventFines: true, freeFormFines: false } });
+  assert.match(html, /No past required event to fine against/);
+  assert.match(html, /Choose an eligible event/);
+});
