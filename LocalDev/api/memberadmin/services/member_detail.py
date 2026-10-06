@@ -7,8 +7,11 @@ writes — never from the frozen legacy `fines` table.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from fastapi import HTTPException
 
+from api.events.core.timing import chapter_timezone, has_started
 from api.platform.db import get_db
 
 
@@ -28,7 +31,7 @@ async def load_member_event_breakdown(chapter_id: str, member_id: str) -> dict:
 
     events = (
         sb.table("events")
-        .select("id, title, date, required")
+        .select("id, title, date, time, required")
         .eq("chapter_id", chapter_id)
         .eq("required", True)
         .order("date", desc=True)
@@ -73,6 +76,8 @@ async def load_member_event_breakdown(chapter_id: str, member_id: str) -> dict:
         row["source_event_id"]: row for row in fines if row["status"] != "cancelled"
     }
 
+    now = datetime.now(timezone.utc)
+    tz = chapter_timezone(sb, chapter_id)
     breakdown = []
     for event in events:
         event_id = event["id"]
@@ -86,8 +91,10 @@ async def load_member_event_breakdown(chapter_id: str, member_id: str) -> dict:
             status = "excused"
         elif exc and exc["status"] == "pending":
             status = "excuse_pending"
-        else:
+        elif has_started(event, tz, now):
             status = "absent"
+        else:
+            status = "upcoming"
 
         breakdown.append({
             "event_id": event_id,
