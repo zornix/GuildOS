@@ -109,6 +109,7 @@ class QueryBuilder:
     _is_single: bool = False
     _payload: dict | None = None
     _on_conflict: str | None = None
+    _ignore_conflict: str | None = None
     _chain_select: str | None = None
     _limit_n: int | None = None
     _offset_n: int | None = None
@@ -356,10 +357,12 @@ class QueryBuilder:
         row_sql = "(" + ", ".join(["%s"] * len(cols)) + ")"
         vals = [self._adapt_value(r[c]) for r in rows for c in cols]
         col_str = ", ".join(f'"{c}"' for c in cols)
-        sql = (
-            f'INSERT INTO "{self._table}" ({col_str}) '
-            f'VALUES {", ".join([row_sql] * len(rows))} RETURNING *'
-        )
+        sql = f'INSERT INTO "{self._table}" ({col_str}) VALUES {", ".join([row_sql] * len(rows))}'
+        if self._ignore_conflict:
+            # Rows that hit the conflict are skipped and absent from RETURNING.
+            conflict = ", ".join(_ident(c.strip()) for c in self._ignore_conflict.split(","))
+            sql += f" ON CONFLICT ({conflict}) DO NOTHING"
+        sql += " RETURNING *"
         cur.execute(sql, vals)
         return QueryResult(data=[self._serialize(dict(r)) for r in cur.fetchall()])
 
@@ -494,8 +497,11 @@ class _TableAccessor:
         qb = QueryBuilder(_pool=self._pool, _table=self._table)
         return qb.select(cols, count=count)
 
-    def insert(self, data: dict) -> QueryBuilder:
-        return QueryBuilder(_pool=self._pool, _table=self._table, _op="insert", _payload=data)
+    def insert(self, data: dict | list[dict], *, ignore_conflict: str | None = None) -> QueryBuilder:
+        return QueryBuilder(
+            _pool=self._pool, _table=self._table, _op="insert", _payload=data,
+            _ignore_conflict=ignore_conflict,
+        )
 
     def update(self, data: dict) -> QueryBuilder:
         return QueryBuilder(_pool=self._pool, _table=self._table, _op="update", _payload=data)

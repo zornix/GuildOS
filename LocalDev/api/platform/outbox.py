@@ -6,8 +6,10 @@ same thing. Domains keep their own `notifications.py` with the named helpers;
 this is the plumbing underneath, like the rest of api/platform/.
 
 Exactly-once: each logical event derives a deterministic `dedup_key`, the table
-has a UNIQUE index on it, and an existing row short-circuits the insert — so a
-retried operation enqueues nothing new.
+has a UNIQUE index on it, and the insert is ON CONFLICT (dedup_key) DO NOTHING —
+so a retried operation enqueues nothing new. Any other insert failure is a real
+failure: logged and swallowed for a plain client (the caller's work already
+committed), raised for a transaction client (so the transaction rolls back).
 
 `channel` ('email' | 'sms') decides which provider the drain uses. It defaults to
 email: everything automatic is email, and SMS is reserved for the two manual
@@ -16,8 +18,11 @@ announcement blasts (ADR-0005), which are produced in plpgsql, not here.
 
 from __future__ import annotations
 
+import logging
+
 from api.platform.delivery import delivery_mode
-from api.platform.rows import unwrap_row
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_sb(sb):
@@ -26,6 +31,22 @@ def _resolve_sb(sb):
     from api.platform.db import get_db
 
     return get_db()
+
+
+def _insert_ignoring_duplicates(client, rows, what: str):
+    """INSERT … ON CONFLICT (dedup_key) DO NOTHING. Returns the inserted rows, or
+    None after logging when a plain client hits a real error. Inside a
+    transaction the error propagates."""
+    try:
+        return client.table("message_outbox").insert(rows, ignore_conflict="dedup_key").execute().data or []
+    except Exception as exc:
+        if getattr(getattr(client, "_pool", None), "in_tx", False):
+            raise
+        # Primary message only, no traceback: the DETAIL line quotes the failing
+        # row, and auth payloads carry live one-time codes.
+        reason = getattr(getattr(exc, "diag", None), "message_primary", None) or type(exc).__name__
+        logger.error("outbox enqueue failed for %s: %s", what, reason)
+        return None
 
 
 def _row(
@@ -87,24 +108,8 @@ def enqueue(
         channel=channel,
     )
 
-    existing = (
-        client.table("message_outbox")
-        .select("id")
-        .eq("dedup_key", dedup_key)
-        .maybe_single()
-        .execute()
-    ).data
-    if existing:
-        return None
-
-    try:
-        result = client.table("message_outbox").insert(row).execute()
-    except Exception:
-        # Lost a race on the UNIQUE(dedup_key) backstop → another caller enqueued
-        # it first. Still exactly-once.
-        return None
-
-    return unwrap_row(result)
+    inserted = _insert_ignoring_duplicates(client, row, dedup_key)
+    return inserted[0] if inserted else None
 
 
 def enqueue_many(
@@ -119,12 +124,11 @@ def enqueue_many(
     payload: dict | None = None,
     channel: str = "email",
 ) -> int:
-    """Fan one notification out to many members in two queries, not 2N.
+    """Fan one notification out to many members in one query, not N.
 
-    `dedup_key_for(member_id) -> str`. Same exactly-once guarantee as `enqueue`:
-    already-queued keys are dropped up front, and if the bulk insert loses a race
-    on UNIQUE(dedup_key) each remaining row falls back to `enqueue`. Returns the
-    number of rows queued.
+    `dedup_key_for(member_id) -> str`. Same exactly-once guarantee and error rule
+    as `enqueue`: one bulk insert, already-queued keys are skipped by the
+    database. Returns the number of rows queued.
     """
     if not member_ids:
         return 0
@@ -143,35 +147,5 @@ def enqueue_many(
         )
         for member_id in member_ids
     }
-    queued = (
-        client.table("message_outbox")
-        .select("dedup_key")
-        .in_("dedup_key", sorted(rows))
-        .execute()
-    ).data or []
-    for existing in queued:
-        rows.pop(existing["dedup_key"], None)
-    if not rows:
-        return 0
-
-    try:
-        client.table("message_outbox").insert(list(rows.values())).execute()
-        return len(rows)
-    except Exception:
-        pass
-
-    return sum(
-        1
-        for row in rows.values()
-        if enqueue(
-            client,
-            event_type=event_type,
-            chapter_id=chapter_id,
-            member_id=row["member_id"],
-            target_table=target_table,
-            target_id=target_id,
-            dedup_key=row["dedup_key"],
-            payload=payload,
-            channel=channel,
-        )
-    )
+    inserted = _insert_ignoring_duplicates(client, list(rows.values()), f"{event_type}:{target_id}")
+    return len(inserted or [])
