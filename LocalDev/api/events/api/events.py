@@ -51,6 +51,10 @@ def _map_domain_errors():
         raise HTTPException(409, str(exc))
     except (svc.NotEligible, svc.InvalidTimeRange) as exc:
         raise HTTPException(422, str(exc))
+    except Exception as exc:
+        if "is not an active member" in str(exc):
+            raise HTTPException(422, "Member must be active") from exc
+        raise
 
 
 # NOTE: fixed paths (/types, /upcoming-details) are declared before /{event_id} so they are not

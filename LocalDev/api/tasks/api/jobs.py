@@ -20,6 +20,10 @@ from api.tasks.services.tasks import get_task
 
 router = APIRouter()
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 # State/uniqueness conflicts every tk_* route maps to 409. Shared with tasks.py
 # (PATCH/DELETE) so the mapping lives in one place.
@@ -44,16 +48,29 @@ def _rpc_http_error(exc: Exception) -> HTTPException:
     """Map tk_* job-lifecycle RPC exceptions onto HTTP statuses."""
     msg = str(exc)
     if "not found" in msg:
-        return HTTPException(404, msg)
+        return HTTPException(404, "Task not found")
     if "rejection_reason_required" in msg:
         return HTTPException(422, "A rejection reason is required")
-    if "job_title_required" in msg or "job_people_needed_invalid" in msg:
-        return HTTPException(422, msg)
+    if "job_title_required" in msg:
+        return HTTPException(422, "A job title is required")
+    if "job_people_needed_invalid" in msg:
+        return HTTPException(422, "Job capacity must be at least one")
+    if "security_no_status_change" in msg:
+        return HTTPException(400, "security_no_status_change")
     if "no active commitment" in msg:
         return HTTPException(403, "Only a claimant of this job can report it done")
-    if any(tok in msg for tok in _CONFLICT):
-        return HTTPException(409, msg)
-    return HTTPException(400, msg)
+    for token in _CONFLICT:
+        if token in msg:
+            detail = {
+                "cannot be reported": "Job cannot be reported done",
+                "cannot be approved": "Job cannot be approved",
+                "cannot be rejected": "Job cannot be rejected",
+            }.get(token, token)
+            return HTTPException(409, detail)
+    # Unmapped: log here because returning (not raising the original) skips
+    # the observability catch-all that would have recorded the trace.
+    logger.exception("unmapped RPC error")
+    return HTTPException(500, "Internal server error")
 
 
 def _load_task_or_404(sb, *, chapter_id: str, task_id: str) -> dict:
