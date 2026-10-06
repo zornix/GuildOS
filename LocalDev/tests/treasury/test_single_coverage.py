@@ -21,12 +21,21 @@ from api.treasury.services import refunds as ref_svc
 _MIGRATION = Path(__file__).resolve().parents[2] / "migrations" / "0165_single_coverage.sql"
 
 
-def _run_0165_data(cursor):
-    """Re-run the data statements of 0165 (they are written to be re-runnable)."""
+def _run_0165_data(cursor, chapter_id):
+    """Re-run the 0165 data statements only inside this test's chapter."""
     sql = _MIGRATION.read_text()
     start = sql.index("-- >>> 0165 data")
     end = sql.index("-- <<< 0165 data")
-    cursor.execute(sql[start:end])
+    # Escape PL/pgSQL RAISE format markers before adding psycopg placeholders.
+    data_sql = sql[start:end].replace("%", "%%")
+    data_sql = data_sql.replace(
+        "WHERE invoice_id IS NOT NULL",
+        "WHERE invoice_id IS NOT NULL AND chapter_id = %s",
+    ).replace(
+        "WHERE vp.invoice_id IS NOT NULL",
+        "WHERE vp.invoice_id IS NOT NULL AND vp.chapter_id = %s",
+    )
+    cursor.execute(data_sql, (chapter_id, chapter_id, chapter_id))
 
 
 def _legacy_paid_invoice(cursor, chapter_id, member_id, amount):
@@ -70,7 +79,7 @@ def test_reallocating_a_directly_covered_payment_does_not_pay_two_invoices(
 ):
     inv_a, vp = _legacy_paid_invoice(cursor, chapter_id, member_id, 5000)
     inv_b = _unpaid_invoice(cursor, chapter_id, member_id, 5000)
-    _run_0165_data(cursor)  # what the migration did to every legacy row
+    _run_0165_data(cursor, chapter_id)  # migrate this chapter's legacy row
 
     cursor.execute(
         "SELECT tr_reallocate_payment(%s, %s, %s::jsonb, %s, %s)",
@@ -142,8 +151,8 @@ def test_migrated_direct_coverage_keeps_balances(sb_client, cursor, chapter_id, 
     inv, vp = _legacy_paid_invoice(cursor, chapter_id, member_id, 2500)
     before = _figures(sb_client, member_id)
 
-    _run_0165_data(cursor)
-    _run_0165_data(cursor)  # second run is a no-op
+    _run_0165_data(cursor, chapter_id)
+    _run_0165_data(cursor, chapter_id)  # second run is a no-op
 
     assert _figures(sb_client, member_id) == before
     assert _status(cursor, inv) == "paid"
