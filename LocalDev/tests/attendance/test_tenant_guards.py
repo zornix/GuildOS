@@ -354,3 +354,15 @@ def test_direct_insert_without_chapter_derives_it(
         (event, member),
     )
     assert str(cursor.fetchone()["chapter_id"]) == chapter
+
+
+def test_checkin_self_rpc_rejects_cross_chapter(cursor, chapter_id, chapter_factory, event_factory, member_factory):
+    import psycopg2
+    member = member_factory(chapter=chapter_factory())
+    event = event_factory(chapter_id)
+    with pytest.raises(psycopg2.Error, match="member .* not found in chapter"):
+        cursor.execute("SELECT at_checkin_self(%s, %s, %s)", (chapter_id, event, member))
+    cursor.execute("SELECT id FROM attendance WHERE event_id = %s AND member_id = %s", (event, member))
+    assert cursor.fetchall() == []
+    cursor.execute("SELECT id FROM audit_logs WHERE chapter_id = %s AND actor_id = %s", (chapter_id, member))
+    assert cursor.fetchall() == []
