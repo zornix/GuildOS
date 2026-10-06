@@ -17,7 +17,7 @@ interface CommandModuleProps {
   events: ChapterEvent[];
   currentMemberName: string;
   onExecuteCommand: (result: {
-    type: 'FINE' | 'TASK' | 'EVENT' | 'BID' | 'ANNOUNCEMENT' | 'EXCUSE_APPROVE' | 'ATTENDANCE';
+    type: 'FINE' | 'TASK' | 'EVENT' | 'ANNOUNCEMENT' | 'EXCUSE_APPROVE' | 'ATTENDANCE';
     payload: any;
     summary: string;
   }) => void;
@@ -190,33 +190,7 @@ export default function CommandModule({
       }
     }
 
-    // 4. EXTEND BID PARSER
-    // "extend bid to [PNM Name]"
-    if (lower.includes('bid') && lower.includes('to')) {
-      const pnmMatch = raw.match(/(?:extend|give|offer)\s+bid\s+to\s+([a-zA-Z\s]+)/i);
-      if (pnmMatch) {
-        const pnmName = pnmMatch[1].trim();
-        onExecuteCommand({
-          type: 'BID',
-          payload: {
-            pnmName
-          },
-          summary: `Extended official bid to PNM "${pnmName}"`
-        });
-
-        setCommandHistory(prev => [{
-          input: raw,
-          timestamp,
-          status: 'Sent',
-          summary: `Updated recruitment pipeline: Bid Extended to ${pnmName}`
-        }, ...prev]);
-
-        setCommandInput('');
-        return;
-      }
-    }
-
-    // 5. ANNOUNCEMENT BLAST PARSER
+    // 4. ANNOUNCEMENT BLAST PARSER
     // "send announcement: [Message]" or "post announcement: [Message]"
     if (lower.includes('announcement')) {
       const annText = raw.replace(/^(?:send|post|broadcast)\s+announcement:?\s*/i, '');
@@ -243,7 +217,7 @@ export default function CommandModule({
       return;
     }
 
-    // 6. APPROVE EXCUSE PARSER
+    // 5. APPROVE EXCUSE PARSER
     // "approve excuse for [Member]"
     if (lower.includes('approve excuse')) {
       const nameMatch = raw.match(/approve\s+excuse\s+for\s+([a-zA-Z\s]+)/i);

@@ -17,7 +17,7 @@ if str(ROOT) not in sys.path:
 from scripts.db_guard import require_demo
 from scripts.migrate_db import _database_url
 
-# Audited INSERTs and API-created names in tests/{treasury,recruitment,
+# Audited INSERTs and API-created names in tests/{treasury,
 # attendance,announcements,platform,events,rbac,contribution,chapters}.
 TEST_PREFIXES = ('tr-test-', 'rc-test-', 'at-test-', 'ob-test-', 'tx-test-',
                  'tx-outbox-', 'foreign-', 'other-', 'rbac-other-', 'contrib-other-')

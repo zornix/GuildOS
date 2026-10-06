@@ -30,7 +30,7 @@ The product is a working **demo chapter**, not a shippable multi-tenant
 release. Officers and members can run the real workflows in greekos against
 the demo database: login, roster, events and jobs, security shifts and swaps,
 initiatives, attendance and excuses, treasury (dues/fines as invoices),
-standing, tasks, announcements, and recruitment. Permission keys (not
+standing, tasks, and announcements. Permission keys (not
 `user.role === "officer"`) gate the UI.
 
 **What is real**

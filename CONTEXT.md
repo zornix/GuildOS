@@ -69,7 +69,7 @@ _Avoid_: task (storage-layer name only), chore, assignment, house job
 
 **Chair**:
 A member granted a slice of officer work in one domain (risk, social,
-recruitment, brotherhood, philanthropy, standards). A chair holds only that
+rush, brotherhood, philanthropy, standards). A chair holds only that
 chair role's permissions and is not an officer.
 _Avoid_: assistant, supervisor (a supervisor is per-event, not a standing role)
 

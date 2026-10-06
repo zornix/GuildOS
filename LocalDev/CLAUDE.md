@@ -83,9 +83,9 @@ never has a db directory for those, and never re-exports
 `require_permission` — route files import it from `api.rbac.auth` directly.
 
 Domains live one per directory under `api/<domain>/` — run `ls api/` for the
-authoritative list (currently ~16: `auth`, `events`, `attendance`, `treasury`,
+authoritative list (currently ~15: `auth`, `events`, `attendance`, `treasury`,
 `tasks`, `announcements`, `memberadmin` (owns standing), `members`,
-`recruitment`, `bylaws`, `nl_controller`, `rbac`, `calendar`, `initiatives`,
+`bylaws`, `nl_controller`, `rbac`, `calendar`, `initiatives`,
 `cron`, `instrumentation`, plus `platform`, which is plumbing rather than a
 domain). `api/index.py` is the FastAPI app: it mounts every router and applies
 CORS. Only `attendance`, `events`, `tasks` and `treasury` keep an

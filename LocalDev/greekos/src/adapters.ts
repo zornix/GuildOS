@@ -1,7 +1,7 @@
 import type { CheckInLinkDto } from './api';
 // Backend DTO -> prototype type mapping. Everything the backend does not send
 // gets an empty default here — nothing is invented. Client-local demo features
-// (GPA, pledge class) stay defaulted.
+// (GPA, class) stay defaulted.
 import {
   AnnouncementDto,
   ContributionDto,
@@ -12,7 +12,6 @@ import {
   InitiativeDto,
   MemberDto,
   OutboxMessageDto,
-  RecruitDto,
   ScoreDto,
   SecurityAssignmentDto,
   StandingDto,
@@ -34,7 +33,6 @@ import {
   OutboxMessage,
   OutboxStatus,
   Payment,
-  PNM,
   SecurityAssignment,
   Task
 } from './types';
@@ -82,7 +80,7 @@ export function adaptMembers(
       duesBalanceCents: balanceCents,
       duesBalance: balanceCents / 100,
       attendanceRate: s && s.total_required ? Math.round((s.attended / s.total_required) * 100) : 0,
-      pledgeClass: '',
+      memberClass: '',
       securityHoursServed: 0,
       priorSecurityShifts: shiftsById.get(row.id) || 0,
       smsConsent: row.sms_consent === true
@@ -98,8 +96,6 @@ const EVENT_TYPES: EventType[] = [
   'Philanthropy',
   'Brotherhood',
   'Social',
-  'Recruitment',
-  'Pledge Education',
   'Community Service'
 ];
 
@@ -370,33 +366,6 @@ export function adaptAnnouncements(rows: AnnouncementDto[], members: Member[]): 
     channels: ['Calendar'],
     calendarDate: day(row.calendar_date) || undefined,
     calendarTime: hhmm(row.calendar_time) || undefined
-  }));
-}
-
-// ----------------------------------------------------
-// RECRUITMENT
-// ----------------------------------------------------
-const RECRUIT_STAGES: Record<string, PNM['status']> = {
-  lead: 'Lead',
-  contacted: 'Contacted',
-  attended_event: 'Invited to House',
-  bid_extended: 'Bid Extended',
-  bid_accepted: 'Bid Accepted',
-  dropped: 'Declined'
-};
-
-export function adaptRecruits(rows: RecruitDto[]): PNM[] {
-  return rows.map(row => ({
-    id: row.id,
-    name: row.name,
-    hometown: '',
-    major: '',
-    phone: row.phone || '',
-    email: row.email || undefined,
-    status: RECRUIT_STAGES[row.stage] || 'Prospect',
-    notes: row.notes || undefined,
-    votesFor: 0,
-    votesAgainst: 0
   }));
 }
 

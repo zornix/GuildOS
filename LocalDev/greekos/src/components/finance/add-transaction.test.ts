@@ -9,7 +9,7 @@ import type { TransactionAccess } from '../../lib/dues';
 const member: Member = {
   id: 'm1', name: 'Jake Martinez', email: 'jake@example.test', phone: '',
   role: 'Active Member', status: 'Active', standing: 'Good Standing', gpa: 3.2,
-  duesBalanceCents: 2500, duesBalance: 25, attendanceRate: 90, pledgeClass: "Fall '22"
+  duesBalanceCents: 2500, duesBalance: 25, attendanceRate: 90, memberClass: "Fall '22"
 };
 
 const event: ChapterEvent = {

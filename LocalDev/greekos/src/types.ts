@@ -4,14 +4,12 @@ export type MemberRole =
   | 'Treasurer' 
   | 'Secretary' 
   | 'Risk Manager' 
-  | 'Recruitment Chair' 
+  | 'Rush Chair' 
   | 'Social Chair' 
   | 'Philanthropy Chair' 
   | 'Scholarship Chair' 
   | 'Officer' // backend members.role === 'officer' (no specific title exposed)
   | 'Active Member'
-  | 'Pledge'
-  | 'Pledge Educator'
   | 'Alumni';
 
 export type MemberStanding = 
@@ -29,7 +27,7 @@ export interface Member {
   email: string;
   phone: string;
   role: MemberRole;
-  status: 'Active' | 'Pledge' | 'Alumni' | 'Inactive';
+  status: 'Active' | 'Alumni' | 'Inactive';
   standing: MemberStanding;
   major?: string;
   gpa: number;
@@ -38,7 +36,7 @@ export interface Member {
   duesBalanceCents: number; // Integer cents end to end
   duesBalance: number; // in dollars for display convenience
   attendanceRate: number;
-  pledgeClass: string; // e.g. "Fall '22"
+  memberClass: string; // e.g. "Fall '22"
   roomNumber?: string;
   securityHoursServed?: number;
   /** Approved security jobs already held (D17) — picker decoration only. */
@@ -52,8 +50,6 @@ export type EventType =
   | 'Philanthropy' 
   | 'Brotherhood' 
   | 'Social' 
-  | 'Recruitment' 
-  | 'Pledge Education' 
   | 'Community Service';
 
 export type JobStatus = 'To Do' | 'In Progress' | 'Done Reported' | 'Approved' | 'Rejected';
@@ -95,7 +91,7 @@ export interface ChapterEvent {
   time: string; // display string
   location: string;
   type: EventType;
-  audience: 'All Members' | 'Officers Only' | 'Actives Only' | 'Pledges Only';
+  audience: 'All Members' | 'Officers Only' | 'Actives Only';
   required: boolean;
   attendanceTaken: boolean;
   checkedInCount?: number;
@@ -194,27 +190,6 @@ export interface Task {
   /** Which event or initiative the job belongs to; absent for a standalone job. */
   parent?: { kind: 'event' | 'initiative'; title: string };
   category?: 'House Chore' | 'Officer Project' | 'Maintenance' | 'Ritual Prep';
-}
-
-export interface PNM {
-  id: string;
-  name: string;
-  hometown: string;
-  highSchoolGPA?: number;
-  gpa?: number;
-  major: string;
-  phone: string;
-  email?: string;
-  year?: string;
-  status: 'Lead' | 'Contacted' | 'Invited to House' | 'Bid Extended' | 'Bid Accepted' | 'Declined' | 'Prospect' | 'Rush Active';
-  rating?: number; // 1-5 stars
-  recommendedBy?: string; // active member name
-  comments?: string[];
-  notes?: string;
-  tags?: string[];
-  votesFor?: number;
-  votesAgainst?: number;
-  eventsAttended?: number;
 }
 
 export interface ChapterRule {

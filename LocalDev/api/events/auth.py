@@ -16,7 +16,7 @@ OFFICER_VIEW = "calendar:officer:view"
 CHAIR_ROLES: tuple[str, ...] = (
     "risk_chair",
     "social_chair",
-    "recruitment_chair",
+    "rush_chair",
     "brotherhood_chair",
     "philanthropy_chair",
     "standards_chair",

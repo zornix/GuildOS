@@ -30,7 +30,7 @@ affects standing.
 ## Frozen — do not build, extend, or polish
 
 NL controller, Bylaws Q&A/RAG (verbatim storage stays), new task surfaces
-(existing event/initiative/standalone jobs all keep working), recruitment.
+(existing event/initiative/standalone jobs all keep working).
 
 ## Decision record
 

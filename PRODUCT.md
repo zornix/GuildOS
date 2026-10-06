@@ -6,7 +6,7 @@ product
 
 ## Users
 
-GuildOS serves fraternity chapter officers, administrators, and members who need one operational source of truth for chapter life. Officers use it during recurring chapter workflows: planning events, opening attendance check-ins, reviewing excuses, issuing fines, managing treasury records, tracking tasks, sending announcements, monitoring standing, handling recruitment, referencing bylaws, and assigning roles. Members use it to see obligations clearly, check in from mobile, submit excuses, and understand their own fines or standing without relying on side channels.
+GuildOS serves fraternity chapter officers, administrators, and members who need one operational source of truth for chapter life. Officers use it during recurring chapter workflows: planning events, opening attendance check-ins, reviewing excuses, issuing fines, managing treasury records, tracking tasks, sending announcements, monitoring standing, referencing bylaws, and assigning roles. Members use it to see obligations clearly, check in from mobile, submit excuses, and understand their own fines or standing without relying on side channels.
 
 ## Product Purpose
 

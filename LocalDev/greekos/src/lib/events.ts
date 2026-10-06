@@ -1,9 +1,9 @@
 import type { ChapterEvent } from '../types';
 
 /** Chips on the Events bar. 'All' first; the rest are the types officers
- *  actually schedule (Recruitment and Community Service exist but are rare). */
+ *  actually schedule (Community Service exists but is rare). */
 export const EVENT_FILTER_TYPES = [
-  'All', 'Chapter Meeting', 'Philanthropy', 'Brotherhood', 'Social', 'Pledge Education'
+  'All', 'Chapter Meeting', 'Philanthropy', 'Brotherhood', 'Social'
 ] as const;
 
 export function filterEventsByType(events: ChapterEvent[], type: string): ChapterEvent[] {
