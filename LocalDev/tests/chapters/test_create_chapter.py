@@ -32,9 +32,10 @@ def test_create_chapter_writes_chapter_officer_and_role(client, create_body, cle
     assert officer["password_hash"] is None
 
     cursor.execute(
-        "SELECT role_key FROM member_roles WHERE member_id = %s", (created["officer_id"],)
+        "SELECT role_key FROM member_roles WHERE member_id = %s ORDER BY role_key",
+        (created["officer_id"],),
     )
-    assert [r["role_key"] for r in cursor.fetchall()] == ["officer"]
+    assert [r["role_key"] for r in cursor.fetchall()] == ["admin", "officer"]
 
     # The code is a redeemable invite, stored only as a hash.
     cursor.execute(
@@ -44,6 +45,20 @@ def test_create_chapter_writes_chapter_officer_and_role(client, create_body, cle
     code_row = cursor.fetchone()
     assert code_row["used_at"] is None
     assert created["setup_code"] not in code_row["code_hash"]
+
+
+def test_creator_becomes_admin(client, create_body, cleanup, cursor):
+    body = create_body()
+
+    res = client.post("/api/chapters", json=body)
+
+    assert res.status_code == 201, res.text
+    created = _created(res, cleanup)
+    cursor.execute(
+        "SELECT role_key FROM member_roles WHERE member_id = %s ORDER BY role_key",
+        (created["officer_id"],),
+    )
+    assert [r["role_key"] for r in cursor.fetchall()] == ["admin", "officer"]
 
 
 def test_officer_redeems_setup_code_and_becomes_active(client, create_body, cleanup, cursor):
