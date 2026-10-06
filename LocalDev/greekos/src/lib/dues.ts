@@ -216,9 +216,19 @@ export interface ProofPlan {
 
 const METHOD_VALUES = new Set<string>(PAYMENT_METHODS.map(m => m.value));
 
+/** Still owed and still open. A refund reopens the invoice it covered (D3),
+ *  so a once-paid invoice comes back here as payable. */
+export const isPayable = (invoice: Invoice): boolean =>
+  invoice.status !== 'Void' && invoice.remainingCents > 0;
+
+/** Where a verified payment lands (D7): the invoice it was submitted against
+ *  first, then the member's oldest unpaid invoice. */
+export const proofAllocationNote = (invoice: Invoice): string =>
+  `Pays ${invoiceTitle(invoice)} first; anything left over goes to your oldest unpaid invoice.`;
+
 /** Validate a proof submission against the invoice it is paying.
- *  Overpaying is allowed — verification allocates the surplus to the member's
- *  other open invoices and leaves any leftover as credit. */
+ *  Overpaying is allowed — verification covers this invoice first and puts
+ *  the surplus on the member's oldest unpaid invoice (D7). */
 export function planProof(invoice: Invoice, draft: ProofDraft): ProofPlan {
   const fail = (error: string): ProofPlan => ({
     valid: false, error, body: { invoice_id: invoice.id, claimed_amount_cents: 0, method: '' }

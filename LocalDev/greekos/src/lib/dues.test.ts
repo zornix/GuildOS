@@ -12,8 +12,10 @@ import {
   duesRunErrorMessage,
   invoiceStatus,
   invoiceTitle,
+  isPayable,
   planDuesRun,
   planProof,
+  proofAllocationNote,
   rejectionReasonValid,
   transactionAccess
 } from './dues';
@@ -160,6 +162,26 @@ test('paying more than the invoice is allowed — verification allocates the res
   const plan = planProof(invoice, { amountDollars: '500', method: 'zelle', note: '' });
   assert.equal(plan.valid, true);
   assert.equal(plan.body.claimed_amount_cents, 50000);
+});
+
+test('the proof form says the named invoice is paid first (D7)', () => {
+  assert.equal(
+    proofAllocationNote(invoice),
+    'Pays Fall 2026 dues first; anything left over goes to your oldest unpaid invoice.'
+  );
+  assert.equal(
+    proofAllocationNote(adaptInvoice(invoiceDto({ description: null, source: 'fine' }))),
+    'Pays Fine first; anything left over goes to your oldest unpaid invoice.'
+  );
+});
+
+test('an invoice a refund reopened is payable again; paid and void ones are not (D3)', () => {
+  const reopened = adaptInvoice(invoiceDto({ status: 'open', remaining_cents: 25000, overdue: true }));
+  assert.equal(reopened.status, 'Overdue');
+  assert.equal(isPayable(reopened), true);
+  assert.equal(isPayable(adaptInvoice(invoiceDto({ remaining_cents: 10000 }))), true);
+  assert.equal(isPayable(adaptInvoice(invoiceDto({ remaining_cents: 0 }))), false);
+  assert.equal(isPayable(adaptInvoice(invoiceDto({ status: 'void' }))), false);
 });
 
 test('a rejection must carry a reason', () => {

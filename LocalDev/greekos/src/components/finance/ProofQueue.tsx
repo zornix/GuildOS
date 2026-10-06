@@ -14,8 +14,8 @@ interface ProofQueueProps {
 }
 
 /** Everything a member has claimed to pay, waiting on the treasury board.
- *  Verify allocates the money oldest-invoice-first; rejecting needs a reason
- *  the member will read. */
+ *  Verify pays the invoice the member named first, then their oldest unpaid
+ *  invoice (D7); rejecting needs a reason the member will read. */
 export default function ProofQueue({
   submissions,
   loading,
@@ -42,7 +42,7 @@ export default function ProofQueue({
           Proof queue
         </h3>
         <p className="text-xs text-slate-500">
-          Payments members say they made. Verifying credits their oldest open invoices first.
+          Payments members say they made. Verifying pays the invoice they named first, then their oldest unpaid invoice.
         </p>
       </div>
 

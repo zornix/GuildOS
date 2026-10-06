@@ -10,7 +10,9 @@ import {
   ProofDraft,
   formatDueDate,
   invoiceTitle,
-  planProof
+  isPayable,
+  planProof,
+  proofAllocationNote
 } from '../../lib/dues';
 
 const STATUS_TONE: Record<InvoiceStatus, string> = {
@@ -139,7 +141,7 @@ export default function InvoiceView({
         </div>
 
         {/* Submit proof */}
-        {canSubmitProof && invoice.remainingCents > 0 && (
+        {canSubmitProof && isPayable(invoice) && (
           <form onSubmit={submit} className="space-y-3 border-t border-slate-200 pt-4">
             <h5 className="text-xs font-bold text-slate-900">Submit proof</h5>
 
@@ -215,7 +217,7 @@ export default function InvoiceView({
               {sending ? 'Sending…' : 'Submit proof'}
             </button>
             <p className="text-xs text-slate-500">
-              Nothing moves until the treasury board verifies it.
+              Nothing moves until the treasury board verifies it. {proofAllocationNote(invoice)}
             </p>
           </form>
         )}
