@@ -98,3 +98,23 @@ automatic is email; SMS is only the two announcement blasts an officer composes
 and sends on purpose, and only those carry consent enforcement and the opt-out
 footer (ADR-0005).
 _Avoid_: delivery mode (that is dry_run vs. the live provider), transport
+
+**Cancelled event**:
+An event with attached history (attendance, jobs, fines) that was cancelled rather than hard-deleted (`cancelled = true`, `required = false`). Cancelled events are hidden from all lists while preserving history.
+_Avoid_: deleted event, purged event
+
+**Waived fine**:
+An issued fine invoice marked `cancelled` via the void RPC, forgiving the amount owed without deleting the historical record.
+_Avoid_: deleted fine, refunded fine
+
+**Door code**:
+A short-lived check-in code for an event. Check-in requires being signed in; members cannot read active codes through the API.
+_Avoid_: public check-in code, open link
+
+**Legacy display role**:
+The two-value `members.role` column (`officer` or `member`), kept in step by the RPCs. It does not store the highest-precedence assigned role; permissions come from `member_roles` plus an implicit `member` baseline.
+_Avoid_: system role, permission level
+
+**Heartbeat**:
+The `/api/health` monitoring probe. Reports 200 when database and outbox drain are healthy, 503 if the DB is down, or `degraded` if the cron drain is stale.
+_Avoid_: ping check, status page
