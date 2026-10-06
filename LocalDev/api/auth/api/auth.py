@@ -1,3 +1,4 @@
+import logging
 import secrets
 from datetime import datetime, timezone, timedelta
 
@@ -17,6 +18,8 @@ from api.members.api.schemas import UserProfile
 from api.platform.db import get_db
 from api.config import settings
 from api.auth.notifications import RESET_CODE, SETUP_CODE, notify_code
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -201,7 +204,7 @@ def _record_attempt(sb, *, email: str, ip: str | None, success: bool) -> None:
 @router.post("/login")
 async def login(body: LoginRequest, request: Request):
     """
-    Authenticate a member. Role plays no part in this flow (imp-one-gate.md D2).
+    Authenticate a member. Role plays no part in this flow.
 
     - Any member with a password_hash must supply the password.
     - A member without one never gets a token from here: email alone would let
@@ -390,7 +393,8 @@ async def invite_members(
             invited.append(email)
             setup_codes.append({"email": email, "setup_code": code, "expires_at": expires_at})
         except Exception as exc:
-            failed.append({"email": email, "error": str(exc)})
+            logger.warning("invite member failed: %s", exc)
+            failed.append({"email": email, "error": "Could not invite this address"})
 
     return {"invited": invited, "setup_codes": setup_codes, "failed": failed}
 

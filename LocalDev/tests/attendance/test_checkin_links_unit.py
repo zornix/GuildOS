@@ -451,3 +451,61 @@ async def test_code_collision_retries_the_whole_transaction(attendance_app, curs
     assert states == {previous["id"]: False, replacement["id"]: True}
     cursor.execute("SELECT active FROM checkin_links WHERE id = %s", (existing["id"],))
     assert cursor.fetchone()["active"] is True
+
+
+def test_rpc_http_error_mappings():
+    from api.attendance.api.errors import _rpc_http_error
+
+    # not found -> 404
+    e404 = _rpc_http_error(Exception("event 123 not found in chapter 456"))
+    assert e404.status_code == 404
+    assert e404.detail == "Event not found"
+
+    # member not found -> 404
+    m404 = _rpc_http_error(Exception("member 123 not found in chapter 456"))
+    assert m404.status_code == 404
+    assert m404.detail == "Member not found"
+
+    # not active -> 403
+    e403 = _rpc_http_error(Exception("actor 123 is not an active member of chapter 456"))
+    assert e403.status_code == 403
+    assert e403.detail == "Actor is not an active member of this chapter"
+
+    # excuse reason required -> 400
+    e400 = _rpc_http_error(Exception("excuse reason is required when marking as excused"))
+    assert e400.status_code == 400
+    assert e400.detail == "Excuse reason is required when marking as excused"
+
+    # unknown -> 400 default safe message
+    unknown = _rpc_http_error(Exception("internal plpgsql syntax error at line 42"))
+    assert unknown.status_code == 400
+    assert unknown.detail == "That change is not allowed"
+
+
+def test_rpc_http_error_keeps_main_status_rules_for_already_checked_in():
+    from api.attendance.api.errors import _rpc_http_error
+
+    assert _rpc_http_error(Exception("already checked in")).status_code == 400
+
+
+def test_rpc_http_error_does_not_read_bare_words_as_not_found():
+    from api.attendance.api.errors import _rpc_http_error
+
+    fk = _rpc_http_error(Exception(
+        'insert or update on table "event_attendance" violates foreign key '
+        'constraint "event_attendance_member_id_fkey"'
+    ))
+    assert fk.status_code == 400
+    assert fk.detail == "That change is not allowed"
+
+    # The PL/pgSQL CONTEXT line names the function; that must not pick the message.
+    review = _rpc_http_error(Exception(
+        "excuse 9f not found in chapter 4a\n"
+        "CONTEXT:  PL/pgSQL function at_review_excuse(uuid,uuid,text,uuid,text) line 20 at RAISE"
+    ))
+    assert review.status_code == 404
+    assert review.detail == "Excuse not found"
+    odd = _rpc_http_error(Exception(
+        "deadlock detected\nCONTEXT:  PL/pgSQL function at_review_excuse(uuid) line 3"
+    ))
+    assert odd.detail == "That change is not allowed"

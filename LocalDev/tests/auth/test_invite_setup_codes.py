@@ -243,6 +243,7 @@ def test_invite_duplicate_email_fails_that_email_only(
     body = res.json()
     assert body["invited"] == [fresh1, fresh2]  # order preserved
     assert [f["email"] for f in body["failed"]] == [existing_email]
+    assert body["failed"][0]["error"] == "Could not invite this address"
     assert sorted(c["email"] for c in body["setup_codes"]) == sorted([fresh1, fresh2])
     # The duplicate never wrote a second member_setup_codes row.
     cursor.execute(

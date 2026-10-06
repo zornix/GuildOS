@@ -7,18 +7,9 @@ from api.platform.rpc import call_rpc
 from .schemas import ManualAttendance
 from api.attendance.services.checkin_links import validate_checkin_link
 from api.platform.db import get_db
+from .errors import _rpc_http_error
 
 router = APIRouter()
-
-
-def _rpc_http_error(exc: Exception) -> HTTPException:
-    """Map at_* RPC exceptions onto HTTP statuses (mirrors the ev_* handlers)."""
-    msg = str(exc)
-    if "not found" in msg:
-        return HTTPException(404, msg)
-    if "not an active member" in msg or "not authorized" in msg:
-        return HTTPException(403, msg)
-    return HTTPException(400, msg)
 
 
 @router.post("/checkin/{short_code}")
@@ -46,7 +37,7 @@ async def checkin_via_link(short_code: str, user=Depends(get_current_user)):
     except Exception as exc:
         if "already checked in" in str(exc):
             raise HTTPException(409, "Already checked in") from exc
-        raise
+        raise _rpc_http_error(exc) from exc
 
     return {
         "status": "checked_in",

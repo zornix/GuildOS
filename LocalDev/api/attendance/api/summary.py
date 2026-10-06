@@ -1,4 +1,4 @@
-"""Attendance summary read — derived attendance % (spec §3).
+"""Attendance summary read — derived attendance percentage.
 
 Officer-or-self semantics: any member can read their own summary; reading the
 whole chapter (or another member) requires calendar:officer:view or one of the
