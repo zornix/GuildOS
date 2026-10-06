@@ -654,6 +654,7 @@ class PostgresClient:
             yield self
             return
         conn = self._pool.getconn()
+        tx = None
         try:
             conn.autocommit = False
             tx = PostgresClient.__new__(PostgresClient)
@@ -670,10 +671,13 @@ class PostgresClient:
                 conn.rollback()
                 raise
         finally:
-            tx._pool.release()
-            if not conn.closed:
-                conn.autocommit = True
-            self._pool.putconn(conn)
+            try:
+                if tx is not None:
+                    tx._pool.release()
+                    if not conn.closed:
+                        conn.autocommit = True
+            finally:
+                self._pool.putconn(conn)
 
     def close(self) -> None:
         self._pool.closeall()
