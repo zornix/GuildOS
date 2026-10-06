@@ -4,9 +4,11 @@
 #   run-stream.sh <stream-id>            e.g. run-stream.sh 02
 #   SETUP_ONLY=1 run-stream.sh 02        create the worktree, print the prompt, do not launch
 #   TIMEOUT=5400 run-stream.sh 08        outer timeout in seconds (default 90 min)
+#   EXTRA_FILE=f.txt run-stream.sh 08    append the stream's carry-over lines to the prompt
 #
 # Logs and the agent's final report go to $REPO/archive/audit-remediation-2026-10/<stream>/.
 # Launch several with run_in_background; never run two streams of different waves together.
+# Cursor/Grok streams moved to Codex (Grok out of usage, 2026-10-05).
 # Claude streams (01, 03, 05, 06, 15) are dispatched with the Agent tool, not this script.
 set -euo pipefail
 
@@ -19,12 +21,12 @@ case $id in
   04) plan=04-db-guards.md;                 branch=fix/audit-04-db-guards;        cli=cursor ;;
   07) plan=07-ci-tooling.md;                branch=fix/audit-07-ci-tooling;       cli=agy ;;
   08) plan=08-standing-balance-readers.md;  branch=fix/audit-08-standing-readers; cli=codex ;;
-  09) plan=09-fines-pipeline.md;            branch=fix/audit-09-fines-pipeline;   cli=cursor ;;
+  09) plan=09-fines-pipeline.md;            branch=fix/audit-09-fines-pipeline;   cli=codex ;;
   10) plan=10-check-in.md;                  branch=fix/audit-10-check-in;         cli=codex ;;
   11) plan=11-events-tasks.md;              branch=fix/audit-11-events-tasks;     cli=codex ;;
-  12) plan=12-outbox-delivery.md;           branch=fix/audit-12-outbox-delivery;  cli=cursor ;;
+  12) plan=12-outbox-delivery.md;           branch=fix/audit-12-outbox-delivery;  cli=codex ;;
   13) plan=13-auth-config-onboarding.md;    branch=fix/audit-13-auth-config;      cli=codex ;;
-  14) plan=14-outbox-ops.md;                branch=fix/audit-14-outbox-ops;       cli=cursor ;;
+  14) plan=14-outbox-ops.md;                branch=fix/audit-14-outbox-ops;       cli=codex ;;
   16) plan=16-sweep.md;                     branch=fix/audit-16-sweep;            cli=agy ;;
   17) plan=17-docs.md;                      branch=fix/audit-17-docs;             cli=agy ;;
   *) echo "stream $id is not an external-CLI stream" >&2; exit 2 ;;
@@ -48,13 +50,17 @@ CONSTRAINTS: change only the files your plan allows. Do NOT commit, stage, or ru
 VERIFICATION: every fix starts with a test that fails first; run the test folders your plan names and paste the final count line.
 OUTPUT: finish with the report block from 'What to hand back', as plain text, and nothing after it."
 
+[ -n "${EXTRA_FILE:-}" ] && prompt="$prompt
+CARRY-OVERS FROM EARLIER STREAMS (binding):
+$(cat "$EXTRA_FILE")"
+
 if [ "${SETUP_ONLY:-0}" = 1 ]; then printf '%s\n' "$prompt"; echo "worktree: $WT"; exit 0; fi
 
 start=$(date +%s)
 case $cli in
   codex)
     timeout "$T" codex exec -s workspace-write -c sandbox_workspace_write.network_access=true \
-      --skip-git-repo-check --ephemeral -C "$WT" -m gpt-6-luna -c model_reasoning_effort=medium \
+      --skip-git-repo-check --ephemeral -C "$WT" -m gpt-6.1-sol -c model_reasoning_effort=medium \
       -o "$OUT/report.txt" "$prompt" </dev/null >"$OUT/stdout.txt" 2>"$OUT/stderr.txt" && rc=0 || rc=$? ;;
   cursor)
     timeout "$T" agent -p --trust --force --workspace "$WT" --model grok-4.7-medium \
