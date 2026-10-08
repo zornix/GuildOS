@@ -49,8 +49,8 @@ def _prior_security_shifts(chapter_id: str) -> dict[str, int]:
     return tally
 
 
-async def compute_engagement_scores(chapter_id: str) -> list[dict]:
-    engagements = await load_member_engagement(chapter_id)
+def compute_engagement_scores(chapter_id: str) -> list[dict]:
+    engagements = load_member_engagement(chapter_id)
     prior_shifts = _prior_security_shifts(chapter_id)
 
     results = []

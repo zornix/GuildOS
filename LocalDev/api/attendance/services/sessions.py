@@ -13,7 +13,7 @@ from api.attendance.services.checkin_links import create_checkin_link
 from api.platform.rows import unwrap_row
 
 
-async def create_session(
+def create_session(
     sb,
     *,
     chapter_id: str,
@@ -41,7 +41,7 @@ async def create_session(
             link = None
             if mode in ("short_link", "qr"):
                 # The new session owns this link; do not bind an older manual one.
-                link = await create_checkin_link(event_id, actor_id, sb=tx, bind_sessions=False)
+                link = create_checkin_link(event_id, actor_id, sb=tx, bind_sessions=False)
 
             session = unwrap_row(
                 tx.table("attendance_sessions")

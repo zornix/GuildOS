@@ -26,7 +26,7 @@ MAX_ROSTER_BYTES = 1_000_000
 
 
 @router.post("", status_code=201)
-async def create_chapter_endpoint(
+def create_chapter_endpoint(
     body: CreateChapterRequest,
     request: Request,
     authorization: str | None = Header(default=None),
@@ -58,7 +58,7 @@ async def create_chapter_endpoint(
 
 
 @router.post("/{chapter_id}/roster")
-async def import_roster_endpoint(
+def import_roster_endpoint(
     chapter_id: str,
     file: UploadFile = File(...),
     officer=Depends(require_permission("members:invite")),
@@ -76,7 +76,7 @@ async def import_roster_endpoint(
     # the bounded read is the backstop for a chunked upload (size is None then).
     if file.size is not None and file.size > MAX_ROSTER_BYTES:
         raise HTTPException(413, "Roster file is too large")
-    raw = await file.read(MAX_ROSTER_BYTES + 1)
+    raw = file.file.read(MAX_ROSTER_BYTES + 1)
     if len(raw) > MAX_ROSTER_BYTES:
         raise HTTPException(413, "Roster file is too large")
 

@@ -121,7 +121,7 @@ def _present_fines(sb, rows: list[dict]) -> list[dict]:
 
 
 @router.get("/")
-async def list_fines(status: str = None, user=Depends(get_current_user)):
+def list_fines(status: str = None, user=Depends(get_current_user)):
     """List fine invoices, presented for the client.
 
     `treasury:audit:view` holders see every fine in their chapter — the same key
@@ -142,7 +142,7 @@ async def list_fines(status: str = None, user=Depends(get_current_user)):
 
 
 @router.get("/missed/{event_id}")
-async def list_missed_members(
+def list_missed_members(
     event_id: str,
     user=Depends(require_permission("treasury:fines:issue")),
 ):
@@ -170,7 +170,7 @@ async def list_missed_members(
 
 
 @router.post("/issue")
-async def issue_fines(
+def issue_fines(
     body: IssueFinesBody,
     user=Depends(require_permission("treasury:fines:issue")),
 ):
@@ -216,7 +216,7 @@ async def issue_fines(
 
 
 @router.post("/{invoice_id}/waive")
-async def waive_fine(
+def waive_fine(
     invoice_id: str,
     body: WaiveBody,
     user=Depends(require_permission("treasury:invoice:void")),
@@ -240,7 +240,7 @@ async def waive_fine(
 
 
 @router.get("/summary")
-async def fine_summary(officer=Depends(require_permission("treasury:audit:view"))):
+def fine_summary(officer=Depends(require_permission("treasury:audit:view"))):
     """Aggregate fine stats for the chapter, in cents."""
     sb = get_db()
     invoices = (

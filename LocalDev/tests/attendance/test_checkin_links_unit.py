@@ -163,7 +163,7 @@ def test_not_null_violation_is_not_a_collision():
 
 async def test_collision_is_retried_with_a_fresh_code(use_client):
     client = use_client(FakeClient(insert_errors=[unique_violation()]))
-    result = await svc.create_checkin_link("ev-1", "officer-1")
+    result = svc.create_checkin_link("ev-1", "officer-1")
 
     assert len(client.inserted) == 1
     assert result["short_code"] == client.inserted[0]["short_code"]
@@ -173,7 +173,7 @@ async def test_collision_is_retried_with_a_fresh_code(use_client):
 async def test_repeated_collisions_eventually_give_up(use_client):
     client = use_client(FakeClient(insert_errors=[unique_violation() for _ in range(5)]))
     with pytest.raises(HTTPException) as exc_info:
-        await svc.create_checkin_link("ev-1", "officer-1")
+        svc.create_checkin_link("ev-1", "officer-1")
 
     assert exc_info.value.status_code == 500
     assert client.inserted == []
@@ -183,7 +183,7 @@ async def test_a_real_error_fails_fast_instead_of_retrying(use_client):
     """The old bare `except Exception: continue` hid outages behind 5 retries."""
     client = use_client(FakeClient(insert_errors=[RuntimeError("connection reset")] * 5))
     with pytest.raises(HTTPException) as exc_info:
-        await svc.create_checkin_link("ev-1", "officer-1")
+        svc.create_checkin_link("ev-1", "officer-1")
 
     assert exc_info.value.status_code == 500
     assert exc_info.value.detail == "Could not generate check-in code"
@@ -225,7 +225,7 @@ async def test_ambiguous_multiple_unbound_sessions_invalidate_the_link(use_clien
         {"id": "s-1", "event_id": "ev-1", "checkin_link_id": None, "closes_at": None},
         {"id": "s-2", "event_id": "ev-1", "checkin_link_id": None, "closes_at": None},
     ]))
-    assert await svc.validate_checkin_link("A7x9Kp") is None
+    assert svc.validate_checkin_link("A7x9Kp") is None
 
 
 def test_no_sessions_at_all_resolve_to_none():
@@ -250,7 +250,7 @@ async def test_open_session_lets_the_link_through(use_client):
         sessions=[{"id": "s-1", "event_id": "ev-1", "checkin_link_id": "link-1",
                    "closes_at": NOW + timedelta(minutes=30)}],
     ))
-    link = await svc.validate_checkin_link("A7x9Kp")
+    link = svc.validate_checkin_link("A7x9Kp")
     assert link is not None
     assert link["attendance_session"]["id"] == "s-1"
 
@@ -262,7 +262,7 @@ async def test_closed_session_kills_the_link(use_client):
         sessions=[{"id": "s-1", "event_id": "ev-1", "checkin_link_id": "link-1",
                    "closes_at": NOW - timedelta(minutes=1)}],
     ))
-    assert await svc.validate_checkin_link("A7x9Kp") is None
+    assert svc.validate_checkin_link("A7x9Kp") is None
 
 
 async def test_closes_at_accepts_the_postgrest_string_form(use_client):
@@ -271,7 +271,7 @@ async def test_closes_at_accepts_the_postgrest_string_form(use_client):
         sessions=[{"id": "s-1", "event_id": "ev-1", "checkin_link_id": "link-1",
                    "closes_at": (NOW - timedelta(minutes=1)).isoformat().replace("+00:00", "Z")}],
     ))
-    assert await svc.validate_checkin_link("A7x9Kp") is None
+    assert svc.validate_checkin_link("A7x9Kp") is None
 
 
 async def test_session_without_closes_at_never_expires_the_link(use_client):
@@ -279,19 +279,19 @@ async def test_session_without_closes_at_never_expires_the_link(use_client):
         link=_valid_link(),
         sessions=[{"id": "s-1", "event_id": "ev-1", "checkin_link_id": "link-1", "closes_at": None}],
     ))
-    assert await svc.validate_checkin_link("A7x9Kp") is not None
+    assert svc.validate_checkin_link("A7x9Kp") is not None
 
 
 async def test_unknown_code_is_none(use_client):
     use_client(FakeClient(link=None))
-    assert await svc.validate_checkin_link("nope") is None
+    assert svc.validate_checkin_link("nope") is None
 
 
 # ── tenant scoping on the write/read queries ──────────────────────────────────
 
 async def test_deactivate_filters_on_chapter(use_client):
     client = use_client(FakeClient())
-    await svc.deactivate_checkin_link("ev-1", "ch-1")
+    svc.deactivate_checkin_link("ev-1", "ch-1")
 
     update = next(q for q in client.queries if q.op == "update")
     assert update.filters["chapter_id"] == "ch-1"
@@ -301,7 +301,7 @@ async def test_deactivate_filters_on_chapter(use_client):
 
 async def test_deactivate_requires_a_chapter():
     with pytest.raises(TypeError):
-        await svc.deactivate_checkin_link("ev-1")  # type: ignore[call-arg]
+        svc.deactivate_checkin_link("ev-1")  # type: ignore[call-arg]
 
 
 async def test_list_active_links_filters_chapter_in_the_query(use_client):
@@ -310,7 +310,7 @@ async def test_list_active_links_filters_chapter_in_the_query(use_client):
         {"event_id": "ev-1", "short_code": "AAA111", "expires_at": NOW.isoformat(),
          "events": {"title": "Meeting", "date": "2026-03-01", "chapter_id": "ch-1"}},
     ]))
-    rows = await svc.list_active_links_for_chapter("ch-1")
+    rows = svc.list_active_links_for_chapter("ch-1")
 
     select = next(q for q in client.queries if q.op == "select")
     assert select.filters["chapter_id"] == "ch-1"
@@ -340,12 +340,12 @@ async def test_two_sessions_bound_to_one_link_is_invalid_even_before_close(use_c
         {"id": "s-1", "event_id": "ev-1", "checkin_link_id": "link-1", "closes_at": closes_at},
         {"id": "s-2", "event_id": "ev-1", "checkin_link_id": "link-1", "closes_at": closes_at},
     ]))
-    assert await svc.validate_checkin_link("A7x9Kp") is None
+    assert svc.validate_checkin_link("A7x9Kp") is None
 
 
 async def test_link_with_no_session_at_all_is_valid_until_ttl(use_client):
     use_client(FakeClient(link=_valid_link(), sessions=[]))
-    assert await svc.validate_checkin_link("A7x9Kp") is not None
+    assert svc.validate_checkin_link("A7x9Kp") is not None
 
 
 def test_several_open_unbound_sessions_are_not_bound():
@@ -360,11 +360,11 @@ def test_several_open_unbound_sessions_are_not_bound():
 async def test_failed_link_insert_keeps_the_old_link_active(attendance_app, cursor, event_factory, chapter_id, member_factory, monkeypatch):
     event = event_factory(chapter_id)
     actor = member_factory(role="officer")
-    old_link = await svc.create_checkin_link(event, actor)
+    old_link = svc.create_checkin_link(event, actor)
     # short_code is TEXT, so force a NOT NULL violation instead of a length error.
     monkeypatch.setattr(svc, "generate_short_code", lambda: None)
     with pytest.raises(HTTPException) as exc:
-        await svc.create_checkin_link(event, actor)
+        svc.create_checkin_link(event, actor)
     assert exc.value.status_code == 500
     cursor.execute("SELECT active FROM checkin_links WHERE event_id = %s AND short_code = %s", (event, old_link["short_code"]))
     assert cursor.fetchone()["active"] is True
@@ -375,12 +375,12 @@ async def test_link_session_does_not_double_bind(attendance_app, sb_client, curs
     event = event_factory(chapter_id)
     actor = member_factory(role="officer")
     manual = session_factory(chapter_id, event, mode="manual")
-    session = await create_session(sb_client, chapter_id=chapter_id, event_id=event, mode="short_link", closes_at=None, actor_id=actor)
+    session = create_session(sb_client, chapter_id=chapter_id, event_id=event, mode="short_link", closes_at=None, actor_id=actor)
     cursor.execute("SELECT id FROM attendance_sessions WHERE event_id = %s AND checkin_link_id = %s", (event, session["checkin_link_id"]))
     assert [str(row["id"]) for row in cursor.fetchall()] == [session["id"]]
     cursor.execute("SELECT checkin_link_id FROM attendance_sessions WHERE id = %s", (manual,))
     assert cursor.fetchone()["checkin_link_id"] is None
-    assert await svc.validate_checkin_link(session["checkin_link"]["short_code"]) is not None
+    assert svc.validate_checkin_link(session["checkin_link"]["short_code"]) is not None
 
 
 async def test_failed_session_insert_leaves_no_link(attendance_app, sb_client, cursor, event_factory, chapter_id, member_factory, monkeypatch):
@@ -398,7 +398,7 @@ async def test_failed_session_insert_leaves_no_link(attendance_app, sb_client, c
 
     monkeypatch.setattr(_TableAccessor, "insert", invalid_session_insert)
     with pytest.raises(psycopg2.errors.CheckViolation):
-        await create_session(sb_client, chapter_id=chapter_id, event_id=event, mode="short_link", closes_at=None, actor_id=actor)
+        create_session(sb_client, chapter_id=chapter_id, event_id=event, mode="short_link", closes_at=None, actor_id=actor)
     cursor.execute("SELECT id FROM checkin_links WHERE event_id = %s", (event,))
     assert cursor.fetchall() == []
     cursor.execute("SELECT linked_attendance_session_id FROM events WHERE id = %s", (event,))
@@ -423,7 +423,7 @@ async def test_active_link_collision_returns_conflict_without_retry(use_client):
         diag = SimpleNamespace(constraint_name="uq_checkin_links_one_active_per_event")
     client = use_client(FakeClient(insert_errors=[ActiveLinkCollision(), error]))
     with pytest.raises(HTTPException) as exc:
-        await svc.create_checkin_link("ev-1", "officer-1")
+        svc.create_checkin_link("ev-1", "officer-1")
     assert exc.value.status_code == 409
     assert len([q for q in client.queries if q.op == "insert"]) == 1
 
@@ -431,7 +431,7 @@ async def test_active_link_collision_returns_conflict_without_retry(use_client):
 async def test_unknown_unique_constraint_is_not_retried(use_client):
     client = use_client(FakeClient(insert_errors=[Exception('duplicate key value violates unique constraint "unrelated_key"')]))
     with pytest.raises(HTTPException) as exc:
-        await svc.create_checkin_link("ev-1", "officer-1")
+        svc.create_checkin_link("ev-1", "officer-1")
     assert exc.value.status_code == 500
     assert len([q for q in client.queries if q.op == "insert"]) == 1
 
@@ -441,11 +441,11 @@ async def test_code_collision_retries_the_whole_transaction(attendance_app, curs
     actor = member_factory(role="officer")
     first_event = event_factory(chapter_id)
     second_event = event_factory(chapter_id)
-    existing = await svc.create_checkin_link(first_event, actor)
-    previous = await svc.create_checkin_link(second_event, actor)
+    existing = svc.create_checkin_link(first_event, actor)
+    previous = svc.create_checkin_link(second_event, actor)
     codes = iter([existing["short_code"], uuid.uuid4().hex[:6]])
     monkeypatch.setattr(svc, "generate_short_code", lambda: next(codes))
-    replacement = await svc.create_checkin_link(second_event, actor)
+    replacement = svc.create_checkin_link(second_event, actor)
     cursor.execute("SELECT id, active FROM checkin_links WHERE event_id = %s", (second_event,))
     states = {str(row["id"]): row["active"] for row in cursor.fetchall()}
     assert states == {previous["id"]: False, replacement["id"]: True}

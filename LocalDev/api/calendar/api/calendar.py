@@ -13,7 +13,7 @@ router = APIRouter()
 # from api.calendar.api.calendar import get_db
 
 @router.get("/")
-async def list_calendar(
+def list_calendar(
     start: str | None = None,
     end: str | None = None,
     user=Depends(get_current_user),

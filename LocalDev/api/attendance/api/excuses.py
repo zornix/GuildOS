@@ -15,7 +15,7 @@ router = APIRouter()
 
 
 @router.post("/event/{event_id}")
-async def submit_excuse(event_id: str, body: ExcuseCreate, user=Depends(get_current_user)):
+def submit_excuse(event_id: str, body: ExcuseCreate, user=Depends(get_current_user)):
     """Submit an excuse for missing an event."""
     sb = get_db()
 
@@ -68,7 +68,7 @@ async def submit_excuse(event_id: str, body: ExcuseCreate, user=Depends(get_curr
 
 
 @router.get("/")
-async def list_excuses(status: str = None, user=Depends(get_current_user)):
+def list_excuses(status: str = None, user=Depends(get_current_user)):
     """
     List excuses.
     `attendance:excuse:review` holders: all excuses for their chapter
@@ -98,7 +98,7 @@ async def list_excuses(status: str = None, user=Depends(get_current_user)):
 
 
 @router.put("/{excuse_id}/review")
-async def review_excuse(
+def review_excuse(
     excuse_id: str,
     body: ExcuseReview,
     officer=Depends(require_permission(EXCUSE_REVIEW)),

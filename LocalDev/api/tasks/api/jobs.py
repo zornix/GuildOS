@@ -81,7 +81,7 @@ def _load_task_or_404(sb, *, chapter_id: str, task_id: str) -> dict:
 
 
 @router.post("/{task_id}/report-done")
-async def report_done(
+def report_done(
     task_id: str,
     user=Depends(require_permission(TASKS_COMPLETE)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
@@ -101,7 +101,7 @@ async def report_done(
 
 
 @router.post("/{task_id}/approve")
-async def approve_task(
+def approve_task(
     task_id: str,
     user=Depends(get_current_user),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
@@ -125,7 +125,7 @@ async def approve_task(
 
 
 @router.post("/{task_id}/reject")
-async def reject_task(
+def reject_task(
     task_id: str,
     body: RejectIn,
     user=Depends(get_current_user),

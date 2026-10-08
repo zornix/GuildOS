@@ -23,7 +23,7 @@ router = APIRouter()
 
 
 @router.get("/")
-async def list_members(user=Depends(get_current_user)):
+def list_members(user=Depends(get_current_user)):
     """List the chapter roster: active members plus pending invitees.
 
     `sms_consent` rides along (#57) so officers can see who is textable and a
@@ -57,7 +57,7 @@ async def list_members(user=Depends(get_current_user)):
 
 
 @router.post("/me/sms-consent")
-async def opt_in_to_sms(user=Depends(get_current_user)):
+def opt_in_to_sms(user=Depends(get_current_user)):
     """The member opts themselves in to SMS (#57).
 
     Mounted before the parameterized routes below, which is why it lives here and
@@ -77,7 +77,7 @@ async def opt_in_to_sms(user=Depends(get_current_user)):
 
 
 @router.put("/{member_id}/role")
-async def update_role(
+def update_role(
     member_id: str,
     role: str,
     officer=Depends(require_permission(ROLES_ASSIGN)),

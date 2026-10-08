@@ -11,8 +11,8 @@ from api.memberadmin.core.engagement import load_member_engagement
 from api.memberadmin.core.standing_rules import derive_standing
 
 
-async def compute_member_standings(chapter_id: str) -> list[dict]:
-    engagements = await load_member_engagement(chapter_id, include_role=True)
+def compute_member_standings(chapter_id: str) -> list[dict]:
+    engagements = load_member_engagement(chapter_id, include_role=True)
 
     results = []
     for row in engagements:

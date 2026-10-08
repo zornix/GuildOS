@@ -26,7 +26,7 @@ async def test_partially_paid_fine_still_counts(
         "INSERT INTO payment_allocations (chapter_id,verified_payment_id,invoice_id,amount_cents) VALUES (%s,%s,%s,1)",
         (chapter_id, payment, invoice),
     )
-    row = _row_for(await load_member_engagement(chapter_id), member)
+    row = _row_for(load_member_engagement(chapter_id), member)
     assert (row.unpaid_fines, row.unpaid_amount_cents) == (1, 2499)
 
 
@@ -35,7 +35,7 @@ async def test_fines_count_with_no_past_required_event(
 ):
     member = member_factory()
     _insert_invoice(cursor, chapter_id, member, "fine", 2500)
-    row = _row_for(await load_member_engagement(chapter_id), member)
+    row = _row_for(load_member_engagement(chapter_id), member)
     assert (row.unpaid_fines, row.unpaid_amount_cents, row.total_required) == (
         1,
         2500,
@@ -53,7 +53,7 @@ async def test_paid_and_cancelled_fines_do_not_count(
             "INSERT INTO unpaid_invoices (chapter_id,member_id,kind,amount_cents,status) VALUES (%s,%s,'fine',2500,%s)",
             (chapter_id, member, status),
         )
-    row = _row_for(await load_member_engagement(chapter_id), member)
+    row = _row_for(load_member_engagement(chapter_id), member)
     assert (row.unpaid_fines, row.unpaid_amount_cents) == (0, 0)
 
 
@@ -71,7 +71,7 @@ async def test_only_started_events_count(
             "INSERT INTO events (chapter_id,title,date,time,location,required) VALUES (%s,'Timed',%s,%s,'Hall',true)",
             (chapter_id, start.date(), start.time()),
         )
-        row = _row_for(await load_member_engagement(chapter_id), member)
+        row = _row_for(load_member_engagement(chapter_id), member)
         assert (row.total_required, row.missed) == (total, total)
 
 
@@ -142,7 +142,7 @@ async def test_partial_status_with_zero_remaining_does_not_count(
         "INSERT INTO payment_allocations (chapter_id,verified_payment_id,invoice_id,amount_cents) VALUES (%s,%s,%s,2500)",
         (chapter_id, payment, invoice),
     )
-    row = _row_for(await load_member_engagement(chapter_id), member)
+    row = _row_for(load_member_engagement(chapter_id), member)
     assert (row.unpaid_fines, row.unpaid_amount_cents) == (0, 0)
 
 

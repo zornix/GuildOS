@@ -20,13 +20,13 @@ router = APIRouter()
 
 
 @router.get("/me")
-async def my_record(user=Depends(get_current_user)):
+def my_record(user=Depends(get_current_user)):
     """The signed-in member's own contribution record."""
     return svc.get_record(get_db(), chapter_id=user["chapter_id"], member_id=user["id"])
 
 
 @router.get("/{member_id}")
-async def member_record(
+def member_record(
     member_id: UUID,
     officer=Depends(require_permission(MEMBER_RECORD_VIEW_ANY)),
 ):

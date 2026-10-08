@@ -61,25 +61,25 @@ def _map_domain_errors():
 # captured by the path parameter.
 
 @router.get("/types")
-async def list_event_types(user=Depends(get_current_user)):
+def list_event_types(user=Depends(get_current_user)):
     """List the chapter's event types (seeding defaults on first use)."""
     return svc.list_event_types(get_db(), chapter_id=user["chapter_id"])
 
 
 @router.get("/upcoming-details")
-async def upcoming_details(user=Depends(get_current_user)):
+def upcoming_details(user=Depends(get_current_user)):
     """Detail, security roster and check-in link for every upcoming event, in one read."""
     return svc.list_upcoming_details(get_db(), user=user)
 
 
 @router.get("/")
-async def list_events(upcoming: bool = True, user=Depends(get_current_user)):
+def list_events(upcoming: bool = True, user=Depends(get_current_user)):
     """List events for the user's chapter (visibility-enforced)."""
     return svc.list_events(get_db(), user=user, upcoming=upcoming)
 
 
 @router.post("/")
-async def create_event(
+def create_event(
     body: EventCreate,
     user=Depends(require_permission(EVENT_CREATE)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
@@ -112,14 +112,14 @@ async def create_event(
 
 
 @router.get("/{event_id}")
-async def get_event(event_id: str, user=Depends(get_current_user)):
+def get_event(event_id: str, user=Depends(get_current_user)):
     """Event details with attendance summary, organizers, and group siblings."""
     with _map_domain_errors():
         return svc.get_event(get_db(), user=user, event_id=event_id)
 
 
 @router.put("/{event_id}")
-async def update_event(
+def update_event(
     event_id: str,
     body: EventUpdate,
     user=Depends(require_permission(EVENT_UPDATE)),
@@ -137,7 +137,7 @@ async def update_event(
 
 
 @router.delete("/{event_id}")
-async def delete_event(event_id: str, user=Depends(require_permission(EVENT_DELETE))):
+def delete_event(event_id: str, user=Depends(require_permission(EVENT_DELETE))):
     """Delete an event."""
     sb = get_db()
     event = (
@@ -159,7 +159,7 @@ async def delete_event(event_id: str, user=Depends(require_permission(EVENT_DELE
 
 
 @router.post("/{event_id}/supervisors")
-async def add_supervisor(
+def add_supervisor(
     event_id: str,
     body: SupervisorAdd,
     user=Depends(get_current_user),
@@ -177,7 +177,7 @@ async def add_supervisor(
 
 
 @router.delete("/{event_id}/supervisors/{member_id}")
-async def remove_supervisor(
+def remove_supervisor(
     event_id: str,
     member_id: str,
     user=Depends(get_current_user),
@@ -195,7 +195,7 @@ async def remove_supervisor(
 
 
 @router.post("/{event_id}/organizers")
-async def add_organizer(
+def add_organizer(
     event_id: str,
     body: OrganizerAdd | None = None,
     user=Depends(get_current_user),
@@ -213,7 +213,7 @@ async def add_organizer(
 
 
 @router.delete("/{event_id}/organizers/{member_id}")
-async def remove_organizer(
+def remove_organizer(
     event_id: str,
     member_id: str,
     user=Depends(get_current_user),
@@ -233,7 +233,7 @@ async def remove_organizer(
 # ── Check-in links (legacy surface, unchanged) ────────────────────────────────
 
 @router.get("/{event_id}/checkin-link")
-async def get_checkin_link(event_id: str, user=Depends(get_current_user)):
+def get_checkin_link(event_id: str, user=Depends(get_current_user)):
     """Get the currently active check-in link for an event, if any."""
     sb = get_db()
     event = (
@@ -248,14 +248,14 @@ async def get_checkin_link(event_id: str, user=Depends(get_current_user)):
         raise HTTPException(404, "Event not found")
     from api.rbac.services.permissions import has_permission
 
-    link = await get_active_link_for_event(event_id)
+    link = get_active_link_for_event(event_id)
     if link and not has_permission(user, CHECKIN_LINK_MANAGE, sb=sb):
         return {"event_id": link["event_id"], "active": True, "expires_at": link["expires_at"]}
     return link or {}
 
 
 @router.post("/{event_id}/checkin-link", response_model=CheckInLinkResponse)
-async def generate_checkin_link(event_id: str, officer=Depends(require_permission(CHECKIN_LINK_MANAGE))):
+def generate_checkin_link(event_id: str, officer=Depends(require_permission(CHECKIN_LINK_MANAGE))):
     """
     Generate a short-lived check-in link for an event.
     Officer shows this link (or its QR) to members in-person.
@@ -275,12 +275,12 @@ async def generate_checkin_link(event_id: str, officer=Depends(require_permissio
     if event.data.get("cancelled"):
         raise HTTPException(409, "Event is cancelled")
 
-    link = await create_checkin_link(event_id, officer["id"])
+    link = create_checkin_link(event_id, officer["id"])
     return link
 
 
 @router.delete("/{event_id}/checkin-link")
-async def kill_checkin_link(event_id: str, officer=Depends(require_permission(CHECKIN_LINK_MANAGE))):
+def kill_checkin_link(event_id: str, officer=Depends(require_permission(CHECKIN_LINK_MANAGE))):
     """Manually deactivate the current check-in link.
 
     Ownership is verified exactly as the POST above does: without it, an officer
@@ -298,5 +298,5 @@ async def kill_checkin_link(event_id: str, officer=Depends(require_permission(CH
     if not event.data:
         raise HTTPException(404, "Event not found")
 
-    await deactivate_checkin_link(event_id, officer["chapter_id"])
+    deactivate_checkin_link(event_id, officer["chapter_id"])
     return {"deactivated": True}

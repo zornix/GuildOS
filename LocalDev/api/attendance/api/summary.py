@@ -25,7 +25,7 @@ _VIEW_ALL_PERMS = (CALENDAR_OFFICER_VIEW, ATTENDANCE_OVERRIDE, EXCUSE_REVIEW)
 
 
 @router.get("/summary")
-async def get_attendance_summary(
+def get_attendance_summary(
     member_id: str | None = None, user=Depends(get_current_user)
 ):
     sb = get_db()

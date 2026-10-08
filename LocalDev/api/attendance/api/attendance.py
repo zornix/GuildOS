@@ -13,12 +13,12 @@ router = APIRouter()
 
 
 @router.post("/checkin/{short_code}")
-async def checkin_via_link(short_code: str, user=Depends(get_current_user)):
+def checkin_via_link(short_code: str, user=Depends(get_current_user)):
     """
     Check in using a short link code.
     Validates: link exists, not expired, not already used by this member.
     """
-    link_data = await validate_checkin_link(short_code)
+    link_data = validate_checkin_link(short_code)
 
     if not link_data:
         raise HTTPException(410, "Check-in link is expired or invalid")
@@ -47,7 +47,7 @@ async def checkin_via_link(short_code: str, user=Depends(get_current_user)):
 
 
 @router.get("/event/{event_id}")
-async def get_attendance(event_id: str, user=Depends(get_current_user)):
+def get_attendance(event_id: str, user=Depends(get_current_user)):
     """Get attendance roster for an event. All authenticated members can view."""
     sb = get_db()
 
@@ -104,7 +104,7 @@ async def get_attendance(event_id: str, user=Depends(get_current_user)):
 
 
 @router.post("/event/{event_id}/manual/{member_id}")
-async def manual_checkin(
+def manual_checkin(
     event_id: str,
     member_id: str,
     body: ManualAttendance,

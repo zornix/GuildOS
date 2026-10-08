@@ -28,7 +28,7 @@ from api.config import settings
 _UNAUTHORIZED = "Unauthorized"
 
 
-async def require_cron_secret(authorization: str | None = Header(default=None)) -> None:
+def require_cron_secret(authorization: str | None = Header(default=None)) -> None:
     """FastAPI dependency: allow the request only for the configured cron caller."""
     # Read through the settings object at call time so config changes (and test
     # monkeypatching) take effect without re-importing the module.

@@ -73,7 +73,7 @@ async def test_member_holding_officer_via_member_roles_passes(
     )
     user = _load(rbac_db, member_id)
 
-    assert await require_permission(permission)(user=user) is user
+    assert require_permission(permission)(user=user) is user
 
 
 @pytest.mark.parametrize("permission", SWAPPED_KEYS)
@@ -81,7 +81,7 @@ async def test_plain_member_still_refused(rbac_db, member_factory, permission):
     user = _load(rbac_db, member_factory())
 
     with pytest.raises(HTTPException) as exc:
-        await require_permission(permission)(user=user)
+        require_permission(permission)(user=user)
     assert exc.value.status_code == 403
 
 
@@ -92,7 +92,7 @@ async def test_legacy_officer_column_does_not_resolve(rbac_db, cursor, member_fa
     user = _load(rbac_db, target)
 
     with pytest.raises(HTTPException) as exc:
-        await require_permission("members:invite")(user=user)
+        require_permission("members:invite")(user=user)
     assert exc.value.status_code == 403
 
 

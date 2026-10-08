@@ -11,7 +11,6 @@ from api.attendance.services.sessions import create_session
 def test_concurrent_session_open_returns_conflict(
     attendance_app, sb_client, cursor, chapter_id, event_factory, member_factory, monkeypatch
 ):
-    import asyncio
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
     from api.platform.postgres import _TableAccessor
@@ -29,10 +28,10 @@ def test_concurrent_session_open_returns_conflict(
 
     def open_session():
         try:
-            return asyncio.run(create_session(
+            return create_session(
                 sb_client, chapter_id=chapter_id, event_id=event, mode="short_link",
                 closes_at=None, actor_id=actor,
-            ))
+            )
         except Exception as error:
             return error
 
@@ -63,9 +62,9 @@ async def test_closed_session_hides_code_from_readers(
     link, _ = checkin_link_factory(event)
     session_factory(chapter_id, event, checkin_link_id=link, closes_in_minutes=-5)
     if reader == "single":
-        assert await links.get_active_link_for_event(event) is None
+        assert links.get_active_link_for_event(event) is None
     elif reader == "chapter":
-        assert await links.list_active_links_for_chapter(chapter_id) == []
+        assert links.list_active_links_for_chapter(chapter_id) == []
     else:
         result = list_upcoming_details(sb_client, user=make_user(actor, chapter_id, role="officer"))
         row = next(row for row in result["events"] if row["event_id"] == event)
@@ -76,16 +75,16 @@ async def test_rotated_link_retains_session_close_time(
     attendance_app, sb_client, cursor, chapter_id, event_factory, member_factory
 ):
     event, actor = event_factory(chapter_id), member_factory(role="officer")
-    session = await create_session(
+    session = create_session(
         sb_client, chapter_id=chapter_id, event_id=event, mode="short_link",
         closes_at=(datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(), actor_id=actor,
     )
-    replacement = await links.create_checkin_link(event, actor)
-    valid = await links.validate_checkin_link(replacement["short_code"])
+    replacement = links.create_checkin_link(event, actor)
+    valid = links.validate_checkin_link(replacement["short_code"])
     assert valid["attendance_session"] is not None
     assert valid["attendance_session"]["id"] == session["id"]
     cursor.execute("UPDATE attendance_sessions SET closes_at=now()-interval '1 minute' WHERE id=%s", (session["id"],))
-    assert await links.validate_checkin_link(replacement["short_code"]) is None
+    assert links.validate_checkin_link(replacement["short_code"]) is None
 
 
 async def test_cancelled_event_refuses_session(
@@ -94,7 +93,7 @@ async def test_cancelled_event_refuses_session(
     event, actor = event_factory(chapter_id), member_factory(role="officer")
     cursor.execute("UPDATE events SET cancelled=true WHERE id=%s", (event,))
     with pytest.raises(HTTPException) as error:
-        await create_session(sb_client, chapter_id=chapter_id, event_id=event, mode="manual", closes_at=None, actor_id=actor)
+        create_session(sb_client, chapter_id=chapter_id, event_id=event, mode="manual", closes_at=None, actor_id=actor)
     assert error.value.status_code == 409
     assert error.value.detail == "Event is cancelled"
     cursor.execute("SELECT id FROM attendance_sessions WHERE chapter_id=%s AND event_id=%s", (chapter_id, event))
@@ -112,6 +111,6 @@ async def test_cancelled_event_refuses_excuse(
     event, member = event_factory(chapter_id), member_factory()
     cursor.execute("UPDATE events SET cancelled=true WHERE id=%s", (event,))
     with pytest.raises(HTTPException) as error:
-        await excuses.submit_excuse(event, ExcuseCreate(reason="sick"), make_user(member, chapter_id))
+        excuses.submit_excuse(event, ExcuseCreate(reason="sick"), make_user(member, chapter_id))
     assert error.value.status_code == 409
     assert error.value.detail == "Event is cancelled"

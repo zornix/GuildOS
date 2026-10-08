@@ -27,7 +27,7 @@ class AdjustmentCreate(BaseModel):
 
 
 @router.post("/adjustments")
-async def create_adjustment(
+def create_adjustment(
     body: AdjustmentCreate,
     user=Depends(require_permission(ADJUSTMENT_CREATE)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
@@ -46,7 +46,7 @@ async def create_adjustment(
 
 
 @router.post("/adjustments/{adjustment_id}/approve")
-async def approve_adjustment(
+def approve_adjustment(
     adjustment_id: str,
     user=Depends(require_permission(ADJUSTMENT_CREATE)),
 ):

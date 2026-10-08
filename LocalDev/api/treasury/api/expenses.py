@@ -23,14 +23,14 @@ class ExpenseCreate(BaseModel):
 
 
 @router.get("/balance")
-async def get_chapter_balance(user=Depends(require_permission(BALANCE_VIEW))):
+def get_chapter_balance(user=Depends(require_permission(BALANCE_VIEW))):
     sb = get_db()
     bal = svc.chapter_balance(sb, chapter_id=user["chapter_id"])
     return {"chapter_id": user["chapter_id"], "balance_cents": bal.cents, "balance_display": bal.to_dollars_str()}
 
 
 @router.post("/expenses")
-async def create_expense(
+def create_expense(
     body: ExpenseCreate,
     user=Depends(require_permission(EXPENSE_CREATE)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
@@ -48,7 +48,7 @@ async def create_expense(
 
 
 @router.post("/expenses/{expense_id}/invalidate")
-async def invalidate_expense(
+def invalidate_expense(
     expense_id: str,
     user=Depends(require_permission(EXPENSE_CREATE)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),

@@ -52,7 +52,7 @@ async def test_prior_security_shifts_counts_approved_jobs_only(
     _security_shift(cursor, chapter_id, event_id, veteran,
                     task_status="in_progress", commitment_status="active")
 
-    scores = await compute_engagement_scores(chapter_id)
+    scores = compute_engagement_scores(chapter_id)
     by_member = {s["member_id"]: s for s in scores}
     assert by_member[veteran]["prior_security_shifts"] == 2
     assert by_member[rookie]["prior_security_shifts"] == 0
@@ -74,6 +74,6 @@ async def test_prior_shifts_do_not_move_the_score(
         _security_shift(cursor, chapter_id, event_id, member,
                         task_status="approved", commitment_status="completed")
 
-    row = next(s for s in await compute_engagement_scores(chapter_id) if s["member_id"] == member)
+    row = next(s for s in compute_engagement_scores(chapter_id) if s["member_id"] == member)
     assert row["prior_security_shifts"] == 3
     assert row["score"] == 9.5

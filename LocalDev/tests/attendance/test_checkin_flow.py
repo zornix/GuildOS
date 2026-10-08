@@ -148,7 +148,7 @@ async def test_a_fresh_link_survives_a_closed_manual_session(
     assert resp.status_code == 200, resp.text
     code = resp.json()["short_code"]
 
-    assert await validate_checkin_link(code) is not None, "the fresh link is dead on arrival"
+    assert validate_checkin_link(code) is not None, "the fresh link is dead on arrival"
 
     cursor.execute("SELECT checkin_link_id FROM attendance_sessions WHERE id = %s", (stale,))
     assert cursor.fetchone()["checkin_link_id"] is None, "a closed session must not be bound"
