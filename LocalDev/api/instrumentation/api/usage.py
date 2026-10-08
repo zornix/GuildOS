@@ -12,7 +12,7 @@ router = APIRouter()
 
 
 @router.post("/track")
-async def track_usage(
+def track_usage(
     body: UsageTrack,
     user=Depends(get_current_user),
 ):
@@ -27,7 +27,7 @@ async def track_usage(
 
 
 @router.get("/summary")
-async def usage_summary(
+def usage_summary(
     days: int = 30,
     user=Depends(require_permission("calendar:officer:view")),
 ):

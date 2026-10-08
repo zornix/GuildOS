@@ -32,13 +32,13 @@ def _map_role_error(exc: psycopg2.Error):
 
 
 @router.get("/roles")
-async def get_role_catalog(user=Depends(get_current_user)):
+def get_role_catalog(user=Depends(get_current_user)):
     """Role catalog — visible to any authenticated member."""
     return list_role_catalog(get_db())
 
 
 @router.get("/me/permissions", response_model=MyPermissionsResponse)
-async def get_my_permissions(user=Depends(get_current_user)):
+def get_my_permissions(user=Depends(get_current_user)):
     sb = get_db()
     return MyPermissionsResponse(
         permissions=sorted(get_member_permissions(user, sb=sb)),
@@ -47,7 +47,7 @@ async def get_my_permissions(user=Depends(get_current_user)):
 
 
 @router.get("/members/{member_id}/roles")
-async def get_member_roles(
+def get_member_roles(
     member_id: str,
     user=Depends(require_permission("roles:assign")),
 ):
@@ -56,7 +56,7 @@ async def get_member_roles(
 
 
 @router.post("/members/{member_id}/roles")
-async def assign_member_role(
+def assign_member_role(
     member_id: str,
     body: RoleAssign,
     user=Depends(require_permission("roles:assign")),
@@ -77,7 +77,7 @@ async def assign_member_role(
 
 
 @router.delete("/members/{member_id}/roles/{role_key}")
-async def revoke_member_role(
+def revoke_member_role(
     member_id: str,
     role_key: str,
     user=Depends(require_permission("roles:assign")),

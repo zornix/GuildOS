@@ -3,7 +3,7 @@ from fastapi import HTTPException, Header
 from api.platform.db import get_db
 
 
-async def get_current_user(authorization: str = Header(...)):
+def get_current_user(authorization: str = Header(...)):
     """Extract and validate JWT, return member record."""
     token = authorization.replace("Bearer ", "")
     sb = get_db()

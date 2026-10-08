@@ -77,7 +77,7 @@ class VoidBody(BaseModel):
 
 
 @router.post("/invoices")
-async def create_invoice(
+def create_invoice(
     body: InvoiceCreate,
     user=Depends(require_permission(INVOICE_CREATE)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
@@ -103,7 +103,7 @@ async def create_invoice(
 
 
 @router.post("/invoices/{invoice_id}/void")
-async def void_invoice(
+def void_invoice(
     invoice_id: str,
     body: VoidBody,
     user=Depends(require_permission("treasury:invoice:void")),
@@ -131,7 +131,7 @@ async def void_invoice(
 
 
 @router.post("/invoices/bulk")
-async def bulk_create_invoices(
+def bulk_create_invoices(
     body: BulkInvoiceCreate,
     user=Depends(require_permission(INVOICE_CREATE)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
@@ -156,7 +156,7 @@ async def bulk_create_invoices(
 
 
 @router.post("/invoices/{invoice_id}/cancel")
-async def cancel_invoice(
+def cancel_invoice(
     invoice_id: str,
     user=Depends(require_permission(INVOICE_CREATE)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
@@ -173,7 +173,7 @@ async def cancel_invoice(
 
 
 @router.post("/payments/submissions")
-async def submit_payment(
+def submit_payment(
     body: SubmissionCreate,
     user=Depends(get_current_user),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),

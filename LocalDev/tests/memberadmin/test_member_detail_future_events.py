@@ -30,7 +30,7 @@ async def test_future_required_events_are_upcoming(
         events[title] = str(cursor.fetchone()["id"])
     monkeypatch.setattr(member_detail, "get_db", lambda: sb_client)
     monkeypatch.setattr(member_detail, "datetime", FrozenDateTime, raising=False)
-    result = await member_detail.load_member_event_breakdown(chapter_id, member)
+    result = member_detail.load_member_event_breakdown(chapter_id, member)
     statuses = {r["event_id"]: r["status"] for r in result["breakdown"]}
     assert statuses[events["Tomorrow"]] == "upcoming"
     assert statuses[events["Later today"]] == "upcoming"

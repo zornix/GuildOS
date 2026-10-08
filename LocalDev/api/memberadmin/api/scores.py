@@ -14,19 +14,19 @@ router = APIRouter()
 
 
 @router.get("/scores")
-async def get_engagement_scores(officer=Depends(require_permission(STANDING_VIEW_ALL))):
+def get_engagement_scores(officer=Depends(require_permission(STANDING_VIEW_ALL))):
     """Ranked member engagement scores — lowest (most delinquent) first."""
-    return await compute_engagement_scores(officer["chapter_id"])
+    return compute_engagement_scores(officer["chapter_id"])
 
 
 @router.get("/member/{member_id}")
-async def get_member_detail(member_id: str, officer=Depends(require_permission(STANDING_VIEW_ALL))):
+def get_member_detail(member_id: str, officer=Depends(require_permission(STANDING_VIEW_ALL))):
     """Per-event breakdown for a single member."""
-    return await load_member_event_breakdown(officer["chapter_id"], member_id)
+    return load_member_event_breakdown(officer["chapter_id"], member_id)
 
 
 @router.post("/remind/{member_id}")
-async def send_reminder(member_id: str, officer=Depends(require_permission(STANDING_REMIND))):
+def send_reminder(member_id: str, officer=Depends(require_permission(STANDING_REMIND))):
     """Queue a payment reminder for a member's outstanding charges.
 
     Reads the live receivable — every `unpaid_invoices` row still open (status

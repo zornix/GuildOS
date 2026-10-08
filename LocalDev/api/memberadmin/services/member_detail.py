@@ -15,7 +15,7 @@ from api.events.core.timing import chapter_timezone, has_started
 from api.platform.db import get_db
 
 
-async def load_member_event_breakdown(chapter_id: str, member_id: str) -> dict:
+def load_member_event_breakdown(chapter_id: str, member_id: str) -> dict:
     sb = get_db()
 
     member = (

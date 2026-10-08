@@ -22,7 +22,7 @@ router = APIRouter(dependencies=[Depends(require_cron_secret)])
 
 
 @router.get("/process-fines")
-async def cron_process_fines():
+def cron_process_fines():
     """DISABLED: fines are never automatic.
 
     The route stays registered (route-registration regression tests) but is a

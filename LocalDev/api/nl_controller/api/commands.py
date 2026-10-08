@@ -14,7 +14,7 @@ router = APIRouter()
 
 
 @router.get("/commands")
-async def list_commands(
+def list_commands(
     status: str | None = None,
     user=Depends(require_permission(NL_EXECUTE, NL_APPROVE)),
 ):
@@ -22,7 +22,7 @@ async def list_commands(
 
 
 @router.post("/commands")
-async def submit_command(
+def submit_command(
     body: CommandSubmit,
     user=Depends(require_permission(NL_EXECUTE)),
 ):
@@ -35,7 +35,7 @@ async def submit_command(
 
 
 @router.post("/commands/{command_id}/review")
-async def review_command(
+def review_command(
     command_id: str,
     body: CommandReview,
     user=Depends(require_permission(NL_APPROVE)),

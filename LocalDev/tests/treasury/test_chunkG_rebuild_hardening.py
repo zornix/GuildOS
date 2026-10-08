@@ -430,7 +430,7 @@ async def test_rebuild_requires_rebuild_run_permission(sb_client, cursor, chapte
     user = {"id": member_id, "chapter_id": chapter_id, "role": "member"}
 
     with pytest.raises(HTTPException) as exc:
-        await dep(user=user)
+        dep(user=user)
     assert exc.value.status_code == 403
 
     cursor.execute(
@@ -439,4 +439,4 @@ async def test_rebuild_requires_rebuild_run_permission(sb_client, cursor, chapte
         (chapter_id, member_id),
     )
     user.pop("_rbac")  # a new request starts without the per-request permission cache
-    assert await dep(user=user) == user
+    assert dep(user=user) == user

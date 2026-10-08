@@ -75,7 +75,7 @@ class ReallocateBody(BaseModel):
 
 
 @router.post("/payments/submissions/{submission_id}/verify")
-async def verify_payment(
+def verify_payment(
     submission_id: str,
     user=Depends(require_permission(PAYMENT_REVIEW)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
@@ -92,7 +92,7 @@ async def verify_payment(
 
 
 @router.post("/payments/submissions/{submission_id}/reject")
-async def reject_payment(
+def reject_payment(
     submission_id: str,
     body: RejectBody | None = None,
     user=Depends(require_permission(PAYMENT_REVIEW)),
@@ -115,7 +115,7 @@ async def reject_payment(
 
 
 @router.post("/payments/balance-submissions")
-async def submit_balance_payment(
+def submit_balance_payment(
     body: BalanceSubmissionCreate,
     user=Depends(get_current_user),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
@@ -134,7 +134,7 @@ async def submit_balance_payment(
 
 
 @router.post("/payments/submissions/{submission_id}/evidence")
-async def add_submission_evidence(
+def add_submission_evidence(
     submission_id: str,
     body: EvidenceCreate,
     user=Depends(get_current_user),
@@ -168,7 +168,7 @@ async def add_submission_evidence(
 
 
 @router.get("/payments/evidence/{evidence_id}")
-async def get_submission_evidence(
+def get_submission_evidence(
     evidence_id: str,
     user=Depends(get_current_user),
 ):
@@ -188,7 +188,7 @@ async def get_submission_evidence(
 
 
 @router.post("/payments/submissions/{submission_id}/verify-v1")
-async def verify_payment_v1(
+def verify_payment_v1(
     submission_id: str,
     user=Depends(require_permission("treasury:payment:verify")),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
@@ -205,7 +205,7 @@ async def verify_payment_v1(
 
 
 @router.post("/payments/record")
-async def record_payment(
+def record_payment(
     body: RecordPaymentBody,
     user=Depends(require_permission(PAYMENT_REVIEW)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
@@ -236,7 +236,7 @@ async def record_payment(
 
 
 @router.post("/payments/submissions/{submission_id}/reject-v1")
-async def reject_payment_v1(
+def reject_payment_v1(
     submission_id: str,
     body: RejectV1Body,
     user=Depends(require_permission("treasury:payment:verify")),
@@ -257,7 +257,7 @@ async def reject_payment_v1(
 
 
 @router.post("/payments/{verified_payment_id}/reallocate")
-async def reallocate_payment(
+def reallocate_payment(
     verified_payment_id: str,
     body: ReallocateBody,
     user=Depends(require_permission("treasury:invoice:void")),
@@ -287,7 +287,7 @@ async def reallocate_payment(
 
 
 @router.get("/payments/{verified_payment_id}/allocations")
-async def get_payment_allocations(
+def get_payment_allocations(
     verified_payment_id: str,
     user=Depends(get_current_user),
 ):
@@ -312,7 +312,7 @@ async def get_payment_allocations(
 
 
 @router.get("/payments/receipts/{receipt_id}")
-async def get_receipt(
+def get_receipt(
     receipt_id: str,
     user=Depends(require_permission(RECEIPT_VIEW)),
 ):

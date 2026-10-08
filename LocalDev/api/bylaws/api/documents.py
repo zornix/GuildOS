@@ -14,12 +14,12 @@ router = APIRouter()
 
 
 @router.get("/documents")
-async def list_documents(user=Depends(require_permission(BYLAWS_QUERY))):
+def list_documents(user=Depends(require_permission(BYLAWS_QUERY))):
     return svc.list_documents(get_db(), chapter_id=user["chapter_id"])
 
 
 @router.post("/documents")
-async def create_document(
+def create_document(
     body: BylawsDocumentCreate,
     user=Depends(require_permission(BYLAWS_ADMIN)),
 ):
@@ -33,7 +33,7 @@ async def create_document(
 
 
 @router.post("/query")
-async def query_bylaws(
+def query_bylaws(
     body: BylawsQuery,
     user=Depends(require_permission(BYLAWS_QUERY)),
 ):

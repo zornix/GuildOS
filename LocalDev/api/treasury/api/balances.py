@@ -18,7 +18,7 @@ router = APIRouter()
 
 
 @router.get("/members/{member_id}/balance")
-async def get_member_balance(member_id: str, user=Depends(get_current_user)):
+def get_member_balance(member_id: str, user=Depends(get_current_user)):
     """A member's cached balance.
 
     Access: the member themself, OR any `treasury:audit:view` holder IN THE SAME
@@ -46,7 +46,7 @@ async def get_member_balance(member_id: str, user=Depends(get_current_user)):
 
 
 @router.get("/members/{member_id}/dashboard")
-async def get_member_treasury_dashboard(member_id: str, user=Depends(get_current_user)):
+def get_member_treasury_dashboard(member_id: str, user=Depends(get_current_user)):
     """Member treasury dashboard (overdue invoices stay visible).
 
     Access: the member themself, OR a `treasury:audit:view` holder, OR a

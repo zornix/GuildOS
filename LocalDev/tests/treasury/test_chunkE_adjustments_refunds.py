@@ -279,7 +279,7 @@ async def test_refund_requires_refund_create_permission(sb_client, cursor, chapt
 
     # A plain member holds no role granting the key → refused.
     with pytest.raises(HTTPException) as exc:
-        await dep(user=user)
+        dep(user=user)
     assert exc.value.status_code == 403
 
     # Assign the treasurer role → the same call now passes.
@@ -289,7 +289,7 @@ async def test_refund_requires_refund_create_permission(sb_client, cursor, chapt
         (chapter_id, member_id),
     )
     user.pop("_rbac")  # a new request starts without the per-request permission cache
-    assert await dep(user=user) == user
+    assert dep(user=user) == user
 
 
 # ── F-030 / D3: a refund reopens the invoice it covered ──────────────────────

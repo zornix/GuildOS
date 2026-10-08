@@ -170,7 +170,7 @@ def _bind_open_sessions(sb, event_id: str, link_id: str, now: datetime, replaced
             .execute()
 
 
-async def create_checkin_link(event_id: str, created_by: str, *, sb=None, bind_sessions: bool = True) -> dict:
+def create_checkin_link(event_id: str, created_by: str, *, sb=None, bind_sessions: bool = True) -> dict:
     """Rotate a link atomically, optionally within the caller's transaction."""
     def create(tx):
         now = datetime.now(timezone.utc)
@@ -224,7 +224,7 @@ async def create_checkin_link(event_id: str, created_by: str, *, sb=None, bind_s
     raise HTTPException(500, "Could not generate check-in code")
 
 
-async def validate_checkin_link(short_code: str) -> dict | None:
+def validate_checkin_link(short_code: str) -> dict | None:
     """Validate a short code. Returns link+event data if valid, None if expired/invalid.
 
     Three gates: the link is active, its TTL has not run out, and the attendance
@@ -265,7 +265,7 @@ async def validate_checkin_link(short_code: str) -> dict | None:
     return link
 
 
-async def get_active_link_for_event(event_id: str) -> dict | None:
+def get_active_link_for_event(event_id: str) -> dict | None:
     """Return the currently active, non-expired link for an event (or None)."""
     sb = get_db()
     now = datetime.now(timezone.utc)
@@ -294,7 +294,7 @@ async def get_active_link_for_event(event_id: str) -> dict | None:
     }
 
 
-async def list_active_links_for_chapter(chapter_id: str) -> list[dict]:
+def list_active_links_for_chapter(chapter_id: str) -> list[dict]:
     """Return all active, non-expired check-in links for events in a chapter.
 
     The chapter filter is applied in the query (checkin_links.chapter_id exists
@@ -333,7 +333,7 @@ async def list_active_links_for_chapter(chapter_id: str) -> list[dict]:
     return rows
 
 
-async def deactivate_checkin_link(event_id: str, chapter_id: str):
+def deactivate_checkin_link(event_id: str, chapter_id: str):
     """Officer manually kills the link before TTL expires.
 
     chapter_id is required and filtered on: without it, any officer could kill

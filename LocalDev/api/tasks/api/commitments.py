@@ -45,7 +45,7 @@ def _rpc_http_error(exc: Exception) -> HTTPException:
 
 
 @router.post("/{task_id}/commit")
-async def commit_task(
+def commit_task(
     task_id: str,
     body: CommitRequest | None = None,
     user=Depends(get_current_user),
@@ -72,7 +72,7 @@ async def commit_task(
 
 
 @router.post("/{task_id}/uncommit")
-async def uncommit_task(
+def uncommit_task(
     task_id: str,
     body: UncommitRequest | None = None,
     user=Depends(get_current_user),
@@ -100,7 +100,7 @@ async def uncommit_task(
 
 
 @router.get("/uncommit-log")
-async def get_uncommit_log(
+def get_uncommit_log(
     member_id: str | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     user=Depends(get_current_user),
@@ -115,14 +115,14 @@ async def get_uncommit_log(
 
 
 @router.get("/attribution/me")
-async def my_attribution(user=Depends(get_current_user)):
+def my_attribution(user=Depends(get_current_user)):
     return svc.attribution(
         get_db(), chapter_id=user["chapter_id"], member_id=user["id"]
     )
 
 
 @router.get("/attribution/{member_id}")
-async def member_attribution(member_id: str, user=Depends(get_current_user)):
+def member_attribution(member_id: str, user=Depends(get_current_user)):
     """Any member can view any member's ledger (chapter-visible by design)."""
     return svc.attribution(
         get_db(), chapter_id=user["chapter_id"], member_id=member_id
@@ -130,7 +130,7 @@ async def member_attribution(member_id: str, user=Depends(get_current_user)):
 
 
 @router.get("/{task_id}/commitments")
-async def task_commitments(task_id: str, user=Depends(get_current_user)):
+def task_commitments(task_id: str, user=Depends(get_current_user)):
     """Active commitments + full commit/uncommit history for a task."""
     return svc.list_task_commitments(
         get_db(), chapter_id=user["chapter_id"], task_id=task_id

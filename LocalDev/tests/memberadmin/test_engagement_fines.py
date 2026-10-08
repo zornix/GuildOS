@@ -65,7 +65,7 @@ async def test_engagement_reads_unpaid_fine_from_invoices_in_cents(
     )
     assert issue.status_code == 200, issue.text
 
-    engagements = await load_member_engagement(chapter_id)
+    engagements = load_member_engagement(chapter_id)
     row = _row_for(engagements, fined)
     assert row.unpaid_amount_cents == 2500  # flat $25 fine, integer cents
     assert row.unpaid_fines == 1
@@ -81,7 +81,7 @@ async def test_dues_invoice_never_affects_standing(
     _make_required_event(cursor, chapter_id)  # so the fine query path runs
     _insert_invoice(cursor, chapter_id, duespayer, "dues", 5000)  # $50 dues, not a fine
 
-    engagements = await load_member_engagement(chapter_id)
+    engagements = load_member_engagement(chapter_id)
     row = _row_for(engagements, duespayer)
     assert row.unpaid_amount_cents == 0
     assert row.unpaid_fines == 0
@@ -114,10 +114,10 @@ async def test_scoring_penalty_uses_x100_cents_conversion(
     _make_required_event(cursor, chapter_id)
     _insert_invoice(cursor, chapter_id, fined, "fine", 1000)  # $10 fine, below cap
 
-    engagements = await load_member_engagement(chapter_id)
+    engagements = load_member_engagement(chapter_id)
     assert _row_for(engagements, fined).unpaid_amount_cents == 1000
 
-    scores = await compute_engagement_scores(chapter_id)
+    scores = compute_engagement_scores(chapter_id)
     row = next(s for s in scores if s["member_id"] == fined)
     assert row["unpaid_amount_cents"] == 1000
     assert row["score"] == 9.5  # correct /20000; the buggy /200 would give 9.0

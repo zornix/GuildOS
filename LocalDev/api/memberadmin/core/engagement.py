@@ -25,7 +25,7 @@ class MemberEngagement:
     unpaid_amount_cents: int
 
 
-async def load_member_engagement(
+def load_member_engagement(
     chapter_id: str,
     *,
     include_role: bool = False,

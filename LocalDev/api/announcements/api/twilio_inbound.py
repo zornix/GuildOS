@@ -22,6 +22,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import asyncio
 import logging
 from datetime import datetime, timezone
 
@@ -85,23 +86,8 @@ def _verify(request: Request, params: dict[str, str]) -> None:
         raise HTTPException(403, "Bad Twilio signature")
 
 
-@router.post("/inbound")
-async def twilio_inbound(request: Request):
-    """Record STOP / START / HELP from an inbound SMS.
-
-    Always answers with TwiML: empty for anything we have no reply for, a single
-    Message for HELP. Twilio retries on a non-2xx, so an unrecognized body is a
-    200 with an empty <Response/>, not an error.
-    """
-    form = await request.form()
-    params = {k: str(v) for k, v in form.items()}
-    _verify(request, params)
-
-    phone = to_e164(params.get("From", ""))
-    word = (params.get("Body") or "").strip().lower()
-    if not phone:
-        return _twiml()
-
+def _apply_keyword(phone: str, word: str) -> None:
+    """Blocking members update for STOP / START; runs off the event loop."""
     sb = get_db()
     now = datetime.now(timezone.utc).isoformat()
 
@@ -119,7 +105,26 @@ async def twilio_inbound(request: Request):
         sb.table("members").update(
             {"sms_opted_out_at": None, "sms_consent_at": now}
         ).eq("phone", phone).execute()
-    elif word in _HELP_WORDS:
-        return _twiml(_HELP_TEXT)
 
+
+@router.post("/inbound")
+async def twilio_inbound(request: Request):
+    """Record STOP / START / HELP from an inbound SMS.
+
+    Always answers with TwiML: empty for anything we have no reply for, a single
+    Message for HELP. Twilio retries on a non-2xx, so an unrecognized body is a
+    200 with an empty <Response/>, not an error.
+    """
+    form = await request.form()
+    params = {k: str(v) for k, v in form.items()}
+    _verify(request, params)
+
+    phone = to_e164(params.get("From", ""))
+    word = (params.get("Body") or "").strip().lower()
+    if not phone:
+        return _twiml()
+
+    if word in _HELP_WORDS:
+        return _twiml(_HELP_TEXT)
+    await asyncio.to_thread(_apply_keyword, phone, word)
     return _twiml()

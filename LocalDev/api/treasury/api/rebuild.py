@@ -21,7 +21,7 @@ router = APIRouter()
 
 
 @router.post("/rebuild")
-async def run_rebuild(
+def run_rebuild(
     apply_repairs: bool = Query(default=False),
     user=Depends(require_permission(REBUILD_RUN)),
 ):

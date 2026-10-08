@@ -15,18 +15,18 @@ router = APIRouter()
 
 
 @router.get("/sessions")
-async def list_sessions(event_id: str | None = None, user=Depends(get_current_user)):
+def list_sessions(event_id: str | None = None, user=Depends(get_current_user)):
     return svc.list_sessions(
         get_db(), chapter_id=user["chapter_id"], event_id=event_id
     )
 
 
 @router.post("/sessions")
-async def create_session(
+def create_session(
     body: SessionCreate,
     user=Depends(require_permission(CHECKIN_CREATE)),
 ):
-    return await svc.create_session(
+    return svc.create_session(
         get_db(),
         chapter_id=user["chapter_id"],
         event_id=body.event_id,

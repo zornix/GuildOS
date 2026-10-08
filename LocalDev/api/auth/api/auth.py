@@ -202,7 +202,7 @@ def _record_attempt(sb, *, email: str, ip: str | None, success: bool) -> None:
 
 
 @router.post("/login")
-async def login(body: LoginRequest, request: Request):
+def login(body: LoginRequest, request: Request):
     """
     Authenticate a member. Role plays no part in this flow.
 
@@ -273,7 +273,7 @@ async def login(body: LoginRequest, request: Request):
 
 
 @router.post("/dev-login")
-async def dev_login(body: LoginRequest):
+def dev_login(body: LoginRequest):
     """Passwordless local dev login for direct-Postgres demo environments."""
     # Hard lockout on any deployed surface: preview URLs are public and inherit
     # env vars, so a stray DEV_AUTH_BYPASS must not be enough to open this door.
@@ -303,7 +303,7 @@ async def dev_login(body: LoginRequest):
 
 
 @router.post("/set-password")
-async def set_password(body: SetPasswordRequest, user=Depends(get_current_user)):
+def set_password(body: SetPasswordRequest, user=Depends(get_current_user)):
     """Set or change the caller's own password (any authenticated member).
 
     Bumps token_version, which revokes every other outstanding session for this
@@ -325,7 +325,7 @@ async def set_password(body: SetPasswordRequest, user=Depends(get_current_user))
 
 
 @router.get("/me", response_model=UserProfile)
-async def get_me(user=Depends(get_current_user)):
+def get_me(user=Depends(get_current_user)):
     """Get current user's profile."""
     return {
         "id": user["id"],
@@ -338,7 +338,7 @@ async def get_me(user=Depends(get_current_user)):
 
 
 @router.post("/invite")
-async def invite_members(
+def invite_members(
     body: InviteRequest,
     officer=Depends(require_permission("members:invite")),
 ):
@@ -400,7 +400,7 @@ async def invite_members(
 
 
 @router.post("/redeem-setup-code")
-async def redeem_setup_code(body: RedeemSetupCodeRequest, request: Request):
+def redeem_setup_code(body: RedeemSetupCodeRequest, request: Request):
     """Redeem an invite or password-reset code.
 
     Activates an invited member and returns a session with
@@ -474,7 +474,7 @@ async def redeem_setup_code(body: RedeemSetupCodeRequest, request: Request):
 
 
 @router.post("/reset-code/{member_id}")
-async def issue_reset_code(
+def issue_reset_code(
     member_id: str,
     officer=Depends(require_permission("members:invite")),
 ):

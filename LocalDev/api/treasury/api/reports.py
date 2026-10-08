@@ -28,7 +28,7 @@ router = APIRouter()
 
 
 @router.get("/payments/submissions")
-async def list_payment_submissions(
+def list_payment_submissions(
     status: str = Query(default="pending"),
     member_id: str | None = Query(default=None),
     invoice_id: str | None = Query(default=None),
@@ -73,7 +73,7 @@ async def list_payment_submissions(
 # Dashboard / Statement / Period CSV exports
 # ════════════════════════════════════════════════════════════════════════════
 @router.get("/dashboard")
-async def treasury_dashboard(
+def treasury_dashboard(
     user=Depends(require_permission(DASHBOARD_VIEW)),
 ):
     """Single treasurer aggregate for the authed user's chapter (integer cents)."""
@@ -82,7 +82,7 @@ async def treasury_dashboard(
 
 
 @router.get("/members/{member_id}/statement")
-async def member_statement(
+def member_statement(
     member_id: str,
     user=Depends(get_current_user),
 ):
@@ -111,7 +111,7 @@ async def member_statement(
 
 
 @router.get("/report")
-async def period_report(
+def period_report(
     period: str = Query(..., description="Reporting period as YYYY-MM"),
     dataset: str = Query(..., description="payments|invoices|expenses|member_balances|ledger"),
     user=Depends(require_permission(RECORD_VIEW)),

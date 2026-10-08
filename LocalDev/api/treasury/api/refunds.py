@@ -26,7 +26,7 @@ class RefundCreate(BaseModel):
 
 
 @router.post("/refunds")
-async def issue_refund(
+def issue_refund(
     body: RefundCreate,
     user=Depends(require_permission(REFUND_CREATE)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),

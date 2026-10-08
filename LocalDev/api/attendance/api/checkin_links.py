@@ -8,8 +8,8 @@ router = APIRouter()
 
 
 @router.get("/active")
-async def active_checkin_links(
+def active_checkin_links(
     officer=Depends(require_permission(CHECKIN_LINK_MANAGE)),
 ):
     """List all active, non-expired check-in links for the caller's chapter."""
-    return await list_active_links_for_chapter(officer["chapter_id"])
+    return list_active_links_for_chapter(officer["chapter_id"])

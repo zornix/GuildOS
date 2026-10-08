@@ -26,7 +26,7 @@ TREASURY_AUDIT_VIEW = "treasury:audit:view"
 
 
 @router.get("/")
-async def list_announcements(status: str | None = None, user=Depends(get_current_user)):
+def list_announcements(status: str | None = None, user=Depends(get_current_user)):
     """List chapter announcements. Any authenticated member can view.
 
     Not a 403 surface: members simply get the filtered feed — sent
@@ -45,7 +45,7 @@ async def list_announcements(status: str | None = None, user=Depends(get_current
 
 
 @router.post("/")
-async def create_announcement(
+def create_announcement(
     body: AnnouncementCreate,
     user=Depends(require_permission(ANNOUNCEMENTS_CREATE)),
 ):
@@ -62,7 +62,7 @@ async def create_announcement(
 
 
 @router.delete("/{announcement_id}")
-async def delete_announcement(
+def delete_announcement(
     announcement_id: str,
     user=Depends(require_permission(ANNOUNCEMENTS_CREATE)),
 ):
@@ -82,7 +82,7 @@ async def delete_announcement(
 
 
 @router.get("/sms-log")
-async def sms_log(
+def sms_log(
     limit: int = 50,
     user=Depends(require_permission(ANNOUNCEMENTS_SEND)),
 ):
@@ -93,7 +93,7 @@ async def sms_log(
 
 
 @router.get("/outbox")
-async def list_outbox(
+def list_outbox(
     status: str | None = None,
     limit: int = outbox_svc.LIST_LIMIT_DEFAULT,
     user=Depends(require_permission(ANNOUNCEMENTS_SEND)),
@@ -109,7 +109,7 @@ async def list_outbox(
 
 
 @router.post("/outbox/{row_id}/retry")
-async def retry_outbox(
+def retry_outbox(
     row_id: str,
     user=Depends(require_permission(ANNOUNCEMENTS_SEND)),
 ):
@@ -131,7 +131,7 @@ async def retry_outbox(
 
 
 @router.get("/{announcement_id}/sms-preview")
-async def sms_preview(
+def sms_preview(
     announcement_id: str,
     user=Depends(require_permission(ANNOUNCEMENTS_SEND_SMS)),
 ):
@@ -147,7 +147,7 @@ async def sms_preview(
 
 
 @router.post("/{announcement_id}/send-sms")
-async def send_announcement_sms(
+def send_announcement_sms(
     announcement_id: str,
     body: SmsSendConfirm,
     user=Depends(require_permission(ANNOUNCEMENTS_SEND_SMS)),
@@ -181,7 +181,7 @@ async def send_announcement_sms(
 
 
 @router.post("/{announcement_id}/send")
-async def send_announcement(
+def send_announcement(
     announcement_id: str,
     user=Depends(require_permission(ANNOUNCEMENTS_SEND)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),

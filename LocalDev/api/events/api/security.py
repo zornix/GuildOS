@@ -82,7 +82,7 @@ def _map_security_errors():
 # dynamic routes so it can never be captured by a path parameter (plan §3.1).
 
 @router.get("/security-swaps/mine")
-async def my_swaps(user=Depends(get_current_user)):
+def my_swaps(user=Depends(get_current_user)):
     """Pending swaps involving me: incoming (I'm the target) + outgoing."""
     return svc.list_my_swaps(
         get_db(), chapter_id=user["chapter_id"], member_id=user["id"]
@@ -90,7 +90,7 @@ async def my_swaps(user=Depends(get_current_user)):
 
 
 @router.get("/{event_id}/security", response_model=list[SecurityAssignmentOut])
-async def list_security(event_id: str, user=Depends(get_current_user)):
+def list_security(event_id: str, user=Depends(get_current_user)):
     """Security roster for an event (read view). Any chapter member may view."""
     with _map_security_errors():
         return svc.list_security(
@@ -99,7 +99,7 @@ async def list_security(event_id: str, user=Depends(get_current_user)):
 
 
 @router.post("/{event_id}/security", response_model=SecurityAssignmentOut, status_code=201)
-async def assign_security(
+def assign_security(
     event_id: str,
     body: SecurityAssignIn,
     user=Depends(get_current_user),
@@ -117,7 +117,7 @@ async def assign_security(
 
 
 @router.delete("/{event_id}/security/{task_id}")
-async def remove_security(
+def remove_security(
     event_id: str,
     task_id: str,
     user=Depends(get_current_user),
@@ -135,7 +135,7 @@ async def remove_security(
 
 
 @router.post("/{event_id}/security/{task_id}/swap-request", response_model=SwapOut)
-async def request_swap(
+def request_swap(
     event_id: str,
     task_id: str,
     body: SwapRequestIn,
@@ -155,7 +155,7 @@ async def request_swap(
 
 
 @router.post("/{event_id}/security/swaps/{swap_id}/accept", response_model=SwapOut)
-async def accept_swap(
+def accept_swap(
     event_id: str,
     swap_id: str,
     user=Depends(get_current_user),
@@ -169,7 +169,7 @@ async def accept_swap(
 
 
 @router.post("/{event_id}/security/swaps/{swap_id}/decline", response_model=SwapOut)
-async def decline_swap(
+def decline_swap(
     event_id: str,
     swap_id: str,
     user=Depends(get_current_user),
@@ -183,7 +183,7 @@ async def decline_swap(
 
 
 @router.post("/{event_id}/security/swaps/{swap_id}/cancel", response_model=SwapOut)
-async def cancel_swap(
+def cancel_swap(
     event_id: str,
     swap_id: str,
     user=Depends(get_current_user),

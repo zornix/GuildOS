@@ -32,9 +32,9 @@ def set_role(sb_client, monkeypatch, chapter_id):
 
     monkeypatch.setattr(members_api, "get_db", lambda: sb_client)
 
-    async def _set(member_id: str, role: str, *, chapter: str | None = None):
+    def _set(member_id: str, role: str, *, chapter: str | None = None):
         officer = {"id": member_id, "chapter_id": chapter or chapter_id}
-        return await update_role(member_id=member_id, role=role, officer=officer)
+        return update_role(member_id=member_id, role=role, officer=officer)
 
     return _set
 
@@ -52,7 +52,7 @@ async def test_promotion_grants_the_member_roles_officer_row(
 ):
     target = member_factory()
 
-    result = await set_role(target, "officer")
+    result = set_role(target, "officer")
 
     assert result["role"] == "officer"
     assert _role_keys(cursor, target) == ["officer"]
@@ -72,7 +72,7 @@ async def test_demotion_revokes_the_officer_permissions(
     """
     target = member_factory(role="officer")   # the factory also seeds the member_roles grant
 
-    result = await set_role(target, "member")
+    result = set_role(target, "member")
 
     assert result["role"] == "member"
     assert _role_keys(cursor, target) == []
@@ -91,7 +91,7 @@ async def test_demotion_leaves_separately_granted_roles_alone(
         "SELECT rbac_assign_role(%s, %s, 'treasurer', %s)", (chapter_id, target, target)
     )
 
-    await set_role(target, "member")
+    set_role(target, "member")
 
     assert _role_keys(cursor, target) == ["treasurer"]
 
@@ -99,16 +99,16 @@ async def test_demotion_leaves_separately_granted_roles_alone(
 async def test_promotion_is_idempotent(set_role, cursor, member_factory):
     target = member_factory()
 
-    await set_role(target, "officer")
-    await set_role(target, "officer")
+    set_role(target, "officer")
+    set_role(target, "officer")
 
     assert _role_keys(cursor, target) == ["officer"]
 
 
 async def test_role_change_is_audited(set_role, cursor, member_factory, chapter_id):
     target = member_factory()
-    await set_role(target, "officer")
-    await set_role(target, "member")
+    set_role(target, "officer")
+    set_role(target, "member")
 
     cursor.execute(
         """
@@ -131,7 +131,7 @@ async def test_catalog_role_the_legacy_column_cannot_hold_is_a_400(
     target = member_factory()
 
     with pytest.raises(HTTPException) as exc:
-        await set_role(target, "treasurer")
+        set_role(target, "treasurer")
 
     assert exc.value.status_code == 400
     assert "treasurer" in exc.value.detail
@@ -140,7 +140,7 @@ async def test_catalog_role_the_legacy_column_cannot_hold_is_a_400(
 
 async def test_unknown_role_is_a_400(set_role, member_factory):
     with pytest.raises(HTTPException) as exc:
-        await set_role(member_factory(), "grand_poobah")
+        set_role(member_factory(), "grand_poobah")
     assert exc.value.status_code == 400
 
 
@@ -151,6 +151,6 @@ async def test_member_outside_the_chapter_is_a_404(set_role, cursor, member_fact
     outsider = member_factory(chapter=str(cursor.fetchone()["id"]))
 
     with pytest.raises(HTTPException) as exc:
-        await set_role(outsider, "officer")
+        set_role(outsider, "officer")
 
     assert exc.value.status_code == 404

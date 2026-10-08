@@ -55,14 +55,14 @@ def _map_domain_errors():
 
 
 @router.get("/{event_id}/notify-preview")
-async def notify_preview(event_id: str, user=Depends(get_current_user)):
+def notify_preview(event_id: str, user=Depends(get_current_user)):
     """Confirmation step: checklist + who this would reach. No side effects."""
     with _map_domain_errors():
         return svc.preview_notify(get_db(), actor=user, event_id=event_id)
 
 
 @router.post("/{event_id}/notify")
-async def notify(
+def notify(
     event_id: str,
     body: NotifyConfirm,
     user=Depends(get_current_user),

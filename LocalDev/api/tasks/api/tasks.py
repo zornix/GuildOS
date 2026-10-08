@@ -22,13 +22,13 @@ router = APIRouter()
 
 
 @router.get("/")
-async def list_tasks(status: str | None = None, user=Depends(get_current_user)):
+def list_tasks(status: str | None = None, user=Depends(get_current_user)):
     """List the chapter's tasks. Any authenticated member can view."""
     return svc.list_tasks(get_db(), chapter_id=user["chapter_id"], status=status)
 
 
 @router.post("/")
-async def create_task(
+def create_task(
     body: TaskCreate,
     user=Depends(require_permission(TASKS_CREATE)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
@@ -72,7 +72,7 @@ async def create_task(
 
 
 @router.post("/{task_id}/status")
-async def update_task_status(
+def update_task_status(
     task_id: str,
     body: TaskStatusUpdate,
     user=Depends(get_current_user),
@@ -128,7 +128,7 @@ def _manageable_task_or_error(sb, *, user: dict, task_id: str) -> dict:
 
 
 @router.patch("/{task_id}")
-async def update_task(
+def update_task(
     task_id: str,
     body: TaskUpdate,
     user=Depends(get_current_user),
@@ -154,7 +154,7 @@ async def update_task(
 
 
 @router.delete("/{task_id}")
-async def cancel_task(
+def cancel_task(
     task_id: str,
     user=Depends(get_current_user),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),

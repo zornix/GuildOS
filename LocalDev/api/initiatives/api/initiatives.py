@@ -38,13 +38,13 @@ def _map_domain_errors():
 
 
 @router.get("/")
-async def list_initiatives(user=Depends(get_current_user)):
+def list_initiatives(user=Depends(get_current_user)):
     """List initiatives for the user's chapter."""
     return svc.list_initiatives(get_db(), chapter_id=user["chapter_id"])
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
-async def create_initiative(
+def create_initiative(
     body: InitiativeCreate,
     user=Depends(require_permission(INITIATIVE_CREATE)),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
@@ -66,7 +66,7 @@ async def create_initiative(
 
 
 @router.get("/{initiative_id}")
-async def get_initiative(initiative_id: str, user=Depends(get_current_user)):
+def get_initiative(initiative_id: str, user=Depends(get_current_user)):
     """Initiative details: chairs, jobs, and job counts."""
     with _map_domain_errors():
         return svc.get_initiative(
@@ -77,7 +77,7 @@ async def get_initiative(initiative_id: str, user=Depends(get_current_user)):
 
 
 @router.patch("/{initiative_id}")
-async def update_initiative(
+def update_initiative(
     initiative_id: str,
     body: InitiativeUpdate,
     user=Depends(get_current_user),
@@ -95,7 +95,7 @@ async def update_initiative(
 
 
 @router.post("/{initiative_id}/chairs")
-async def add_chair(
+def add_chair(
     initiative_id: str,
     body: ChairAdd,
     user=Depends(get_current_user),
@@ -113,7 +113,7 @@ async def add_chair(
 
 
 @router.delete("/{initiative_id}/chairs/{member_id}")
-async def remove_chair(
+def remove_chair(
     initiative_id: str,
     member_id: str,
     user=Depends(get_current_user),
