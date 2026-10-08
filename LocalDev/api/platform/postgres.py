@@ -20,13 +20,44 @@ with results nested under the relation key, matching PostgREST output.
 from __future__ import annotations
 
 import re
+import threading
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
 import psycopg2
 import psycopg2.extras
-from psycopg2.pool import ThreadedConnectionPool
+from psycopg2.pool import PoolError, ThreadedConnectionPool
+
+# Route handlers run in FastAPI's threadpool (#109), so more threads than pool
+# slots can want a connection at once. psycopg2's pool raises immediately then;
+# a request should queue for a slot instead, and only fail if none frees up.
+_POOL_WAIT_SECONDS = 10
+
+
+class _WaitingPool(ThreadedConnectionPool):
+    def __init__(self, minconn, maxconn, *args, **kwargs):
+        super().__init__(minconn, maxconn, *args, **kwargs)
+        # psycopg2 closes every returned connection above `minconn`, so under
+        # load each query would open a fresh TLS connection to the pooler
+        # (~1 s). Open lazily, but keep what was opened.
+        self.minconn = maxconn
+        self._slots = threading.BoundedSemaphore(maxconn)
+
+    def getconn(self, key=None):
+        if not self._slots.acquire(timeout=_POOL_WAIT_SECONDS):
+            raise PoolError("connection pool exhausted")
+        try:
+            return super().getconn(key)
+        except BaseException:
+            self._slots.release()
+            raise
+
+    def putconn(self, conn=None, key=None, close=False):
+        try:
+            super().putconn(conn, key, close)
+        finally:
+            self._slots.release()
 
 FK_MAP: dict[str, dict[str, tuple[str, str]]] = {
     "members":       {"chapters": ("chapter_id", "id")},
@@ -632,7 +663,7 @@ class PostgresClient:
     """Drop-in replacement for supabase.Client using local PostgreSQL."""
 
     def __init__(self, dsn: str, jwt_secret: str = "local-dev-secret"):
-        self._pool = ThreadedConnectionPool(1, 10, dsn)
+        self._pool = _WaitingPool(1, 10, dsn)
         self.auth = _LocalAuth(jwt_secret)
 
     def table(self, name: str) -> _TableAccessor:
