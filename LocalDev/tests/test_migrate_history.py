@@ -10,6 +10,12 @@ def test_unknown_applied_names():
     assert m.unknown_applied({"0001_a.sql"}, ["0001_a.sql", "0003_c.sql"]) == []
 
 
+def test_duplicate_numbers():
+    files = ["0156_a.sql", "0157_sms_consent.sql", "0157_dues_run.sql", "0158_dues_run.sql"]
+    assert m.duplicate_numbers(files) == ["0157_dues_run.sql", "0157_sms_consent.sql"]
+    assert m.duplicate_numbers(["0001_a.sql", "0002_b.sql"]) == []
+
+
 def test_edited_after_apply():
     applied = {"0001_a.sql": "aaa", "0002_b.sql": None, "0003_c.sql": "ccc"}
     files = {"0001_a.sql": "aaa", "0002_b.sql": "anything", "0003_c.sql": "CHANGED"}
@@ -172,3 +178,16 @@ def test_demo_path_keeps_legacy_backfill_without_prompt(main_harness, monkeypatc
     assert conn.statements[0].startswith('CREATE TABLE')
     assert any(sql.startswith('UPDATE') for sql in conn.writes)
     assert not any(sql.startswith('INSERT INTO') for sql in conn.writes)
+
+
+def test_duplicate_number_refuses_before_connecting(main_harness, monkeypatch, tmp_path, capsys):
+    conn = main_harness({})
+    (tmp_path / '0002_dup.sql').write_text('SELECT 3;')
+    monkeypatch.setattr(m, '_parse_args', lambda: argparse.Namespace(prod=False, yes=False))
+    monkeypatch.setattr(m, '_database_url', lambda: 'synthetic-database')
+    monkeypatch.setattr(m, 'require_demo', lambda url, context: None)
+    with pytest.raises(SystemExit) as exc:
+        m.main()
+    assert exc.value.code == 1
+    assert 'share a number' in capsys.readouterr().err
+    assert conn.statements == []
