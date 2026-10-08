@@ -120,6 +120,14 @@ def unknown_applied(applied: set[str], files: list[str]) -> list[str]:
     return sorted(applied - set(files))
 
 
+def duplicate_numbers(files: list[str]) -> list[str]:
+    """Files sharing a numeric prefix: two branches both took 0157 once (#117)."""
+    by_prefix: dict[str, list[str]] = {}
+    for name in files:
+        by_prefix.setdefault(name.partition("_")[0], []).append(name)
+    return sorted(n for names in by_prefix.values() if len(names) > 1 for n in names)
+
+
 def edited_after_apply(applied: dict[str, str | None], files: dict[str, str]) -> list[str]:
     """Applied migrations whose recorded checksum differs from the file now on disk."""
     return sorted(n for n, d in applied.items() if d is not None and n in files and files[n] != d)
@@ -157,6 +165,13 @@ def main() -> None:
     files = sorted(MIGRATIONS_DIR.glob("*.sql"))
     if not files:
         print("no migrations/*.sql files found", file=sys.stderr)
+        sys.exit(1)
+
+    dupes = duplicate_numbers([f.name for f in files])
+    if dupes:
+        print("error: these migrations share a number (renumber the newer one):", file=sys.stderr)
+        for name in dupes:
+            print(f"  {name}", file=sys.stderr)
         sys.exit(1)
 
     conn = psycopg2.connect(url)
