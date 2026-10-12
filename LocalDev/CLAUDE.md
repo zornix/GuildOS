@@ -29,6 +29,7 @@ Run from this directory (`LocalDev/`). `npm run *` shells out to
 npm run dev          # Supabase demo DB + migrate + FastAPI + greekos (Vite)
 npm run migrate      # apply pending migrations/*.sql against demo db
 npm run seed         # seed demo db only (usually unnecessary — demo has data)
+npm run reset-demo   # wipe demo db, replay all migrations, reseed (-- --dry-run to test)
 ```
 
 Local ports: **frontend 3000**, **backend 8001** (`/api/docs` for Swagger).
