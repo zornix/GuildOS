@@ -6,9 +6,13 @@
 **Written:** 2026-10-11/12 by the orchestrating session (Claude Fable 5.1). Product decisions were made by the user on 2026-10-11 and are recorded in `../01-phase-b-design.md` §0. They are not open for re-litigation; if one turns out to be impossible, stop and report.
 **Status:** PLAN ONLY. Phase E (implementation) has not been approved. Nothing below may be executed until the user says so.
 
-**`fn-index.txt` must be regenerated before wave 0** (the working tree was restored after the index was built). From `LocalDev/`:
+**`fn-index.txt`** lists every DB function and the migration that holds its live (last) definition. Regenerated 2026-10-12 after the working tree was restored. If you add or apply migrations, rebuild it from `LocalDev/` with:
 ```
-{ echo "# function  live-definition(migration:line)  times-defined"; ls migrations/*.sql | LC_ALL=C sort | xargs grep -noE "CREATE OR REPLACE FUNCTION (public\.)?[a-z_]+ ?\(" | sed -E 's#migrations/([^:]*)\.sql:([0-9]+):CREATE OR REPLACE FUNCTION (public\.)?([a-z_]+) ?\(#\4 \1:\2#' | awk '{cnt[$1]++; last[$1]=$2} END {for (f in cnt) print f, last[f], cnt[f]}' | LC_ALL=C sort; } > docs/superpowers/plans/2026-10-11-member-first/impl/fn-index.txt
+python3 -c "import re,pathlib;pat=re.compile(r'CREATE\s+OR\s+REPLACE\s+FUNCTION\s+(?:public\.)?([a-z_0-9]+)\s*\(',re.I);L={};C={}
+for p in sorted(pathlib.Path('migrations').glob('*.sql')):
+  for i,l in enumerate(p.read_text().splitlines(),1):
+    for m in pat.finditer(l): f=m.group(1).lower();C[f]=C.get(f,0)+1;L[f]=f'{p.stem}:{i}'
+print('\n'.join(f'{f} {L[f]} {C[f]}' for f in sorted(L)))" > docs/superpowers/plans/2026-10-11-member-first/impl/fn-index.txt
 ```
 Known live bodies as of 80e4f8b: `rbac_assign_role` 0164:71 · `rbac_revoke_role` 0206:4 · `ch_import_roster` 0163:4 · `ch_create_chapter` 0164:16 · `tk_approve_task` 0142:371 · `tk_reject_task` 0142 · `tk_update_task_status` 0182:2 · `tr_reject_payment` 0031:120 · `tr_verify_payment_v2` 0166 · `tr_record_payment` 0205 · `tr_bulk_create_invoices` 0169:14 · `an_send_announcement` 0188:1 · `au_set_password` 0191:3.
 
