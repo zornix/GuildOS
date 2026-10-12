@@ -38,6 +38,17 @@ DEMO_PASSWORD = "demo-officer-pw"
 # seeded into member_roles below.
 DEMO_OFFICER_ROLE_KEYS = ("admin", "president", "treasurer")
 
+# A real inbox, for testing email delivery end to end. Same demo password.
+TEST_ADMIN = {
+    "id": "00000000-0000-0000-0000-000000000011",
+    "auth_id": "aaaaaaaa-0000-0000-0000-000000000011",
+    "name": "Max Test",
+    "email": "testaccstudio@gmail.com",
+    "phone": "+15551110009",
+    "role": "officer",
+}
+TEST_ADMIN_ROLE_KEYS = ("officer", "admin")
+
 # Phones are E.164 (migration 0149 + api/phone.py). The old bare 9-digit values
 # matched nothing: the check-in page collects 10 digits and normalizes to +1...,
 # so a seeded member could never be found by phone.
@@ -175,7 +186,7 @@ def _seed_fine_invoice(
 
 def _clear_demo_seed(cur) -> None:
     """Remove prior demo rows (fixed UUIDs) without touching other chapter/test data."""
-    demo_member_ids = tuple([OFFICER_ID, *MEMBER_IDS])
+    demo_member_ids = tuple([OFFICER_ID, *MEMBER_IDS, TEST_ADMIN["id"]])
     demo_event_ids = tuple(EVENT_IDS)
 
     cur.execute('DELETE FROM verified_payments WHERE chapter_id = %s', (CHAPTER_ID,))
@@ -189,7 +200,9 @@ def _clear_demo_seed(cur) -> None:
     try:
         cur.execute('DELETE FROM big_ledger WHERE chapter_id = %s', (CHAPTER_ID,))
         cur.execute('DELETE FROM events WHERE chapter_id = %s', (CHAPTER_ID,))
-        cur.execute('DELETE FROM members WHERE id IN %s', (demo_member_ids,))
+        # The email check also clears an earlier invite of the test inbox.
+        cur.execute('DELETE FROM members WHERE id IN %s OR email = %s',
+                    (demo_member_ids, TEST_ADMIN["email"]))
     finally:
         # autocommit connection: an interrupted run must not leave the
         # append-only guard triggers disabled on the shared demo DB
@@ -207,7 +220,14 @@ def seed():
     conn = psycopg2.connect(DATABASE_URL)
     conn.autocommit = True
     cur = conn.cursor()
+    seed_rows(cur)
+    cur.close()
+    conn.close()
+    _print_summary()
 
+
+def seed_rows(cur) -> None:
+    """Write the Delta Mu demo rows through `cur`; the caller owns the transaction."""
     _clear_demo_seed(cur)
 
     cur.execute(
@@ -244,6 +264,19 @@ def seed():
             'VALUES (%s, %s, %s) '
             'ON CONFLICT (member_id, role_key, chapter_id) DO NOTHING',
             (CHAPTER_ID, OFFICER_ID, role_key),
+        )
+
+    cur.execute(
+        'INSERT INTO members (id, auth_id, chapter_id, name, email, phone, role, status, password_hash) '
+        'VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)',
+        (TEST_ADMIN["id"], TEST_ADMIN["auth_id"], CHAPTER_ID, TEST_ADMIN["name"], TEST_ADMIN["email"],
+         TEST_ADMIN["phone"], TEST_ADMIN["role"], "active",
+         bcrypt.hashpw(DEMO_PASSWORD.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")),
+    )
+    for role_key in TEST_ADMIN_ROLE_KEYS:
+        cur.execute(
+            'INSERT INTO member_roles (chapter_id, member_id, role_key) VALUES (%s, %s, %s)',
+            (CHAPTER_ID, TEST_ADMIN["id"], role_key),
         )
 
     for i, ev in enumerate(EVENTS_DATA):
@@ -312,15 +345,13 @@ def seed():
         days_ago = random.randint(0, 60)
         d_iso = (now - timedelta(days=days_ago, minutes=random.randint(0, 1440))).isoformat()
         _seed_expense(cur, f"Vendor/Service {i}", random.randint(10, 500), d_iso)
-        mid = random.choice(all_member_ids)
-        _seed_fine_invoice(cur, mid, EVENT_IDS[0], random.randint(10, 100), f"Random invoice {i}", "paid", d_iso)
 
 
-    cur.close()
-    conn.close()
-
+def _print_summary() -> None:
+    all_member_ids = [OFFICER_ID] + MEMBER_IDS
     print("\n=== Database seeded ===")
     print(f"Chapter: Delta Mu ({CHAPTER_ID})")
+    print(f"Test admin: {TEST_ADMIN['name']} <{TEST_ADMIN['email']}>")
     print(f"\nMembers ({len(MEMBERS_DATA)}):")
     for i, m in enumerate(MEMBERS_DATA):
         mid = all_member_ids[i]
