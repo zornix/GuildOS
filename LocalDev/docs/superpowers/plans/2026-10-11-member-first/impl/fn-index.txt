@@ -1,0 +1,1 @@
+# function  live-definition(migration:line)  times-defined   (generated 2026-10-12 from migrations/*.sql in lexical order; the LAST definition is the live one)
