@@ -468,5 +468,8 @@ Complete waves 1–4 and the full suite before the production sync; add the CI
 9. Test chapter cleanup: `scripts/purge_test_chapters.py` (demo only, batches
    of 500, `--apply`). Each purge batch takes write locks on every triggered table;
    run only when no tests or agents are using the demo DB.
+   Full rebuild instead: `npm run reset-demo` drops everything in `public`,
+   replays every migration and seeds Delta Mu in one transaction (demo only;
+   `-- --dry-run` rolls back). Anything not in `scripts/seed.py` is lost.
 10. Production tree sync: `scripts/build_prod.sh` (`--check` shows Prod drift;
     syncing Prod needs the user's go-ahead).
