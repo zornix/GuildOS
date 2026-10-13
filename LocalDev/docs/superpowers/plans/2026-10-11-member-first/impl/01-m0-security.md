@@ -1,5 +1,7 @@
 # M0 — Security fixes
 
+> **State 2026-10-12: PARTIAL, deferred by the user.** T2, T3, T5 merged to `main` (merge `beae1a4`; built by Codex Sol, reviewed twice by Opus, red-checked on `main`). **T1 and T4 not started** — next step is the Claude-vs-Codex approach challenge, then Codex builds both in one branch (they share `api/chapters/services/onboarding.py`; migration 0219 still free). Open human item: rotate the demo admin password (T5). Wave 1 (M1) must not start until T1+T4 merge.
+
 > Read `00-README.md` first. Test first. Stay in your lane.
 
 **Goal:** close the P0 authority and input holes before any UI work (D10, D11, D13).
@@ -29,20 +31,20 @@ Live body: `rbac_assign_role` in `0164_rbac_admin_tier.sql:71` (verify with grep
 - Forgot password = officer reset code → redeem → choose a new password. No current password is needed. The old password keeps working until the new one is set; an unfinished flow changes nothing.
 - Changing a password while signed in (current password + an email code) is a separate feature in M2 T5 (#123).
 
-- [ ] Redeem scope (moved here from M2 T1): `_issue_member_token(..., pwd_setup=False)`. `/redeem-setup-code` issues a token with `pwd_setup: true`. `get_current_user` in `api/dependencies.py` refuses it with 403 `PASSWORD_SETUP_REQUIRED` on every path except `/api/auth/set-password` and `/api/auth/me`.
-- [ ] `/set-password` accepts only a `pwd_setup` token; a normal session gets 403. There is no `current_password` field. Passwords over 72 UTF-8 bytes → 422 (validator only). The returned token has no `pwd_setup` claim.
-- [ ] Failing tests `tests/auth/test_set_password_setup_only.py`: normal session → 403; invite redeem → set; reset redeem for a member with a password (old password still works before the set, not after); `pwd_setup` token refused on an unrelated route, allowed on `/me`; over 72 bytes → 422; returned token works normally.
-- [ ] Review fixes: `reset_demo.main()` checks `SEED_PASSWORD` before any DB work; the evidence service drops its unused `content_type` parameter; `_seed_password()` runs once per entrypoint.
-- [ ] Setup tokens expire after 1 hour. Frontend (added 2026-10-12 after review): a reload mid-setup lands back on "Choose a password", not the main app — `lib/auth.ts` `isSetupToken`, `App.tsx`, `LoginScreen.tsx` (`initialStep` + "Back to sign in"), with tests. Docs: `greekos/README.md` drops the old demo password; `.env.example` documents `SEED_PASSWORD`.
-- [ ] Checkpoint: `python3 -m pytest tests/auth tests/members -q`; `npm test && npm run lint && npm run build`.
+- [x] Redeem scope (moved here from M2 T1): `_issue_member_token(..., pwd_setup=False)`. `/redeem-setup-code` issues a token with `pwd_setup: true`. `get_current_user` in `api/dependencies.py` refuses it with 403 `PASSWORD_SETUP_REQUIRED` on every path except `/api/auth/set-password` and `/api/auth/me`.
+- [x] `/set-password` accepts only a `pwd_setup` token; a normal session gets 403. There is no `current_password` field. Passwords over 72 UTF-8 bytes → 422 (validator only). The returned token has no `pwd_setup` claim.
+- [x] Failing tests `tests/auth/test_set_password_setup_only.py`: normal session → 403; invite redeem → set; reset redeem for a member with a password (old password still works before the set, not after); `pwd_setup` token refused on an unrelated route, allowed on `/me`; over 72 bytes → 422; returned token works normally.
+- [x] Review fixes: `reset_demo.main()` checks `SEED_PASSWORD` before any DB work; the evidence service drops its unused `content_type` parameter; `_seed_password()` runs once per entrypoint.
+- [x] Setup tokens expire after 1 hour. Frontend (added 2026-10-12 after review): a reload mid-setup lands back on "Choose a password", not the main app — `lib/auth.ts` `isSetupToken`, `App.tsx`, `LoginScreen.tsx` (`initialStep` + "Back to sign in"), with tests. Docs: `greekos/README.md` drops the old demo password; `.env.example` documents `SEED_PASSWORD`.
+- [x] Checkpoint: `python3 -m pytest tests/auth tests/members -q`; `npm test && npm run lint && npm run build`.
 
 ## T3 — Evidence upload: content sniff, pending-only, cap
 
 `api/treasury/services/payments.py` (`add_submission_evidence`, near `MAX_EVIDENCE_BYTES`) and `api/treasury/api/payments.py:136-167`.
 
-- [ ] Failing tests, `tests/treasury/test_evidence_validation.py`: `text/plain` bytes → 415; a PNG header with client type `image/jpeg` → stored type is `image/png`; HEIC (`....ftypheic`) → accepted as `image/heic`; evidence on an approved submission → 409; a 4th file on one submission → 409; 2 MiB cap still 413.
-- [ ] Implement a pure `sniff_image_type(data: bytes) -> str | None` in `api/treasury/core/image_sniff.py` (PNG `\x89PNG\r\n\x1a\n`, JPEG `\xff\xd8\xff`, HEIC/HEIF `ftyp` at offset 4 + brand in `heic heix hevc hevx mif1 msf1`). Service: ignore client `content_type`, store the sniffed one, 415 if `None`; `submission.status == 'pending'` else 409; existing evidence rows ≥ 3 → 409. Route maps the new domain errors.
-- [ ] Checkpoint: `python3 -m pytest tests/treasury/test_v1_balance_submissions.py tests/treasury/test_evidence_validation.py -q`.
+- [x] Failing tests, `tests/treasury/test_evidence_validation.py`: `text/plain` bytes → 415; a PNG header with client type `image/jpeg` → stored type is `image/png`; HEIC (`....ftypheic`) → accepted as `image/heic`; evidence on an approved submission → 409; a 4th file on one submission → 409; 2 MiB cap still 413.
+- [x] Implement a pure `sniff_image_type(data: bytes) -> str | None` in `api/treasury/core/image_sniff.py` (PNG `\x89PNG\r\n\x1a\n`, JPEG `\xff\xd8\xff`, HEIC/HEIF `ftyp` at offset 4 + brand in `heic heix hevc hevx mif1 msf1`). Service: ignore client `content_type`, store the sniffed one, 415 if `None`; `submission.status == 'pending'` else 409; existing evidence rows ≥ 3 → 409. Route maps the new domain errors.
+- [x] Checkpoint: `python3 -m pytest tests/treasury/test_v1_balance_submissions.py tests/treasury/test_evidence_validation.py -q`.
 
 ## T4 — Chapter signup must not return the setup code (D10)
 
@@ -57,10 +59,10 @@ Live body: `rbac_assign_role` in `0164_rbac_admin_tier.sql:71` (verify with grep
 
 `scripts/seed.py:34` hard-codes `demo-officer-pw`; prod `DATABASE_URL` points at the demo DB (CLAUDE.md).
 
-- [ ] Failing test `tests/test_seed_guard.py`: running the seed entrypoint without `SEED_PASSWORD` exits non-zero before touching the DB (pattern: `tests/test_set_officer_password.py`).
-- [ ] `seed.py` reads `SEED_PASSWORD` (required, ≥ 12 chars) and never embeds a literal.
+- [x] Failing test `tests/test_seed_guard.py`: running the seed entrypoint without `SEED_PASSWORD` exits non-zero before touching the DB (pattern: `tests/test_set_officer_password.py`).
+- [x] `seed.py` reads `SEED_PASSWORD` (required, ≥ 12 chars) and never embeds a literal.
 - [ ] HUMAN FOLLOW-UP in your report: the live demo admin password must be rotated with `scripts/set_officer_password.py` by the user (their go-ahead; the DB is what prod points at). Do not run it.
-- [ ] Checkpoint: `python3 -m pytest tests/test_seed_guard.py tests/test_set_officer_password.py -q`.
+- [x] Checkpoint: `python3 -m pytest tests/test_seed_guard.py tests/test_set_officer_password.py -q`.
 
 ## Definition of done
 

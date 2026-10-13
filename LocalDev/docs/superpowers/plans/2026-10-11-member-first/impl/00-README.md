@@ -4,7 +4,9 @@
 
 **Spec:** `../00-phase-a-audit.md` (what exists, with file:line evidence; the nine reports under `../audit/` go deeper), `../01-phase-b-design.md` (the product design and the binding decisions D1–D16), `../02-phase-c-priorities.md` (milestones and acceptance criteria).
 **Written:** 2026-10-11/12 by the orchestrating session (Claude Fable 5.1). Product decisions were made by the user on 2026-10-11 and are recorded in `../01-phase-b-design.md` §0. They are not open for re-litigation; if one turns out to be impossible, stop and report.
-**Status:** PLAN ONLY. Phase E (implementation) has not been approved. Nothing below may be executed until the user says so.
+**Status (2026-10-12):** Phase E approved by the user for M0. M0 is PARTIAL and paused (user: "defer"): T2, T3, T5 merged (`beae1a4`); T1, T4 not started — see the state note at the top of `01-m0-security.md`. Nothing else has started. Do not resume without the user's go-ahead.
+
+**Workflow in use:** Claude (Opus) orchestrates and commits. Per milestone: Claude and Codex each draft an approach, challenge each other once, orchestrator merges into `notes/m<n>-approach.md`; builders split by type (Codex Sol: M0, M4, M5, M7; Opus: M1, M2, M3, M6, M8); the other family reviews read-only; orchestrator red-checks new tests on `main` before commit. External CLIs run only inside their own worktree under `/home/mshik/GuildOS-wt/`.
 
 **`fn-index.txt`** lists every DB function and the migration that holds its live (last) definition. Regenerated 2026-10-12 after the working tree was restored. If you add or apply migrations, rebuild it from `LocalDev/` with:
 ```
