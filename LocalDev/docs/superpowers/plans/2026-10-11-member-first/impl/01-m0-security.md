@@ -5,7 +5,7 @@
 **Goal:** close the P0 authority and input holes before any UI work (D10, D11, D13).
 **Spec:** `../00-phase-a-audit.md` §5; `../audit/rbac.md` §4; `../audit/auth-members.md` §8; `../audit/treasury.md` §3.
 **Migrations:** 0219 only.
-**Allowed files:** `migrations/0219_role_grant_subset_rule.sql`; `api/rbac/api/roles.py`; `api/auth/api/auth.py`; `api/auth/api/schemas.py`; `api/treasury/api/payments.py`; `api/treasury/services/payments.py`; `api/treasury/api/schemas.py`; new `api/treasury/core/image_sniff.py`; `api/chapters/services/onboarding.py`; `api/chapters/api/chapters.py`; `api/chapters/api/schemas.py` (if the response model lives there); `scripts/seed.py`; new/changed tests under `tests/rbac/`, `tests/auth/`, `tests/treasury/`, `tests/chapters/`, `tests/test_seed_guard.py`.
+**Allowed files:** `migrations/0219_role_grant_subset_rule.sql`; `api/rbac/api/roles.py`; `api/auth/api/auth.py`; `api/auth/api/schemas.py`; `api/treasury/api/payments.py`; `api/treasury/services/payments.py`; `api/treasury/api/schemas.py`; new `api/treasury/core/image_sniff.py`; `api/chapters/services/onboarding.py`; `api/chapters/api/chapters.py`; `api/chapters/api/schemas.py` (if the response model lives there); `scripts/seed.py`; `scripts/reset_demo.py`; `api/dependencies.py` (redeem scope, moved here from M2); new/changed tests under `tests/rbac/`, `tests/auth/`, `tests/treasury/`, `tests/chapters/`, `tests/test_seed_guard.py`, `tests/test_reset_demo.py`.
 
 ## T1 — Grant only what you hold (D11)
 
@@ -23,13 +23,17 @@ Live body: `rbac_assign_role` in `0164_rbac_admin_tier.sql:71` (verify with grep
 - [ ] API test in `tests/rbac/test_grant_subset.py`: POST `/api/rbac/members/{self}/roles {"role_key":"treasurer"}` as an officer → 403.
 - [ ] Checkpoint: `python3 -m pytest tests/rbac tests/chapters -q`.
 
-## T2 — `/set-password` requires the current password
+## T2 — `/set-password` is setup-only (amended 2026-10-12)
 
-`api/auth/api/auth.py:305-324`. Exception: a session that came from `/redeem-setup-code` has no password yet.
+**Changed on 2026-10-12 after review.** The first version required `current_password`. That locked out members who redeem an officer's reset code ("Forgot password?") but already have a `password_hash`. User decision:
+- Forgot password = officer reset code → redeem → choose a new password. No current password is needed. The old password keeps working until the new one is set; an unfinished flow changes nothing.
+- Changing a password while signed in (current password + an email code) is a separate feature in M2 T5 (#123).
 
-- [ ] Failing tests, `tests/auth/test_set_password_requires_current.py`: (a) a member with a password calling `/set-password` without `current_password` → 422; (b) with a wrong one → 403 and the password is unchanged; (c) with the right one → 200 and the new password logs in; (d) a freshly redeemed member (no `password_hash`) may set without `current_password`; (e) a password over 72 bytes → 422.
-- [ ] `SetPasswordRequest` gets `current_password: str | None = None` and a max length. In the handler: if the member row has a `password_hash`, require and bcrypt-check it (reuse `_check_secret`); otherwise allow.
-- [ ] Checkpoint: `python3 -m pytest tests/auth -q`.
+- [ ] Redeem scope (moved here from M2 T1): `_issue_member_token(..., pwd_setup=False)`. `/redeem-setup-code` issues a token with `pwd_setup: true`. `get_current_user` in `api/dependencies.py` refuses it with 403 `PASSWORD_SETUP_REQUIRED` on every path except `/api/auth/set-password` and `/api/auth/me`.
+- [ ] `/set-password` accepts only a `pwd_setup` token; a normal session gets 403. There is no `current_password` field. Passwords over 72 UTF-8 bytes → 422 (validator only). The returned token has no `pwd_setup` claim.
+- [ ] Failing tests `tests/auth/test_set_password_setup_only.py`: normal session → 403; invite redeem → set; reset redeem for a member with a password (old password still works before the set, not after); `pwd_setup` token refused on an unrelated route, allowed on `/me`; over 72 bytes → 422; returned token works normally.
+- [ ] Review fixes: `reset_demo.main()` checks `SEED_PASSWORD` before any DB work; the evidence service drops its unused `content_type` parameter; `_seed_password()` runs once per entrypoint.
+- [ ] Checkpoint: `python3 -m pytest tests/auth tests/members -q`.
 
 ## T3 — Evidence upload: content sniff, pending-only, cap
 
