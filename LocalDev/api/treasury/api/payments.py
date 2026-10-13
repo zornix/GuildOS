@@ -158,13 +158,17 @@ def add_submission_evidence(
     if len(data) > svc.MAX_EVIDENCE_BYTES:
         raise HTTPException(413, f"evidence exceeds the {svc.MAX_EVIDENCE_BYTES} byte limit")
 
-    return svc.add_evidence(
-        sb,
-        chapter_id=user["chapter_id"],
-        submission_id=submission_id,
-        content_type=body.content_type,
-        data=data,
-    )
+    try:
+        return svc.add_evidence(
+            sb,
+            chapter_id=user["chapter_id"],
+            submission_id=submission_id,
+            data=data,
+        )
+    except svc.UnsupportedEvidenceType as exc:
+        raise HTTPException(415, str(exc))
+    except svc.EvidenceConflict as exc:
+        raise HTTPException(409, str(exc))
 
 
 @router.get("/payments/evidence/{evidence_id}")
