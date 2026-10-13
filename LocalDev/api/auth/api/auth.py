@@ -52,17 +52,21 @@ INVALID_CREDENTIALS = "Invalid credentials"
 _DUMMY_HASH = bcrypt.hashpw(secrets.token_bytes(16), bcrypt.gensalt()).decode("utf-8")
 
 
-def _issue_member_token(member_id: str, token_version: int = 0) -> str:
+def _issue_member_token(member_id: str, ver: int = 0, pwd_setup: bool = False) -> str:
     now = datetime.now(timezone.utc)
+    ttl = timedelta(hours=1) if pwd_setup else timedelta(days=TOKEN_TTL_DAYS)
+    claims = {
+        "sub": member_id,
+        "iat": now,
+        "exp": now + ttl,
+        "iss": TOKEN_ISSUER,
+        "aud": TOKEN_AUDIENCE,
+        "ver": int(ver or 0),
+    }
+    if pwd_setup:
+        claims["pwd_setup"] = True
     return pyjwt.encode(
-        {
-            "sub": member_id,
-            "iat": now,
-            "exp": now + timedelta(days=TOKEN_TTL_DAYS),
-            "iss": TOKEN_ISSUER,
-            "aud": TOKEN_AUDIENCE,
-            "ver": int(token_version or 0),
-        },
+        claims,
         settings.JWT_SECRET,
         algorithm="HS256",
     )
@@ -304,11 +308,14 @@ def dev_login(body: LoginRequest):
 
 @router.post("/set-password")
 def set_password(body: SetPasswordRequest, user=Depends(get_current_user)):
-    """Set or change the caller's own password (any authenticated member).
+    """Set the caller's password using a redeemed invite or reset session.
 
     Bumps token_version, which revokes every other outstanding session for this
     member, and returns a fresh token so the caller stays logged in.
     """
+    if not user.get("pwd_setup"):
+        raise HTTPException(403, "Password setup session required")
+
     sb = get_db()
     result = sb.rpc("au_set_password", {
         "p_member_id": user["id"],
@@ -467,7 +474,7 @@ def redeem_setup_code(body: RedeemSetupCodeRequest, request: Request):
     _record_attempt(sb, email=normalized_email, ip=ip, success=True)
 
     return {
-        "access_token": _issue_member_token(member["id"], claim.data["token_version"]),
+        "access_token": _issue_member_token(member["id"], claim.data["token_version"], pwd_setup=True),
         "token_type": "bearer",
         "password_setup_required": True,
     }

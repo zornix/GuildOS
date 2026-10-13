@@ -1,19 +1,20 @@
 """Outstanding codes and sessions are revoked at credential transitions."""
 
-from api.auth.api.auth import _generate_setup_code
+from api.auth.api.auth import _generate_setup_code, _issue_member_token
 from tests.auth.test_tokens import PASSWORD, NEW_PASSWORD, _auth, _login
 
 
 def test_setting_a_password_burns_unused_codes(
-    client, as_member, member_factory, member_email, issue_code
+    client, member_factory, member_email, issue_code, token_version
 ):
     member = member_factory()
     email = member_email(member)
     codes = [_generate_setup_code(), _generate_setup_code()]
     for code in codes:
         issue_code(member, code)
-    response = as_member(member).post(
-        "/api/auth/set-password", json={"password": NEW_PASSWORD}
+    setup_token = _issue_member_token(member, token_version(member), pwd_setup=True)
+    response = client.post(
+        "/api/auth/set-password", json={"password": NEW_PASSWORD}, headers=_auth(setup_token)
     )
     assert response.status_code == 200
     for code in codes:

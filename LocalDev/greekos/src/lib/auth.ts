@@ -3,7 +3,9 @@
  *  Backend contracts (api/auth/api/auth.py):
  *    POST /api/auth/login              -> { access_token, password_setup_required? }
  *    POST /api/auth/redeem-setup-code  -> { access_token, password_setup_required: true }
- *    POST /api/auth/set-password       -> { access_token }  (requires a session)
+ *        access_token is setup-only (JWT claim pwd_setup: true, 1 hour): the API refuses it
+ *        with 403 PASSWORD_SETUP_REQUIRED everywhere except /set-password and /me.
+ *    POST /api/auth/set-password       -> { access_token }  (takes the setup-only token, returns a full one)
  */
 
 /** Which panel the login screen shows. */
@@ -17,6 +19,20 @@ export function normalizeSetupCode(raw: string): string {
 /** A redeemed setup code yields a session that must set a password before anything else. */
 export function stepAfterAuth(result: { password_setup_required?: boolean }): AuthStep | 'app' {
   return result.password_setup_required ? 'password' : 'app';
+}
+
+/** True when a stored token is the setup-only one, so a reload goes back to set-password
+ *  instead of mounting the app on a token every endpoint refuses. Reads the payload only;
+ *  the server still verifies the signature. */
+export function isSetupToken(token: string | null): boolean {
+  try {
+    const part = token?.split('.')[1];
+    if (!part) return false;
+    const json = atob(part.replace(/-/g, '+').replace(/_/g, '/'));
+    return JSON.parse(json)?.pwd_setup === true;
+  } catch {
+    return false;
+  }
 }
 
 /** Turn an auth failure into something a member can act on. */
