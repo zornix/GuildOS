@@ -391,6 +391,9 @@ class QueryBuilder:
         rows = self._payload if isinstance(self._payload, list) else [self._payload]
         if not rows:
             return QueryResult(data=[])
+        for i, r in enumerate(rows[1:], start=1):
+            if r.keys() != rows[0].keys():
+                raise ValueError(f"insert row {i} keys differ from row 0: {sorted(r.keys() ^ rows[0].keys())}")
         cols = [_ident(c) for c in rows[0].keys()]
         row_sql = "(" + ", ".join(["%s"] * len(cols)) + ")"
         vals = [self._adapt_value(r[c]) for r in rows for c in cols]
