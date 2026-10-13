@@ -12,7 +12,8 @@ cd LocalDev && npm run dev
 That migrates the **demo** Supabase database, starts FastAPI on `:8001`, and
 this app on `:3000` (Vite proxies `/api` to the backend).
 
-Sign in with a seeded officer (`jake@tke.org` / `demo-officer-pw`). In a local
+Sign in with a seeded officer (`jake@tke.org`); the password is whatever
+`SEED_PASSWORD` was when the demo was last seeded. In a local
 Vite session you can also use **Local only: sign in as seeded officer** if
 `DEV_AUTH_BYPASS=1` is set in `LocalDev/.env`. That bypass is 404 on Vercel.
 

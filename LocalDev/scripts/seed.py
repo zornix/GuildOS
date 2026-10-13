@@ -28,11 +28,6 @@ MEMBER_AUTH_IDS = [f"aaaaaaaa-0000-0000-0000-0000000001{i:02d}" for i in range(1
 
 EVENT_IDS = [f"00000000-0000-0000-0000-000000000e{i:02d}" for i in range(1, 6)]
 
-# Known demo password for every seeded member: /login issues no token without
-# a verified password, so passwordless demo rows would be unreachable.
-# Satisfies the min-8 validator in api/auth/api/schemas.py.
-DEMO_PASSWORD = "demo-officer-pw"
-
 # Treasury authority is catalog permissions on roles since 0147 (treasury_grants
 # is gone); the demo officer holds them through the 'officer' + 'treasurer' roles
 # seeded into member_roles below.
@@ -211,7 +206,15 @@ def _clear_demo_seed(cur) -> None:
     cur.execute('DELETE FROM chapters WHERE id = %s', (CHAPTER_ID,))
 
 
+def _seed_password() -> str:
+    password = os.getenv("SEED_PASSWORD")
+    if not password or len(password) < 12:
+        sys.exit("error: SEED_PASSWORD is required and must be at least 12 characters")
+    return password
+
+
 def seed():
+    seed_password = _seed_password()
     try:
         require_demo(DATABASE_URL, context="seed")
     except ProdGuardError as exc:
@@ -220,13 +223,13 @@ def seed():
     conn = psycopg2.connect(DATABASE_URL)
     conn.autocommit = True
     cur = conn.cursor()
-    seed_rows(cur)
+    seed_rows(cur, seed_password=seed_password)
     cur.close()
     conn.close()
     _print_summary()
 
 
-def seed_rows(cur) -> None:
+def seed_rows(cur, *, seed_password: str) -> None:
     """Write the Delta Mu demo rows through `cur`; the caller owns the transaction."""
     _clear_demo_seed(cur)
 
@@ -240,7 +243,7 @@ def seed_rows(cur) -> None:
 
     for i, m in enumerate(MEMBERS_DATA):
         password_hash = bcrypt.hashpw(
-            DEMO_PASSWORD.encode("utf-8"), bcrypt.gensalt()
+            seed_password.encode("utf-8"), bcrypt.gensalt()
         ).decode("utf-8")
         cur.execute(
             'INSERT INTO members (id, auth_id, chapter_id, name, email, phone, role, status, password_hash) '
@@ -271,7 +274,7 @@ def seed_rows(cur) -> None:
         'VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)',
         (TEST_ADMIN["id"], TEST_ADMIN["auth_id"], CHAPTER_ID, TEST_ADMIN["name"], TEST_ADMIN["email"],
          TEST_ADMIN["phone"], TEST_ADMIN["role"], "active",
-         bcrypt.hashpw(DEMO_PASSWORD.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")),
+         bcrypt.hashpw(seed_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")),
     )
     for role_key in TEST_ADMIN_ROLE_KEYS:
         cur.execute(
