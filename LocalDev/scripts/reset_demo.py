@@ -30,7 +30,7 @@ from scripts.migrate_db import (
     _read_sql,
     duplicate_numbers,
 )
-from scripts.seed import seed_rows
+from scripts import seed
 
 # Everything the migrations create lives in public. The schema itself and
 # extension-owned objects stay, so Supabase's grants survive and
@@ -80,6 +80,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--yes", action="store_true", help="skip the typed confirmation")
     parser.add_argument("--dry-run", action="store_true", help="do everything, then roll back")
     args = parser.parse_args(argv)
+    seed_password = seed._seed_password()
 
     url = _database_url()
     try:
@@ -126,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
                     (path.name, hashlib.sha256(path.read_bytes()).hexdigest()),
                 )
             print(f"applied: {len(files)} migrations")
-            seed_rows(cur)
+            seed.seed_rows(cur, seed_password=seed_password)
             print("seeded: Delta Mu")
         if args.dry_run:
             conn.rollback()

@@ -19,10 +19,16 @@ import { useEventsChrome } from './hooks/useEventsChrome';
 import { filterEventsByType } from './lib/events';
 import { balanceForMember } from './lib/balance';
 import { can, isOfficerView } from './lib/session';
+import { isSetupToken } from './lib/auth';
 import { CHECKIN_STORAGE_KEY, readCheckinCode, stripCheckinParam } from './lib/checkinLink';
 
 export default function App() {
-  const [authed, setAuthed] = useState(() => !!localStorage.getItem('g_token'));
+  // A setup-only token (code redeemed, password not chosen yet) is refused by every
+  // data endpoint, so it resumes on the password step instead of mounting the app.
+  const [authed, setAuthed] = useState(() => {
+    const token = localStorage.getItem('g_token');
+    return !!token && !isSetupToken(token);
+  });
   const [onboarding, setOnboarding] = useState(false);
   // A /?checkin=CODE link (where the backend's /c/CODE redirect lands) must
   // survive the login screen, so the code is parked until a member is signed in.
@@ -33,7 +39,8 @@ export default function App() {
   if (!authed) {
     return onboarding
       ? <OnboardingScreen onBack={() => setOnboarding(false)} />
-      : <LoginScreen onLoggedIn={() => setAuthed(true)} onStartChapter={() => setOnboarding(true)} />;
+      : <LoginScreen onLoggedIn={() => setAuthed(true)} onStartChapter={() => setOnboarding(true)}
+          initialStep={isSetupToken(localStorage.getItem('g_token')) ? 'password' : 'signin'} />;
   }
   return <ChapterApp onLogout={() => { logout(); setAuthed(false); }} />;
 }

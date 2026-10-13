@@ -1,9 +1,9 @@
-from fastapi import HTTPException, Header
+from fastapi import HTTPException, Header, Request
 
 from api.platform.db import get_db
 
 
-def get_current_user(authorization: str = Header(...)):
+def get_current_user(request: Request, authorization: str = Header(...)):
     """Extract and validate JWT, return member record."""
     token = authorization.replace("Bearer ", "")
     sb = get_db()
@@ -35,5 +35,11 @@ def get_current_user(authorization: str = Header(...)):
     claims = getattr(auth_user, "claims", None) or {}
     if int(claims.get("ver", 0)) != int(result.data.get("token_version") or 0):
         raise HTTPException(403, "Session no longer valid, please log in again")
+
+    result.data["pwd_setup"] = bool(claims.get("pwd_setup"))
+    if result.data["pwd_setup"] and request.url.path not in (
+        "/api/auth/set-password", "/api/auth/me",
+    ):
+        raise HTTPException(403, "PASSWORD_SETUP_REQUIRED")
 
     return result.data

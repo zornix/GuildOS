@@ -91,19 +91,19 @@ def test_evidence_stored_and_size_capped(sb_client, cursor, chapter_id, member_i
     )
     ev = pay_svc.add_evidence(
         sb_client, chapter_id=chapter_id, submission_id=sub["id"],
-        content_type="image/png", data=b"\x89PNG fake bytes",
+        data=b"\x89PNG\r\n\x1a\n fake bytes",
     )
-    assert ev["size_bytes"] == len(b"\x89PNG fake bytes")
+    assert ev["size_bytes"] == len(b"\x89PNG\r\n\x1a\n fake bytes")
 
     fetched = pay_svc.get_evidence(sb_client, chapter_id=chapter_id, evidence_id=ev["id"])
     assert fetched["content_type"] == "image/png"
-    assert base64.b64decode(fetched["data_base64"]) == b"\x89PNG fake bytes"
+    assert base64.b64decode(fetched["data_base64"]) == b"\x89PNG\r\n\x1a\n fake bytes"
 
     # > 2 MiB is refused
     with pytest.raises(Exception):
         pay_svc.add_evidence(
             sb_client, chapter_id=chapter_id, submission_id=sub["id"],
-            content_type="image/png", data=b"x" * (2 * 1024 * 1024 + 1),
+            data=b"x" * (2 * 1024 * 1024 + 1),
         )
 
 
@@ -114,7 +114,7 @@ def test_evidence_is_append_only(sb_client, cursor, chapter_id, member_id):
     )
     ev = pay_svc.add_evidence(
         sb_client, chapter_id=chapter_id, submission_id=sub["id"],
-        content_type="text/plain", data=b"memo",
+        data=b"\xff\xd8\xffmemo",
     )
     with pytest.raises(Exception):
         cursor.execute("UPDATE payment_evidence SET content_type='x' WHERE id=%s", (ev["id"],))
@@ -191,7 +191,7 @@ def test_evidence_endpoints_owner_and_reviewer(api, sb_client, cursor, chapter_i
         headers={"Authorization": "Bearer x"},
     ).json()
 
-    payload = base64.b64encode(b"proof-bytes").decode()
+    payload = base64.b64encode(b"\xff\xd8\xffproof-bytes").decode()
     ev = owner_client.post(
         f"/api/treasury/payments/submissions/{sub['id']}/evidence",
         json={"content_type": "image/jpeg", "data_base64": payload},
@@ -218,7 +218,7 @@ def test_evidence_endpoints_owner_and_reviewer(api, sb_client, cursor, chapter_i
         f"/api/treasury/payments/evidence/{ev_id}", headers={"Authorization": "Bearer x"}
     )
     assert reviewer_read.status_code == 200
-    assert base64.b64decode(reviewer_read.json()["data_base64"]) == b"proof-bytes"
+    assert base64.b64decode(reviewer_read.json()["data_base64"]) == b"\xff\xd8\xffproof-bytes"
 
     # an unrelated member cannot
     stranger_read = api(make_user(stranger, chapter_id)).get(

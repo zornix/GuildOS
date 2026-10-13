@@ -12,6 +12,8 @@ from datetime import datetime, timedelta, timezone
 import jwt as pyjwt
 import pytest
 
+from api.auth.api.auth import _issue_member_token
+
 PASSWORD = "an-initial-password"
 NEW_PASSWORD = "a-brand-new-password"
 
@@ -32,15 +34,17 @@ def _login(client, email: str, password: str | None = None) -> dict:
 def test_set_password_bumps_epoch_and_returns_working_token(
     client, member_factory, member_email, set_password_hash, token_version
 ):
-    """role='member' sets their own password — no officer check any more."""
+    """A member's setup session replaces the password and revokes old sessions."""
     member = member_factory(role="member")
     set_password_hash(member, PASSWORD)
     old_token = _login(client, member_email(member), PASSWORD)["access_token"]
     assert client.get("/api/auth/me", headers=_auth(old_token)).status_code == 200
 
     before = token_version(member)
+    setup_token = _issue_member_token(member, before, pwd_setup=True)
     res = client.post(
-        "/api/auth/set-password", json={"password": NEW_PASSWORD}, headers=_auth(old_token)
+        "/api/auth/set-password",
+        json={"password": NEW_PASSWORD}, headers=_auth(setup_token)
     )
 
     assert res.status_code == 200, res.text
@@ -54,13 +58,19 @@ def test_set_password_bumps_epoch_and_returns_working_token(
 
 
 def test_password_is_enforced_after_being_set(
-    client, member_factory, member_email, set_password_hash
+    client, member_factory, member_email, set_password_hash, token_version
 ):
     member = member_factory(role="member")
     email = member_email(member)
     set_password_hash(member, PASSWORD)
     token = _login(client, email, PASSWORD)["access_token"]
-    client.post("/api/auth/set-password", json={"password": NEW_PASSWORD}, headers=_auth(token))
+    assert client.get("/api/auth/me", headers=_auth(token)).status_code == 200
+    setup_token = _issue_member_token(member, token_version(member), pwd_setup=True)
+    response = client.post(
+        "/api/auth/set-password",
+        json={"password": NEW_PASSWORD}, headers=_auth(setup_token)
+    )
+    assert response.status_code == 200
 
     assert client.post("/api/auth/login", json={"email": email}).status_code == 403
     assert _login(client, email, NEW_PASSWORD)["access_token"]

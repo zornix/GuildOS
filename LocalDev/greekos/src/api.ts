@@ -64,7 +64,7 @@ export function redeemSetupCode(email: string, code: string): Promise<AuthRespon
   return authPost('/api/auth/redeem-setup-code', { email: email.trim().toLowerCase(), code });
 }
 
-/** Uses the grace/redeem token; the response rotates it, so the caller stays signed in. */
+/** Sends the setup-only token from redeem-setup-code; the response is a full session token. */
 export function setPassword(password: string): Promise<AuthResponse> {
   return authPost('/api/auth/set-password', { password }, true);
 }

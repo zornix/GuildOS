@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   authErrorMessage,
+  isSetupToken,
   normalizeSetupCode,
   stepAfterAuth,
   validateCodeForm,
@@ -42,4 +43,26 @@ test('form validation blocks the obviously-bad submits', () => {
   assert.match(validateNewPassword('short', 'short') || '', /8 characters/);
   assert.match(validateNewPassword('longenough', 'longenouhg') || '', /do not match/);
   assert.equal(validateNewPassword('longenough', 'longenough'), null);
+});
+
+/** Builds an unsigned JWT-shaped string; only the payload matters to the client. */
+function jwt(payload: object): string {
+  const b64url = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  return `${b64url({ alg: 'HS256', typ: 'JWT' })}.${b64url(payload)}.sig`;
+}
+
+test('a setup-only token is recognised so a reload lands on set-password, not the app', () => {
+  assert.equal(isSetupToken(jwt({ sub: 'm1', pwd_setup: true })), true);
+});
+
+test('a normal session token is not a setup token', () => {
+  assert.equal(isSetupToken(jwt({ sub: 'm1' })), false);
+  assert.equal(isSetupToken(jwt({ sub: 'm1', pwd_setup: 'true' })), false);
+});
+
+test('a missing or malformed token is not a setup token', () => {
+  assert.equal(isSetupToken(null), false);
+  assert.equal(isSetupToken(''), false);
+  assert.equal(isSetupToken('garbage'), false);
+  assert.equal(isSetupToken('a.!!!.c'), false);
 });

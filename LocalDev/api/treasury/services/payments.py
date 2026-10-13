@@ -11,6 +11,7 @@ approval notification (never on an idempotent replay).
 from __future__ import annotations
 
 from api.treasury.core.balance import BalanceEngine
+from api.treasury.core.image_sniff import sniff_image_type
 from api.platform.rows import unwrap_row
 from api.platform.rpc import call_rpc
 from api.treasury.notifications import notify_payment_approved, notify_payment_rejected
@@ -91,6 +92,14 @@ def reject_payment(
 # ── TREASURY V1: balance-level submissions, allocation, evidence ──────────────
 
 MAX_EVIDENCE_BYTES = 2 * 1024 * 1024  # evidence uploads are capped at 2 MiB
+
+
+class UnsupportedEvidenceType(ValueError):
+    pass
+
+
+class EvidenceConflict(ValueError):
+    pass
 
 
 def submit_balance_payment(
@@ -258,30 +267,57 @@ def get_submission(sb, *, chapter_id: str, submission_id: str) -> dict | None:
 
 
 def add_evidence(
-    sb, *, chapter_id: str, submission_id: str, content_type: str, data: bytes
+    sb, *, chapter_id: str, submission_id: str, data: bytes
 ) -> dict:
-    """Attach evidence bytes to a submission (append-only; ≤ 2 MiB).
-
-    Single-row insert — no RPC needed; the DB CHECK + append-only triggers
-    enforce the invariants.
-    """
+    """Attach a supported image to a pending submission (at most three files)."""
     if not data:
         raise ValueError("evidence payload is empty")
     if len(data) > MAX_EVIDENCE_BYTES:
         raise ValueError(f"evidence exceeds the {MAX_EVIDENCE_BYTES} byte limit")
-    result = (
-        sb.table("payment_evidence")
-        .insert(
-            {
-                "chapter_id": chapter_id,
-                "submission_id": submission_id,
-                "content_type": content_type,
-                "data": data,
-                "size_bytes": len(data),
-            }
+    content_type = sniff_image_type(data)
+    if content_type is None:
+        raise UnsupportedEvidenceType("Evidence must be a PNG, JPEG, HEIC or HEIF image")
+
+    with sb.transaction() as tx:
+        # Serialize uploads and reviews on the submission so neither the file
+        # cap nor the pending-only guard can be bypassed by concurrent requests.
+        conn = tx._pool.getconn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT status FROM payment_submissions "
+                    "WHERE chapter_id = %s AND id = %s FOR UPDATE",
+                    (chapter_id, submission_id),
+                )
+                submission = cur.fetchone()
+        finally:
+            tx._pool.putconn(conn)
+        if not submission or submission[0] != "pending":
+            raise EvidenceConflict("Evidence may only be attached to a pending submission")
+
+        existing = (
+            tx.table("payment_evidence")
+            .select("id", count="exact")
+            .eq("chapter_id", chapter_id)
+            .eq("submission_id", submission_id)
+            .execute()
         )
-        .execute()
-    )
+        if (existing.count or 0) >= 3:
+            raise EvidenceConflict("A submission may have at most three evidence files")
+
+        result = (
+            tx.table("payment_evidence")
+            .insert(
+                {
+                    "chapter_id": chapter_id,
+                    "submission_id": submission_id,
+                    "content_type": content_type,
+                    "data": data,
+                    "size_bytes": len(data),
+                }
+            )
+            .execute()
+        )
     row = unwrap_row(result)
     return {k: v for k, v in row.items() if k != "data"}
 

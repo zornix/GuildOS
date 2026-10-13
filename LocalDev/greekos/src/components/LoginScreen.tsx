@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react';
-import { localDevLogin, login, redeemSetupCode, setPassword } from '../api';
+import { localDevLogin, login, logout, redeemSetupCode, setPassword } from '../api';
 import {
   AuthStep,
   authErrorMessage,
@@ -33,9 +33,10 @@ const CODE_COPY = {
 } as const;
 
 export default function LoginScreen(
-  { onLoggedIn, onStartChapter }: { onLoggedIn: () => void; onStartChapter?: () => void }
+  { onLoggedIn, onStartChapter, initialStep = 'signin' }:
+  { onLoggedIn: () => void; onStartChapter?: () => void; initialStep?: AuthStep }
 ) {
-  const [step, setStep] = useState<AuthStep>('signin');
+  const [step, setStep] = useState<AuthStep>(initialStep);
   const [codeKind, setCodeKind] = useState<keyof typeof CODE_COPY>('setup');
   const [email, setEmail] = useState('');
   const [password, setPasswordValue] = useState('');
@@ -198,6 +199,11 @@ export default function LoginScreen(
             {errorBox}
             <button type="submit" disabled={busy} className={primaryClass}>
               {busy ? 'Saving…' : 'Save password and continue'}
+            </button>
+            {/* An expired setup token (401) must never trap the member here. */}
+            <button type="button" className={`${linkClass} min-h-11 sm:min-h-0`}
+              onClick={() => { logout(); go('signin'); }}>
+              Back to sign in
             </button>
           </form>
         )}
