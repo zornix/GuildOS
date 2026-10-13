@@ -5,6 +5,7 @@ export APP_ENV="${APP_ENV:-local}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOCALDEV_ROOT="$(cd "$SCRIPT_DIR/../../LocalDev" && pwd)"
 cd "$LOCALDEV_ROOT"
+source "$SCRIPT_DIR/db-url-check.sh"
 
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
@@ -187,9 +188,9 @@ TEST_DATABASE_URL_VAL="$(read_env_key TEST_DATABASE_URL)"
 SUPABASE_DB_URL_VAL="$(read_env_key SUPABASE_DB_URL)"
 
 MIGRATE_DB_URL="${TEST_DATABASE_URL_VAL:-${SUPABASE_DB_URL_VAL:-$DATABASE_URL_VAL}}"
-if [ -z "$MIGRATE_DB_URL" ] || [[ "$MIGRATE_DB_URL" == *"<"* ]]; then
+if is_placeholder_db_url "$MIGRATE_DB_URL"; then
   echo -e "${RED}Supabase demo DATABASE_URL is missing or still a placeholder in .env.${NC}"
-  echo "  Copy .env.example → .env and set the pooler URL (Session mode)."
+  echo "  Copy .env.example → .env and set the transaction pooler URL (port 6543)."
   exit 1
 fi
 echo "▸ Using Supabase demo database (direct Postgres via pooler)"
