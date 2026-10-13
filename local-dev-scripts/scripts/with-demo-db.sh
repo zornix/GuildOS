@@ -4,6 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOCALDEV_ROOT="$(cd "$SCRIPT_DIR/../../LocalDev" && pwd)"
 cd "$LOCALDEV_ROOT"
+source "$SCRIPT_DIR/db-url-check.sh"
 
 read_env_key() {
   grep -E "^$1=" .env 2>/dev/null | tail -n1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//' || true
@@ -22,7 +23,7 @@ if [ -z "$DB_URL" ]; then
   DB_URL="$(read_env_key DATABASE_URL)"
 fi
 
-if [ -z "$DB_URL" ] || [[ "$DB_URL" == *"<"* ]]; then
+if is_placeholder_db_url "$DB_URL"; then
   echo "error: set DATABASE_URL (Supabase demo pooler) in LocalDev/.env" >&2
   exit 1
 fi
