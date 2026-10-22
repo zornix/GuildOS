@@ -29,7 +29,13 @@ false unless you want the local one-click officer login (see below).
 
 ## Launch
 
-From `LocalDev/`:
+From the repo root:
+
+```bash
+./start-demo.sh
+```
+
+That is the same as running it by hand:
 
 ```bash
 cd LocalDev

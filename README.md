@@ -16,7 +16,8 @@ hosted UI in `Prod/fratos` (clone of greekos). See `Prod/vercel.json`.
 separate prod project comes after this window.
 
 **Launch the demo locally:** [`docs/launch-demo.md`](docs/launch-demo.md)
-(`cd LocalDev && npm run dev`, then sign in as `jake@tke.org` /
+(`./start-demo.sh` from the repo root, which runs `cd LocalDev && npm run dev`;
+then sign in as `jake@tke.org` /
 `demo-officer-pw`).
 
 Domain language lives in [`CONTEXT.md`](CONTEXT.md); architectural decisions in
