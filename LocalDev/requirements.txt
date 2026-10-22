@@ -1,11 +1,11 @@
-fastapi[standard]==0.142.2
+fastapi[standard]==0.148.0
 uvicorn==0.54.0
-pydantic-settings==2.15.0
-pydantic[email]==2.13.5
+pydantic-settings==2.16.0
+pydantic[email]==2.14.1
 psycopg2-binary==2.9.13
 PyJWT==2.15.1
 bcrypt==5.0.0
 httpx==0.28.1
-sentry-sdk[fastapi]==2.71.0
+sentry-sdk[fastapi]==2.72.0
 pytest==9.1.1
 pytest-asyncio==1.4.0
